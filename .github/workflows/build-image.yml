@@ -40,6 +40,8 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64
           push: true
+          provenance: false
+          sbom: false
           tags: |
             ${{ steps.image.outputs.name }}:latest
             ${{ steps.image.outputs.name }}:0.${{ github.run_number }}
