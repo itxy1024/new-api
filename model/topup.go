@@ -51,6 +51,7 @@ var (
 type inviterTopUpCommission struct {
 	InviterId int
 	Quota     int
+	Ratio     float64
 }
 
 func awardInviterTopUpCommission(tx *gorm.DB, userId int, topUpQuota decimal.Decimal) (*inviterTopUpCommission, error) {
@@ -92,14 +93,18 @@ func awardInviterTopUpCommission(tx *gorm.DB, userId int, topUpQuota decimal.Dec
 		return nil, nil
 	}
 
-	return &inviterTopUpCommission{InviterId: invitedUser.InviterId, Quota: commissionQuota}, nil
+	return &inviterTopUpCommission{InviterId: invitedUser.InviterId, Quota: commissionQuota, Ratio: ratio}, nil
 }
 
 func recordInviterTopUpCommission(commission *inviterTopUpCommission) {
 	if commission == nil {
 		return
 	}
-	RecordLog(commission.InviterId, LogTypeSystem, fmt.Sprintf("受邀用户在线充值返利 %s", logger.LogQuota(commission.Quota)))
+	RecordLog(
+		commission.InviterId,
+		LogTypeSystem,
+		fmt.Sprintf("受邀用户在线充值返利 %s（返利比例 %g%%）", logger.LogQuota(commission.Quota), commission.Ratio),
+	)
 }
 
 func (topUp *TopUp) Insert() error {
