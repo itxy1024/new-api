@@ -3684,6 +3684,8 @@
     "默认折叠侧边栏": "Réduire la barre latérale par défaut",
     "默认测试模型": "Modèle de test par défaut",
     "默认用户消息": "Bonjour",
-    "默认补全倍率": "Taux de complétion par défaut"
+    "默认补全倍率": "Taux de complétion par défaut",
+    "邀请充值返利比例": "Taux de commission sur recharge",
+    "按受邀用户每次在线充值到账额度的百分比返利": "Récompensez le parrain avec un pourcentage du quota de chaque recharge en ligne d'un filleul"
   }
 }

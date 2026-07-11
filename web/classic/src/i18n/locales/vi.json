@@ -4218,6 +4218,8 @@
     "默认折叠侧边栏": "Mặc định thu gọn thanh bên",
     "默认测试模型": "Mô hình kiểm tra mặc định",
     "默认用户消息": "Xin chào",
-    "默认补全倍率": "Tỷ lệ hoàn thành mặc định"
+    "默认补全倍率": "Tỷ lệ hoàn thành mặc định",
+    "邀请充值返利比例": "Tỷ lệ hoa hồng nạp tiền",
+    "按受邀用户每次在线充值到账额度的百分比返利": "Thưởng cho người mời theo phần trăm hạn mức từ mỗi lần nạp tiền trực tuyến của người được mời"
   }
 }
