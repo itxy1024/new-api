@@ -51,8 +51,8 @@ func InitChannelCache() {
 		newGroup2model2channels[group] = make(map[string][]int)
 	}
 	for _, channel := range channels {
-		if channel.Status != common.ChannelStatusEnabled {
-			continue // skip disabled channels
+		if channel.Status != common.ChannelStatusEnabled || channel.AdminVisible {
+			continue // 跳过禁用渠道和仅供管理员查看的展示渠道
 		}
 		groups := strings.Split(channel.Group, ",")
 		for _, group := range groups {

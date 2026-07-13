@@ -45,7 +45,7 @@ func Distribute() func(c *gin.Context) {
 				return
 			}
 			channel, err = model.GetChannelById(id, true)
-			if err != nil {
+			if err != nil || channel.AdminVisible {
 				abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidChannelId))
 				return
 			}
@@ -104,6 +104,9 @@ func Distribute() func(c *gin.Context) {
 				if preferredChannelID, found := service.GetPreferredChannelByAffinity(c, modelRequest.Model, usingGroup); found {
 					affinityUsable := false
 					preferred, err := model.CacheGetChannel(preferredChannelID)
+					if err == nil && preferred.AdminVisible {
+						err = fmt.Errorf("channel %d does not participate in routing", preferredChannelID)
+					}
 					if err == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled &&
 						channelSupportsRequestPath(preferred, c.Request.URL.Path, modelRequest.Model) {
 						if usingGroup == "auto" {

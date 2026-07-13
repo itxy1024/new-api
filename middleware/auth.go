@@ -212,6 +212,26 @@ func RequirePermission(permission authz.Permission) func(c *gin.Context) {
 	}
 }
 
+// RequireVisibleChannel 防止普通管理员通过已知渠道 ID 绕过列表可见范围。
+func RequireVisibleChannel() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		if c.GetInt("role") != common.RoleAdminUser || c.Param("id") == "" {
+			c.Next()
+			return
+		}
+		var count int64
+		if err := model.DB.Model(&model.Channel{}).Where("id = ? AND admin_visible = ?", c.Param("id"), true).Count(&count).Error; err != nil || count == 0 {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": common.TranslateMessage(c, i18n.MsgAuthInsufficientPrivilege),
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
 func WssAuth(c *gin.Context) {
 
 }
