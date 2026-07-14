@@ -113,7 +113,8 @@ func assignDisplayLogIds(logs []*Log, startIdx int) {
 	}
 }
 
-func formatUserLogs(logs []*Log, startIdx int) {
+// FormatUserLogs 按普通用户可见范围清理日志中的管理员专属信息。
+func FormatUserLogs(logs []*Log, startIdx int) {
 	for i := range logs {
 		logs[i].ChannelId = 0
 		logs[i].ChannelName = ""
@@ -132,31 +133,13 @@ func formatUserLogs(logs []*Log, startIdx int) {
 	assignDisplayLogIds(logs, startIdx)
 }
 
-// HideLogChannelInfo 清除当前管理员无权查看的渠道信息。
-func HideLogChannelInfo(logs []*Log) {
-	for i := range logs {
-		logs[i].ChannelId = 0
-		logs[i].ChannelName = ""
-		otherMap, _ := common.StrToMap(logs[i].Other)
-		adminInfo, ok := otherMap["admin_info"].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		delete(adminInfo, "use_channel")
-		delete(adminInfo, "channel_affinity")
-		delete(adminInfo, "is_multi_key")
-		delete(adminInfo, "multi_key_index")
-		logs[i].Other = common.MapToJsonStr(otherMap)
-	}
-}
-
 func GetLogByTokenId(tokenId int) (logs []*Log, err error) {
 	order := "id desc"
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		order = clickHouseLogOrder("")
 	}
 	err = LOG_DB.Model(&Log{}).Where("token_id = ?", tokenId).Order(order).Limit(common.MaxRecentItems).Find(&logs).Error
-	formatUserLogs(logs, 0)
+	FormatUserLogs(logs, 0)
 	return logs, err
 }
 
@@ -624,7 +607,7 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 		return nil, 0, errors.New("查询日志失败")
 	}
 
-	formatUserLogs(logs, startIdx)
+	FormatUserLogs(logs, startIdx)
 	return logs, total, err
 }
 

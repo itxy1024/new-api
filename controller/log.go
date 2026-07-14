@@ -33,7 +33,7 @@ func GetAllLogs(c *gin.Context) {
 		return
 	}
 	if !canViewChannel {
-		model.HideLogChannelInfo(logs)
+		model.FormatUserLogs(logs, pageInfo.GetStartIdx())
 	}
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(logs)
