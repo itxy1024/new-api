@@ -33,3 +33,30 @@ func TestFormatUserLogsStripsQuotaSaturation(t *testing.T) {
 	// Non-admin billing fields remain visible.
 	require.Contains(t, parsed, "model_price")
 }
+
+func TestHideLogChannelInfoOnlyRemovesChannelMetadata(t *testing.T) {
+	other := common.MapToJsonStr(map[string]interface{}{
+		"admin_info": map[string]interface{}{
+			"admin_id":         7,
+			"use_channel":      []interface{}{11, 12},
+			"channel_affinity": map[string]interface{}{"rule_name": "sticky"},
+			"is_multi_key":     true,
+			"multi_key_index":  2,
+		},
+	})
+	logs := []*Log{{ChannelId: 12, ChannelName: "secret", Other: other}}
+
+	HideLogChannelInfo(logs)
+
+	require.Zero(t, logs[0].ChannelId)
+	require.Empty(t, logs[0].ChannelName)
+	parsed, err := common.StrToMap(logs[0].Other)
+	require.NoError(t, err)
+	adminInfo, ok := parsed["admin_info"].(map[string]interface{})
+	require.True(t, ok)
+	require.EqualValues(t, 7, adminInfo["admin_id"])
+	require.NotContains(t, adminInfo, "use_channel")
+	require.NotContains(t, adminInfo, "channel_affinity")
+	require.NotContains(t, adminInfo, "is_multi_key")
+	require.NotContains(t, adminInfo, "multi_key_index")
+}

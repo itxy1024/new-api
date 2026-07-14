@@ -37,6 +37,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { useCanViewLogChannel } from '@/hooks/use-admin'
 
 import { LOG_TYPE_ALL_VALUE, LOG_TYPE_FILTERS } from '../constants'
 import { buildSearchParams } from '../lib/filter'
@@ -117,6 +118,8 @@ export function CommonLogsFilterBar<TData>(
   const queryClient = useQueryClient()
   const searchParams = route.useSearch()
   const { isAdminView: isAdmin } = useLogsViewScope()
+  const hasChannelPermission = useCanViewLogChannel()
+  const canViewChannel = isAdmin && hasChannelPermission
   const { sensitiveVisible, setSensitiveVisible } = useUsageLogsContext()
   const fetchingLogs = useIsFetching({ queryKey: ['logs'] })
 
@@ -380,7 +383,7 @@ export function CommonLogsFilterBar<TData>(
           />
         </LogsFilterField>
       )}
-      {isAdmin && (
+      {canViewChannel && (
         <LogsFilterField>
           <LogsFilterInput
             placeholder={t('Channel ID')}

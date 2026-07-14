@@ -115,6 +115,7 @@ func assignDisplayLogIds(logs []*Log, startIdx int) {
 
 func formatUserLogs(logs []*Log, startIdx int) {
 	for i := range logs {
+		logs[i].ChannelId = 0
 		logs[i].ChannelName = ""
 		var otherMap map[string]interface{}
 		otherMap, _ = common.StrToMap(logs[i].Other)
@@ -129,6 +130,24 @@ func formatUserLogs(logs []*Log, startIdx int) {
 		logs[i].Other = common.MapToJsonStr(otherMap)
 	}
 	assignDisplayLogIds(logs, startIdx)
+}
+
+// HideLogChannelInfo 清除当前管理员无权查看的渠道信息。
+func HideLogChannelInfo(logs []*Log) {
+	for i := range logs {
+		logs[i].ChannelId = 0
+		logs[i].ChannelName = ""
+		otherMap, _ := common.StrToMap(logs[i].Other)
+		adminInfo, ok := otherMap["admin_info"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		delete(adminInfo, "use_channel")
+		delete(adminInfo, "channel_affinity")
+		delete(adminInfo, "is_multi_key")
+		delete(adminInfo, "multi_key_index")
+		logs[i].Other = common.MapToJsonStr(otherMap)
+	}
 }
 
 func GetLogByTokenId(tokenId int) (logs []*Log, err error) {

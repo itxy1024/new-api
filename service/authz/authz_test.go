@@ -50,6 +50,8 @@ func TestInitSeedsBuiltInRolesAndPoliciesOnce(t *testing.T) {
 	assert.True(t, Can(2, common.RoleAdminUser, ChannelOperate))
 	assert.True(t, Can(2, common.RoleAdminUser, ChannelWrite))
 	assert.False(t, Can(2, common.RoleAdminUser, ChannelSensitiveWrite))
+	assert.True(t, Can(1, common.RoleRootUser, LogChannelView))
+	assert.False(t, Can(2, common.RoleAdminUser, LogChannelView))
 	assert.False(t, Can(3, common.RoleCommonUser, ChannelRead))
 }
 
@@ -75,6 +77,17 @@ func TestInitOnSlaveOnlyLoadsPolicies(t *testing.T) {
 	require.NoError(t, db.Model(&model.CasbinRule{}).Count(&policyCount).Error)
 	assert.Equal(t, int64(0), policyCount)
 	assert.False(t, Can(2, common.RoleAdminUser, ChannelRead))
+}
+
+func TestAdminCanBeGrantedLogChannelView(t *testing.T) {
+	db := newAuthzTestDB(t)
+	require.NoError(t, Init(db))
+
+	assert.False(t, Can(42, common.RoleAdminUser, LogChannelView))
+	require.NoError(t, SetUserPermissions(42, PermissionsMap{
+		ResourceLog: {ActionChannelView: true},
+	}))
+	assert.True(t, Can(42, common.RoleAdminUser, LogChannelView))
 }
 
 func TestSetUserPermissionsStoresOnlyOverrides(t *testing.T) {
@@ -105,6 +118,7 @@ func TestSetUserPermissionsStoresOnlyOverrides(t *testing.T) {
 			ActionSensitiveWrite: true,
 			ActionSecretView:     false,
 		},
+		ResourceLog: {ActionChannelView: false},
 	}, ExplicitUserPermissions(42))
 	assert.Equal(t, PermissionsMap{
 		ResourceChannel: {
@@ -133,6 +147,7 @@ func TestSetUserPermissionsStoresOnlyOverrides(t *testing.T) {
 			ActionSensitiveWrite: false,
 			ActionSecretView:     false,
 		},
+		ResourceLog: {ActionChannelView: false},
 	}, ExplicitUserPermissions(42))
 	assert.Empty(t, ExplicitUserOverrides(42))
 }
@@ -226,4 +241,5 @@ func TestCapabilitiesUseCatalogShape(t *testing.T) {
 	assert.True(t, capabilities[ResourceChannel][ActionWrite])
 	assert.False(t, capabilities[ResourceChannel][ActionSensitiveWrite])
 	assert.False(t, capabilities[ResourceChannel][ActionSecretView])
+	assert.False(t, capabilities[ResourceLog][ActionChannelView])
 }

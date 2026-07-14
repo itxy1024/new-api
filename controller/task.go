@@ -8,6 +8,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay"
+	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
@@ -28,11 +29,21 @@ func GetAllTask(c *gin.Context) {
 		EndTimestamp:   endTimestamp,
 		ChannelID:      c.Query("channel_id"),
 	}
+	showChannel := authz.Can(c.GetInt("id"), c.GetInt("role"), authz.LogChannelView)
+	if !showChannel {
+		queryParams.ChannelID = ""
+	}
 
 	items := model.TaskGetAllTasks(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
 	total := model.TaskCountAllTasks(queryParams)
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(tasksToDto(items, true))
+	result := tasksToDto(items, true)
+	if !showChannel {
+		for _, task := range result {
+			task.ChannelId = 0
+		}
+	}
+	pageInfo.SetItems(result)
 	common.ApiSuccess(c, pageInfo)
 }
 

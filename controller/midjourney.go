@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 
@@ -303,6 +304,10 @@ func GetAllMidjourney(c *gin.Context) {
 		StartTimestamp: c.Query("start_timestamp"),
 		EndTimestamp:   c.Query("end_timestamp"),
 	}
+	showChannel := authz.Can(c.GetInt("id"), c.GetInt("role"), authz.LogChannelView)
+	if !showChannel {
+		queryParams.ChannelID = ""
+	}
 
 	items := model.GetAllTasks(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
 	total := model.CountAllTasks(queryParams)
@@ -311,6 +316,11 @@ func GetAllMidjourney(c *gin.Context) {
 		for i, midjourney := range items {
 			midjourney.ImageUrl = system_setting.ServerAddress + "/mj/image/" + midjourney.MjId
 			items[i] = midjourney
+		}
+	}
+	if !showChannel {
+		for _, item := range items {
+			item.ChannelId = 0
 		}
 	}
 	pageInfo.SetTotal(int(total))
@@ -337,6 +347,9 @@ func GetUserMidjourney(c *gin.Context) {
 			midjourney.ImageUrl = system_setting.ServerAddress + "/mj/image/" + midjourney.MjId
 			items[i] = midjourney
 		}
+	}
+	for _, item := range items {
+		item.ChannelId = 0
 	}
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(items)

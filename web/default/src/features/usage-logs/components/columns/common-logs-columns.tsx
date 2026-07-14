@@ -288,7 +288,10 @@ function buildTypeDetailSegments(
   return segments
 }
 
-export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
+export function useCommonLogsColumns(
+  isAdmin: boolean,
+  canViewChannel: boolean
+): ColumnDef<UsageLog>[] {
   const { t } = useTranslation()
   const columns: ColumnDef<UsageLog>[] = [
     {
@@ -324,7 +327,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
     },
   ]
 
-  if (isAdmin) {
+  if (canViewChannel) {
     columns.push(
       {
         id: 'channel',
@@ -822,6 +825,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             <DetailsDialog
               log={log}
               isAdmin={isAdmin}
+              canViewChannel={canViewChannel}
               open={dialogOpen}
               onOpenChange={setDialogOpen}
             />

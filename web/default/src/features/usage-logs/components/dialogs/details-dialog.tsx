@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -31,7 +32,6 @@ import {
   Info,
   LogIn,
 } from 'lucide-react'
-import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
@@ -179,7 +179,9 @@ function getUsageBillingPathLabel(
   }
 }
 
-function isUsageBillingPathLocal(adminInfo: LogOtherData['admin_info']): boolean {
+function isUsageBillingPathLocal(
+  adminInfo: LogOtherData['admin_info']
+): boolean {
   if (adminInfo?.usage_billing_path) {
     return adminInfo.usage_billing_path === USAGE_BILLING_PATH.LOCAL
   }
@@ -452,6 +454,7 @@ function TokenBreakdown(props: { log: UsageLog; other: LogOtherData }) {
 interface DetailsDialogProps {
   log: UsageLog
   isAdmin: boolean
+  canViewChannel: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -636,7 +639,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
             />
           )}
 
-          {props.isAdmin && props.log.channel > 0 && (
+          {props.canViewChannel && props.log.channel > 0 && (
             <DetailRow
               label={t('Channel')}
               value={
@@ -654,7 +657,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
             />
           )}
 
-          {channelChain && props.isAdmin && (
+          {channelChain && props.canViewChannel && (
             <DetailRow label={t('Retry Chain')} value={channelChain} mono />
           )}
 

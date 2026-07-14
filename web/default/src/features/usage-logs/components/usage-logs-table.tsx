@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -28,6 +28,7 @@ import {
   useDataTable,
 } from '@/components/data-table'
 import { useMediaQuery } from '@/hooks'
+import { useCanViewLogChannel } from '@/hooks/use-admin'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { cn } from '@/lib/utils'
 
@@ -58,13 +59,20 @@ const quotaSaturationRowTint = 'bg-amber-50/60 dark:bg-amber-950/25'
 
 function getColumnVisibilityStorageKey(
   logCategory: LogCategory,
-  isAdmin: boolean
+  isAdmin: boolean,
+  canViewChannel: boolean
 ): string {
-  return `usage-logs:${logCategory}:${isAdmin ? 'admin' : 'user'}:column-visibility`
+  const channelScope = canViewChannel ? 'channel' : 'no-channel'
+  return `usage-logs:${logCategory}:${isAdmin ? 'admin' : 'user'}:${channelScope}:column-visibility`
 }
 
 function deserializeLogTypeFilter(value: unknown): unknown[] {
-  const values = Array.isArray(value) ? value : value ? [value] : []
+  let values: unknown[] = []
+  if (Array.isArray(value)) {
+    values = value
+  } else if (value) {
+    values = [value]
+  }
   return values.filter((item) => String(item) !== LOG_TYPE_ALL_VALUE)
 }
 
@@ -75,6 +83,8 @@ interface UsageLogsTableProps {
 export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   const { t } = useTranslation()
   const { isAdminView: isAdmin } = useLogsViewScope()
+  const hasChannelPermission = useCanViewLogChannel()
+  const canViewChannel = isAdmin && hasChannelPermission
   const isMobile = useMediaQuery('(max-width: 640px)')
   const searchParams = route.useSearch()
 
@@ -101,11 +111,15 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
       { columnId: 'group', searchKey: 'group', type: 'string' as const },
       ...(isAdmin
         ? [
-            {
-              columnId: 'channel',
-              searchKey: 'channel',
-              type: 'string' as const,
-            },
+            ...(canViewChannel
+              ? [
+                  {
+                    columnId: 'channel',
+                    searchKey: 'channel',
+                    type: 'string' as const,
+                  },
+                ]
+              : []),
             {
               columnId: 'username',
               searchKey: 'username',
@@ -121,6 +135,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
       'logs',
       logCategory,
       isAdmin,
+      canViewChannel,
       pagination.pageIndex + 1,
       pagination.pageSize,
       columnFilters,
@@ -153,7 +168,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   })
 
   const logs = data?.items || []
-  const columns = useColumnsByCategory(logCategory, isAdmin)
+  const columns = useColumnsByCategory(logCategory, isAdmin, canViewChannel)
   const isLoadingData = isLoading || (isFetching && !data)
 
   const { table } = useDataTable({
@@ -162,7 +177,8 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     columnFilters,
     columnVisibilityStorageKey: getColumnVisibilityStorageKey(
       logCategory,
-      isAdmin
+      isAdmin,
+      canViewChannel
     ),
     pagination,
     enableRowSelection: false,

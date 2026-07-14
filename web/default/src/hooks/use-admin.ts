@@ -1,3 +1,8 @@
+import {
+  ADMIN_PERMISSION_ACTIONS,
+  ADMIN_PERMISSION_RESOURCES,
+  hasPermission,
+} from '@/lib/admin-permissions'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -28,4 +33,16 @@ import { useAuthStore } from '@/stores/auth-store'
 export function useIsAdmin(): boolean {
   const { user } = useAuthStore((state) => state.auth)
   return (user?.role ?? 0) >= ROLE.ADMIN
+}
+
+/**
+ * 判断当前用户是否可以查看日志中的渠道信息
+ */
+export function useCanViewLogChannel(): boolean {
+  const { user } = useAuthStore((state) => state.auth)
+  return hasPermission(
+    user,
+    ADMIN_PERMISSION_RESOURCES.LOG,
+    ADMIN_PERMISSION_ACTIONS.CHANNEL_VIEW
+  )
 }
