@@ -33,6 +33,14 @@ func GetAllTask(c *gin.Context) {
 	if !showChannel {
 		queryParams.ChannelID = ""
 	}
+	if c.GetInt("role") != common.RoleRootUser {
+		excludedUserIds, err := model.GetRootUserIds()
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		queryParams.ExcludedUserIDs = excludedUserIds
+	}
 
 	items := model.TaskGetAllTasks(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
 	total := model.TaskCountAllTasks(queryParams)

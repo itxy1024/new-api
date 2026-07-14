@@ -27,10 +27,11 @@ type Midjourney struct {
 
 // TaskQueryParams 用于包含所有搜索条件的结构体，可以根据需求添加更多字段
 type TaskQueryParams struct {
-	ChannelID      string
-	MjID           string
-	StartTimestamp string
-	EndTimestamp   string
+	ChannelID       string
+	MjID            string
+	StartTimestamp  string
+	EndTimestamp    string
+	ExcludedUserIDs []int
 }
 
 func GetAllUserTask(userId int, startIdx int, num int, queryParams TaskQueryParams) []*Midjourney {
@@ -49,6 +50,9 @@ func GetAllUserTask(userId int, startIdx int, num int, queryParams TaskQueryPara
 	}
 	if queryParams.EndTimestamp != "" {
 		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+	}
+	if len(queryParams.ExcludedUserIDs) > 0 {
+		query = query.Where("user_id NOT IN ?", queryParams.ExcludedUserIDs)
 	}
 
 	// 获取数据
@@ -79,6 +83,9 @@ func GetAllTasks(startIdx int, num int, queryParams TaskQueryParams) []*Midjourn
 	}
 	if queryParams.EndTimestamp != "" {
 		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+	}
+	if len(queryParams.ExcludedUserIDs) > 0 {
+		query = query.Where("user_id NOT IN ?", queryParams.ExcludedUserIDs)
 	}
 
 	// 获取数据
@@ -210,6 +217,9 @@ func CountAllTasks(queryParams TaskQueryParams) int64 {
 	}
 	if queryParams.EndTimestamp != "" {
 		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+	}
+	if len(queryParams.ExcludedUserIDs) > 0 {
+		query = query.Where("user_id NOT IN ?", queryParams.ExcludedUserIDs)
 	}
 	_ = query.Count(&total).Error
 	return total

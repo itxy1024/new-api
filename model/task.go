@@ -159,15 +159,16 @@ func (p TaskPrivateData) Value() (driver.Value, error) {
 
 // SyncTaskQueryParams 用于包含所有搜索条件的结构体，可以根据需求添加更多字段
 type SyncTaskQueryParams struct {
-	Platform       constant.TaskPlatform
-	ChannelID      string
-	TaskID         string
-	UserID         string
-	Action         string
-	Status         string
-	StartTimestamp int64
-	EndTimestamp   int64
-	UserIDs        []int
+	Platform        constant.TaskPlatform
+	ChannelID       string
+	TaskID          string
+	UserID          string
+	Action          string
+	Status          string
+	StartTimestamp  int64
+	EndTimestamp    int64
+	UserIDs         []int
+	ExcludedUserIDs []int
 }
 
 func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) *Task {
@@ -264,6 +265,9 @@ func TaskGetAllTasks(startIdx int, num int, queryParams SyncTaskQueryParams) []*
 	}
 	if len(queryParams.UserIDs) != 0 {
 		query = query.Where("user_id in (?)", queryParams.UserIDs)
+	}
+	if len(queryParams.ExcludedUserIDs) != 0 {
+		query = query.Where("user_id NOT IN ?", queryParams.ExcludedUserIDs)
 	}
 	if queryParams.TaskID != "" {
 		query = query.Where("task_id = ?", queryParams.TaskID)
@@ -481,6 +485,9 @@ func TaskCountAllTasks(queryParams SyncTaskQueryParams) int64 {
 	}
 	if len(queryParams.UserIDs) != 0 {
 		query = query.Where("user_id in (?)", queryParams.UserIDs)
+	}
+	if len(queryParams.ExcludedUserIDs) != 0 {
+		query = query.Where("user_id NOT IN ?", queryParams.ExcludedUserIDs)
 	}
 	if queryParams.TaskID != "" {
 		query = query.Where("task_id = ?", queryParams.TaskID)

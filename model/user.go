@@ -1107,6 +1107,13 @@ func GetRootUser() (user *User) {
 	return user
 }
 
+// GetRootUserIds 返回全部超级管理员用户 ID。
+func GetRootUserIds() ([]int, error) {
+	var ids []int
+	err := DB.Model(&User{}).Where("role = ?", common.RoleRootUser).Pluck("id", &ids).Error
+	return ids, err
+}
+
 func UpdateUserLastLoginAt(id int) {
 	if err := DB.Model(&User{}).Where("id = ?", id).Update("last_login_at", common.GetTimestamp()).Error; err != nil {
 		common.SysLog("failed to update user last_login_at: " + err.Error())
