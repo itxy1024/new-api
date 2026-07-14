@@ -84,7 +84,6 @@ import type {
   FlowOverflowMode,
   FlowRole,
 } from '@/features/dashboard/types'
-import { useCanViewLogChannel } from '@/hooks/use-admin'
 import { formatQuota } from '@/lib/format'
 import { ROLE } from '@/lib/roles'
 import { computeTimeRange } from '@/lib/time'
@@ -260,7 +259,6 @@ export function FlowCharts(props: FlowChartsProps) {
   const user = useAuthStore((state) => state.auth.user)
   const isRoot = Boolean(user?.role && user.role >= ROLE.SUPER_ADMIN)
   const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
-  const canViewChannel = useCanViewLogChannel()
   let flowRole: FlowRole = 'user'
   if (isRoot) {
     flowRole = 'root'
@@ -281,44 +279,6 @@ export function FlowCharts(props: FlowChartsProps) {
   >()
   const [hiddenStages, setHiddenStages] = useState<FlowNodeKind[]>([])
 
-  const stages = useMemo(
-    () =>
-      getFlowStages(flowRole).filter(
-        (stage) => stage !== 'channel' || canViewChannel
-      ),
-    [canViewChannel, flowRole]
-  )
-  const visibleStages = useMemo(
-    () => stages.filter((stage) => !hiddenStages.includes(stage)),
-    [stages, hiddenStages]
-  )
-  useEffect(() => {
-    const visible = new Set(visibleStages)
-    setSelectedNodes((prev) => {
-      const next = prev.filter((filter) => visible.has(filter.kind))
-      return next.length === prev.length ? prev : next
-    })
-    setActiveFlowNode((prev) =>
-      prev && visible.has(prev.kind) ? prev : undefined
-    )
-    // The graph reshapes when columns are toggled, so any highlighted edge may
-    // no longer exist. Drop the link selection rather than leave it dangling.
-    setActiveFlowLink(undefined)
-  }, [visibleStages])
-  const toggleStage = (stage: FlowNodeKind) => {
-    setHiddenStages((prev) => {
-      const hidden = new Set(prev)
-      if (hidden.has(stage)) {
-        hidden.delete(stage)
-      } else {
-        const remaining = stages.filter((item) => !hidden.has(item)).length
-        if (remaining <= MIN_VISIBLE_STAGES) return prev
-        hidden.add(stage)
-      }
-      return stages.filter((item) => hidden.has(item))
-    })
-  }
-
   const timeRange = useMemo(
     () =>
       computeTimeRange(
@@ -338,17 +298,56 @@ export function FlowCharts(props: FlowChartsProps) {
   )
 
   const {
-    data: flowRows,
+    data: flowResult,
     error: flowError,
     isError,
     isLoading,
   } = useQuery({
-    queryKey: ['dashboard', 'flow', flowQueryParams, flowRole, canViewChannel],
+    queryKey: ['dashboard', 'flow', flowQueryParams, flowRole],
     queryFn: () => getFlowQuotaDates(flowQueryParams, isAdmin),
-    select: (res) =>
-      requireSuccessfulFlowRows(res, t('Please try again later.')),
+    select: (res) => ({
+      rows: requireSuccessfulFlowRows(res, t('Please try again later.')),
+      channelVisible: res.channel_visible === true,
+    }),
     staleTime: 60_000,
   })
+  const flowRows = flowResult?.rows
+  const stages = useMemo(
+    () =>
+      getFlowStages(flowRole).filter(
+        (stage) => stage !== 'channel' || flowResult?.channelVisible === true
+      ),
+    [flowResult?.channelVisible, flowRole]
+  )
+  const visibleStages = useMemo(
+    () => stages.filter((stage) => !hiddenStages.includes(stage)),
+    [stages, hiddenStages]
+  )
+  useEffect(() => {
+    const visible = new Set(visibleStages)
+    setSelectedNodes((prev) => {
+      const next = prev.filter((filter) => visible.has(filter.kind))
+      return next.length === prev.length ? prev : next
+    })
+    setActiveFlowNode((prev) =>
+      prev && visible.has(prev.kind) ? prev : undefined
+    )
+    // 分流列发生变化后，已有高亮边可能已经不存在，因此清除边选择。
+    setActiveFlowLink(undefined)
+  }, [visibleStages])
+  const toggleStage = (stage: FlowNodeKind) => {
+    setHiddenStages((prev) => {
+      const hidden = new Set(prev)
+      if (hidden.has(stage)) {
+        hidden.delete(stage)
+      } else {
+        const remaining = stages.filter((item) => !hidden.has(item)).length
+        if (remaining <= MIN_VISIBLE_STAGES) return prev
+        hidden.add(stage)
+      }
+      return stages.filter((item) => hidden.has(item))
+    })
+  }
 
   const maskSensitive = props.sensitiveVisible === false
   const flowData = useMemo(

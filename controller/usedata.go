@@ -99,9 +99,10 @@ func GetAllFlowQuotaDates(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    dates,
+		"success":         true,
+		"message":         "",
+		"data":            dates,
+		"channel_visible": canViewChannel,
 	})
 	return
 }
@@ -125,9 +126,10 @@ func GetUserFlowQuotaDates(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    dates,
+		"success":         true,
+		"message":         "",
+		"data":            dates,
+		"channel_visible": false,
 	})
 	return
 }

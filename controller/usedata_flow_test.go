@@ -12,9 +12,10 @@ import (
 )
 
 type flowQuotaResponse struct {
-	Success bool                  `json:"success"`
-	Message string                `json:"message"`
-	Data    []model.FlowQuotaData `json:"data"`
+	Success        bool                  `json:"success"`
+	Message        string                `json:"message"`
+	Data           []model.FlowQuotaData `json:"data"`
+	ChannelVisible bool                  `json:"channel_visible"`
 }
 
 func setupFlowControllerTestDB(t *testing.T) {
@@ -79,6 +80,7 @@ func TestGetAllFlowQuotaDatesUsesAdminDimensions(t *testing.T) {
 	require.Empty(t, payload.Data[0].ChannelName)
 	require.Empty(t, payload.Data[0].TokenName)
 	require.Empty(t, payload.Data[0].NodeName)
+	require.False(t, payload.ChannelVisible)
 }
 
 func TestGetAllFlowQuotaDatesUsesRootDimensions(t *testing.T) {
@@ -98,6 +100,7 @@ func TestGetAllFlowQuotaDatesUsesRootDimensions(t *testing.T) {
 	require.Equal(t, "primary", payload.Data[0].TokenName)
 	require.Equal(t, "default", payload.Data[0].UseGroup)
 	require.Equal(t, "east", payload.Data[0].ChannelName)
+	require.True(t, payload.ChannelVisible)
 }
 
 func TestGetUserFlowQuotaDatesRestrictsToAuthenticatedUser(t *testing.T) {

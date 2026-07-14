@@ -80,6 +80,7 @@ export async function getFlowQuotaDates(
     success: boolean
     data?: FlowQuotaDataItem[]
     message?: string
+    channel_visible?: boolean
   }>(endpoint, { params })
   return res.data
 }
