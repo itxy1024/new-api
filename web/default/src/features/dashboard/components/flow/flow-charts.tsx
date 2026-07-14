@@ -84,6 +84,7 @@ import type {
   FlowOverflowMode,
   FlowRole,
 } from '@/features/dashboard/types'
+import { useCanViewLogChannel } from '@/hooks/use-admin'
 import { formatQuota } from '@/lib/format'
 import { ROLE } from '@/lib/roles'
 import { computeTimeRange } from '@/lib/time'
@@ -259,6 +260,7 @@ export function FlowCharts(props: FlowChartsProps) {
   const user = useAuthStore((state) => state.auth.user)
   const isRoot = Boolean(user?.role && user.role >= ROLE.SUPER_ADMIN)
   const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
+  const canViewChannel = useCanViewLogChannel()
   let flowRole: FlowRole = 'user'
   if (isRoot) {
     flowRole = 'root'
@@ -279,7 +281,13 @@ export function FlowCharts(props: FlowChartsProps) {
   >()
   const [hiddenStages, setHiddenStages] = useState<FlowNodeKind[]>([])
 
-  const stages = useMemo(() => getFlowStages(flowRole), [flowRole])
+  const stages = useMemo(
+    () =>
+      getFlowStages(flowRole).filter(
+        (stage) => stage !== 'channel' || canViewChannel
+      ),
+    [canViewChannel, flowRole]
+  )
   const visibleStages = useMemo(
     () => stages.filter((stage) => !hiddenStages.includes(stage)),
     [stages, hiddenStages]
@@ -335,7 +343,7 @@ export function FlowCharts(props: FlowChartsProps) {
     isError,
     isLoading,
   } = useQuery({
-    queryKey: ['dashboard', 'flow', flowQueryParams, flowRole],
+    queryKey: ['dashboard', 'flow', flowQueryParams, flowRole, canViewChannel],
     queryFn: () => getFlowQuotaDates(flowQueryParams, isAdmin),
     select: (res) =>
       requireSuccessfulFlowRows(res, t('Please try again later.')),

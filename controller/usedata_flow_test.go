@@ -75,7 +75,8 @@ func TestGetAllFlowQuotaDatesUsesAdminDimensions(t *testing.T) {
 	require.Len(t, payload.Data, 1)
 	require.Equal(t, "bob", payload.Data[0].Username)
 	require.Equal(t, "vip", payload.Data[0].UseGroup)
-	require.Equal(t, "east", payload.Data[0].ChannelName)
+	require.Zero(t, payload.Data[0].ChannelID)
+	require.Empty(t, payload.Data[0].ChannelName)
 	require.Empty(t, payload.Data[0].TokenName)
 	require.Empty(t, payload.Data[0].NodeName)
 }

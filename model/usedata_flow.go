@@ -22,12 +22,12 @@ type FlowQuotaData struct {
 	Quota       int    `json:"quota" gorm:"column:quota"`
 }
 
-func GetFlowQuotaData(startTime int64, endTime int64, username string, userID int, role int) ([]*FlowQuotaData, error) {
+func GetFlowQuotaData(startTime int64, endTime int64, username string, userID int, role int, canViewChannel bool) ([]*FlowQuotaData, error) {
 	switch {
 	case role >= common.RoleRootUser:
 		return getRootFlowQuotaData(startTime, endTime, username)
 	case role >= common.RoleAdminUser:
-		return getAdminFlowQuotaData(startTime, endTime, username)
+		return getAdminFlowQuotaData(startTime, endTime, username, canViewChannel)
 	default:
 		return getSelfFlowQuotaData(startTime, endTime, userID)
 	}
@@ -54,21 +54,29 @@ func getSelfFlowQuotaData(startTime int64, endTime int64, userID int) ([]*FlowQu
 	return rows, fillFlowTokenNames(rows)
 }
 
-func getAdminFlowQuotaData(startTime int64, endTime int64, username string) ([]*FlowQuotaData, error) {
+func getAdminFlowQuotaData(startTime int64, endTime int64, username string, canViewChannel bool) ([]*FlowQuotaData, error) {
 	rows := make([]*FlowQuotaData, 0)
-	query := flowQuotaBaseQuery(startTime, endTime).
-		Select("user_id, username, use_group, model_name, channel_id, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used")
+	selectColumns := "user_id, username, use_group, model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used"
+	groupColumns := "user_id, username, use_group, model_name"
+	if canViewChannel {
+		selectColumns = "user_id, username, use_group, model_name, channel_id, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used"
+		groupColumns += ", channel_id"
+	}
+	query := flowQuotaBaseQuery(startTime, endTime).Select(selectColumns)
 	if username != "" {
 		query = query.Where("username = ?", username)
 	}
 	err := query.
-		Group("user_id, username, use_group, model_name, channel_id").
+		Group(groupColumns).
 		Order("quota DESC").
 		Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}
-	return rows, fillFlowChannelNames(rows)
+	if canViewChannel {
+		return rows, fillFlowChannelNames(rows)
+	}
+	return rows, nil
 }
 
 func getRootFlowQuotaData(startTime int64, endTime int64, username string) ([]*FlowQuotaData, error) {
