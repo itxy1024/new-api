@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -503,6 +504,24 @@ func TestUpdateTokenMasksKeyInResponse(t *testing.T) {
 	if strings.Contains(recorder.Body.String(), token.Key) {
 		t.Fatalf("update response leaked raw token key: %s", recorder.Body.String())
 	}
+}
+
+func TestNormalizeTokenGroupsPreservesOrderAndCompatibilityGroup(t *testing.T) {
+	token := model.Token{Groups: []string{"vip", "default", "vip"}}
+
+	normalizeTokenGroups(&token)
+
+	require.Equal(t, []string{"vip", "default"}, token.Groups)
+	require.Equal(t, "vip", token.Group)
+}
+
+func TestNormalizeTokenGroupsKeepsAutoExclusive(t *testing.T) {
+	token := model.Token{Groups: []string{"default", "auto", "vip"}}
+
+	normalizeTokenGroups(&token)
+
+	require.Equal(t, []string{"default", "vip"}, token.Groups)
+	require.Equal(t, "default", token.Group)
 }
 
 func TestGetTokenKeyRequiresOwnershipAndReturnsFullKey(t *testing.T) {

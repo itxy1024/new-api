@@ -46,8 +46,8 @@ export type ApiKeyGroupOption = {
 
 type ApiKeyGroupComboboxProps = {
   options: ApiKeyGroupOption[]
-  value?: string
-  onValueChange: (value: string) => void
+  value: string[]
+  onValueChange: (value: string[]) => void
   placeholder?: string
   disabled?: boolean
 }
@@ -106,7 +106,11 @@ export function ApiKeyGroupCombobox({
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
-  const selectedOption = options.find((option) => option.value === value)
+  const selectedOptions = value
+    .map((selectedValue) =>
+      options.find((option) => option.value === selectedValue)
+    )
+    .filter((option): option is ApiKeyGroupOption => !!option)
 
   const filteredOptions = useMemo(() => {
     const search = searchValue.trim().toLowerCase()
@@ -124,9 +128,19 @@ export function ApiKeyGroupCombobox({
   }, [options, searchValue])
 
   const handleSelect = (selectedValue: string) => {
-    onValueChange(selectedValue)
-    setOpen(false)
-    setSearchValue('')
+    if (selectedValue === 'auto') {
+      onValueChange(['auto'])
+      setOpen(false)
+      return
+    }
+    const withoutAuto = value.filter((item) => item !== 'auto')
+    if (withoutAuto.includes(selectedValue)) {
+      if (withoutAuto.length > 1) {
+        onValueChange(withoutAuto.filter((item) => item !== selectedValue))
+      }
+      return
+    }
+    onValueChange([...withoutAuto, selectedValue])
   }
 
   return (
@@ -146,16 +160,18 @@ export function ApiKeyGroupCombobox({
         <span className='flex min-w-0 flex-1 items-center justify-between gap-2 sm:gap-3'>
           <span className='min-w-0'>
             <span className='block truncate font-medium'>
-              {selectedOption?.label || placeholder || t('Select a group')}
+              {selectedOptions.length > 0
+                ? selectedOptions.map((option) => option.label).join(' -> ')
+                : placeholder || t('Select groups')}
             </span>
-            {selectedOption?.desc && (
+            {selectedOptions.length === 1 && selectedOptions[0]?.desc && (
               <span className='text-muted-foreground block truncate text-[11px] sm:text-xs'>
-                {selectedOption.desc}
+                {selectedOptions[0].desc}
               </span>
             )}
           </span>
           <span className='hidden sm:block'>
-            <GroupRatioBadge ratio={selectedOption?.ratio} />
+            <GroupRatioBadge ratio={selectedOptions[0]?.ratio} />
           </span>
         </span>
         <ChevronsUpDown className='h-4 w-4 shrink-0 opacity-50' />
@@ -185,7 +201,7 @@ export function ApiKeyGroupCombobox({
                   <Check
                     className={cn(
                       'mt-0.5 h-4 w-4',
-                      value === option.value ? 'opacity-100' : 'opacity-0'
+                      value.includes(option.value) ? 'opacity-100' : 'opacity-0'
                     )}
                   />
                   <span className='min-w-0 flex-1'>

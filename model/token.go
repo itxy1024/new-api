@@ -27,6 +27,7 @@ type Token struct {
 	AllowIps           *string        `json:"allow_ips" gorm:"default:''"`
 	UsedQuota          int            `json:"used_quota" gorm:"default:0"` // used quota
 	Group              string         `json:"group" gorm:"default:''"`
+	Groups             []string       `json:"groups" gorm:"serializer:json;type:text"`
 	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
 }
@@ -302,8 +303,18 @@ func (token *Token) Update() (err error) {
 		}
 	}()
 	err = DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry").Updates(token).Error
+		"model_limits_enabled", "model_limits", "allow_ips", "group", "groups", "cross_group_retry").Updates(token).Error
 	return err
+}
+
+func (token *Token) GetGroups() []string {
+	if len(token.Groups) > 0 {
+		return token.Groups
+	}
+	if token.Group != "" {
+		return []string{token.Group}
+	}
+	return nil
 }
 
 func (token *Token) SelectUpdate() (err error) {

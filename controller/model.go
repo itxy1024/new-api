@@ -177,6 +177,10 @@ type modelListGroups struct {
 
 func getModelListGroups(c *gin.Context) (modelListGroups, error) {
 	tokenGroup := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
+	tokenGroups, _ := common.GetContextKey(c, constant.ContextKeyTokenGroups)
+	if groups, ok := tokenGroups.([]string); ok && len(groups) > 0 && tokenGroup != "auto" {
+		return modelListGroups{tokenGroup: tokenGroup, ownerGroups: groups}, nil
+	}
 	userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
 	if userGroup == "" && (tokenGroup == "" || tokenGroup == "auto") {
 		var err error
@@ -246,7 +250,7 @@ func ListModels(c *gin.Context, modelType int) {
 		}
 	} else {
 		var models []string
-		if groups.tokenGroup == "auto" {
+		if groups.tokenGroup == "auto" || len(ownerGroups) > 1 {
 			for _, autoGroup := range ownerGroups {
 				groupModels := model.GetGroupEnabledModels(autoGroup)
 				for _, g := range groupModels {

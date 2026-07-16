@@ -175,6 +175,7 @@ func AddToken(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
 		return
 	}
+	normalizeTokenGroups(&token)
 	// 非无限额度时，检查额度值是否超出有效范围
 	if !token.UnlimitedQuota {
 		if token.RemainQuota < 0 {
@@ -220,6 +221,7 @@ func AddToken(c *gin.Context) {
 		ModelLimits:        token.ModelLimits,
 		AllowIps:           token.AllowIps,
 		Group:              token.Group,
+		Groups:             token.Groups,
 		CrossGroupRetry:    token.CrossGroupRetry,
 	}
 	err = cleanToken.Insert()
@@ -260,6 +262,7 @@ func UpdateToken(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
 		return
 	}
+	normalizeTokenGroups(&token)
 	if !token.UnlimitedQuota {
 		if token.RemainQuota < 0 {
 			common.ApiErrorI18n(c, i18n.MsgTokenQuotaNegative)
@@ -298,6 +301,7 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.ModelLimits = token.ModelLimits
 		cleanToken.AllowIps = token.AllowIps
 		cleanToken.Group = token.Group
+		cleanToken.Groups = token.Groups
 		cleanToken.CrossGroupRetry = token.CrossGroupRetry
 	}
 	err = cleanToken.Update()
@@ -310,6 +314,40 @@ func UpdateToken(c *gin.Context) {
 		"message": "",
 		"data":    buildMaskedTokenResponse(cleanToken),
 	})
+}
+
+func normalizeTokenGroups(token *model.Token) {
+	seen := make(map[string]struct{}, len(token.Groups))
+	groups := make([]string, 0, len(token.Groups))
+	for _, group := range token.Groups {
+		group = strings.TrimSpace(group)
+		if group == "" {
+			continue
+		}
+		if _, exists := seen[group]; exists {
+			continue
+		}
+		seen[group] = struct{}{}
+		groups = append(groups, group)
+	}
+	if len(groups) == 0 && token.Group != "" {
+		groups = []string{strings.TrimSpace(token.Group)}
+	}
+	if len(groups) > 1 {
+		filtered := groups[:0]
+		for _, group := range groups {
+			if group != "auto" {
+				filtered = append(filtered, group)
+			}
+		}
+		groups = filtered
+	}
+	token.Groups = groups
+	if len(groups) > 0 {
+		token.Group = groups[0]
+	} else {
+		token.Group = ""
+	}
 }
 
 type TokenBatch struct {

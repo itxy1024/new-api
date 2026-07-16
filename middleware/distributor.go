@@ -83,6 +83,18 @@ func Distribute() func(c *gin.Context) {
 				}
 				var selectGroup string
 				usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+				if tokenGroups, exists := common.GetContextKey(c, constant.ContextKeyTokenGroups); exists {
+					if groups, ok := tokenGroups.([]string); ok && len(groups) > 1 {
+						for _, group := range groups {
+							if common.StringsContains(model.GetGroupEnabledModels(group), modelRequest.Model) {
+								usingGroup = group
+								common.SetContextKey(c, constant.ContextKeyUsingGroup, group)
+								common.SetContextKey(c, constant.ContextKeyTokenGroup, group)
+								break
+							}
+						}
+					}
+				}
 				// check path is /pg/chat/completions
 				if strings.HasPrefix(c.Request.URL.Path, "/pg/chat/completions") {
 					playgroundRequest := &dto.PlayGroundRequest{}

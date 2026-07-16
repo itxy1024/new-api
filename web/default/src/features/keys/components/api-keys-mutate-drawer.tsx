@@ -154,14 +154,17 @@ export function ApiKeysMutateDrawer({
   // Correct group after groups load: if the form value is not in available groups, fall back
   useEffect(() => {
     if (groups.length === 0) return
-    const currentGroup = form.getValues('group')
-    if (currentGroup && !groups.some((g) => g.value === currentGroup)) {
+    const currentGroups = form.getValues('groups')
+    const availableGroups = currentGroups.filter((currentGroup) =>
+      groups.some((group) => group.value === currentGroup)
+    )
+    if (availableGroups.length !== currentGroups.length) {
       const fallback =
         groups.find((g) => g.value === 'default')?.value ??
         groups[0]?.value ??
         ''
-      form.setValue('group', fallback)
-      if (currentGroup === 'auto') {
+      form.setValue('groups', availableGroups.length > 0 ? availableGroups : [fallback])
+      if (currentGroups.includes('auto') && !availableGroups.includes('auto')) {
         form.setValue('cross_group_retry', false)
       }
     }
@@ -247,7 +250,7 @@ export function ApiKeysMutateDrawer({
   const quotaPlaceholder = tokensOnly
     ? t('Enter quota in tokens')
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
-  const selectedGroup = form.watch('group')
+  const selectedGroups = form.watch('groups')
   const unlimitedQuota = form.watch('unlimited_quota')
 
   return (
@@ -302,24 +305,29 @@ export function ApiKeysMutateDrawer({
 
               <FormField
                 control={form.control}
-                name='group'
+                name='groups'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('Group')}</FormLabel>
+                    <FormLabel>{t('Aggregate groups')}</FormLabel>
                     <FormControl>
                       <ApiKeyGroupCombobox
                         options={groups}
                         value={field.value}
                         onValueChange={field.onChange}
-                        placeholder={t('Select a group')}
+                        placeholder={t('Select groups')}
                       />
                     </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Models are combined from the selected groups. When a model exists in multiple groups, the first selected group is used.'
+                      )}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              {selectedGroup === 'auto' && (
+              {selectedGroups[0] === 'auto' && (
                 <FormField
                   control={form.control}
                   name='cross_group_retry'
