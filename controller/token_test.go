@@ -533,6 +533,22 @@ func TestNormalizeTokenGroupsUsesOnlyFirstGroupWhenAggregationDisabled(t *testin
 	require.Equal(t, "vip", token.Group)
 }
 
+func TestBuildMaskedTokenResponseNormalizesLegacyGroups(t *testing.T) {
+	token := &model.Token{Group: "default", Key: "legacy-token-key"}
+
+	response := buildMaskedTokenResponse(token)
+
+	require.Equal(t, []string{"default"}, response.Groups)
+	require.Equal(t, token.GetMaskedKey(), response.Key)
+}
+
+func TestBuildMaskedTokenResponseUsesEmptyArrayWithoutGroup(t *testing.T) {
+	response := buildMaskedTokenResponse(&model.Token{})
+
+	require.NotNil(t, response.Groups)
+	require.Empty(t, response.Groups)
+}
+
 func TestGetTokenKeyRequiresOwnershipAndReturnsFullKey(t *testing.T) {
 	db := setupTokenControllerTestDB(t)
 	token := seedToken(t, db, 1, "owned-token", "owner1234token5678")

@@ -34,7 +34,10 @@ export const apiKeySchema = z.object({
   created_time: z.number(),
   accessed_time: z.number(),
   group: z.string().nullish().default(''),
-  groups: z.array(z.string()).nullish().default([]),
+  groups: z.preprocess(
+    (value) => (value == null ? [] : value),
+    z.array(z.string())
+  ),
   group_aggregation_enabled: z.boolean().optional().default(false),
   cross_group_retry: z
     .preprocess((v) => {

@@ -20,6 +20,10 @@ func buildMaskedTokenResponse(token *model.Token) *model.Token {
 	}
 	maskedToken := *token
 	maskedToken.Key = token.GetMaskedKey()
+	maskedToken.Groups = token.GetGroups()
+	if maskedToken.Groups == nil {
+		maskedToken.Groups = []string{}
+	}
 	return &maskedToken
 }
 

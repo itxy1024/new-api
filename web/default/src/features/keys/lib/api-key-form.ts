@@ -140,10 +140,9 @@ export function transformApiKeyToFormDefaults(
       ? apiKey.model_limits.split(',').filter(Boolean)
       : [],
     allow_ips: apiKey.allow_ips || '',
-    groups:
-      apiKey.groups.length > 0
-        ? apiKey.groups
-        : [apiKey.group || DEFAULT_GROUP],
+    groups: apiKey.groups?.length
+      ? apiKey.groups
+      : [apiKey.group || DEFAULT_GROUP],
     group_aggregation_enabled: apiKey.group_aggregation_enabled,
     cross_group_retry: !!apiKey.cross_group_retry,
     tokenCount: 1,
