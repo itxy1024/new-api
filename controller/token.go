@@ -220,9 +220,10 @@ func AddToken(c *gin.Context) {
 		ModelLimitsEnabled: token.ModelLimitsEnabled,
 		ModelLimits:        token.ModelLimits,
 		AllowIps:           token.AllowIps,
-		Group:              token.Group,
-		Groups:             token.Groups,
-		CrossGroupRetry:    token.CrossGroupRetry,
+		Group:                   token.Group,
+		Groups:                  token.Groups,
+		GroupAggregationEnabled: token.GroupAggregationEnabled,
+		CrossGroupRetry:         token.CrossGroupRetry,
 	}
 	err = cleanToken.Insert()
 	if err != nil {
@@ -302,6 +303,7 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.AllowIps = token.AllowIps
 		cleanToken.Group = token.Group
 		cleanToken.Groups = token.Groups
+		cleanToken.GroupAggregationEnabled = token.GroupAggregationEnabled
 		cleanToken.CrossGroupRetry = token.CrossGroupRetry
 	}
 	err = cleanToken.Update()
@@ -341,6 +343,9 @@ func normalizeTokenGroups(token *model.Token) {
 			}
 		}
 		groups = filtered
+	}
+	if !token.GroupAggregationEnabled && len(groups) > 1 {
+		groups = groups[:1]
 	}
 	token.Groups = groups
 	if len(groups) > 0 {

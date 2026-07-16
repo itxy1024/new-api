@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, KeyRound, Settings2, WalletCards } from 'lucide-react'
+import { ChevronDown, KeyRound, Layers3, Settings2, WalletCards } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm, type SubmitErrorHandler } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -251,6 +251,7 @@ export function ApiKeysMutateDrawer({
     ? t('Enter quota in tokens')
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
   const selectedGroups = form.watch('groups')
+  const groupAggregationEnabled = form.watch('group_aggregation_enabled')
   const unlimitedQuota = form.watch('unlimited_quota')
 
   return (
@@ -305,23 +306,67 @@ export function ApiKeysMutateDrawer({
 
               <FormField
                 control={form.control}
+                name='group_aggregation_enabled'
+                render={({ field }) => (
+                  <FormItem className={sideDrawerSwitchItemClassName()}>
+                    <div className='flex min-w-0 items-start gap-3'>
+                      <Layers3 className='text-muted-foreground mt-0.5 size-4 shrink-0' />
+                      <div className='flex min-w-0 flex-col gap-0.5'>
+                        <FormLabel className='text-sm'>
+                          {t('Custom group routing')}
+                        </FormLabel>
+                        <FormDescription className='text-xs'>
+                          {t(
+                            'Enable selecting multiple groups and arranging their routing priority.'
+                          )}
+                        </FormDescription>
+                      </div>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={(checked) => {
+                          field.onChange(checked)
+                          if (!checked) {
+                            form.setValue('groups', [selectedGroups[0]])
+                          }
+                        }}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name='groups'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('Aggregate groups')}</FormLabel>
+                    <FormLabel>
+                      {groupAggregationEnabled
+                        ? t('Group routing order')
+                        : t('Group')}
+                    </FormLabel>
                     <FormControl>
                       <ApiKeyGroupCombobox
                         options={groups}
                         value={field.value}
                         onValueChange={field.onChange}
-                        placeholder={t('Select groups')}
+                        aggregationEnabled={groupAggregationEnabled}
+                        placeholder={
+                          groupAggregationEnabled
+                            ? t('Select groups')
+                            : t('Select a group')
+                        }
                       />
                     </FormControl>
-                    <FormDescription>
-                      {t(
-                        'Models are combined from the selected groups. When a model exists in multiple groups, the first selected group is used.'
-                      )}
-                    </FormDescription>
+                    {groupAggregationEnabled && (
+                      <FormDescription>
+                        {t(
+                          'Models are combined from the selected groups. When a model exists in multiple groups, the first selected group is used.'
+                        )}
+                      </FormDescription>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

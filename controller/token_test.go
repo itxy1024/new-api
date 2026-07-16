@@ -507,7 +507,7 @@ func TestUpdateTokenMasksKeyInResponse(t *testing.T) {
 }
 
 func TestNormalizeTokenGroupsPreservesOrderAndCompatibilityGroup(t *testing.T) {
-	token := model.Token{Groups: []string{"vip", "default", "vip"}}
+	token := model.Token{GroupAggregationEnabled: true, Groups: []string{"vip", "default", "vip"}}
 
 	normalizeTokenGroups(&token)
 
@@ -516,12 +516,21 @@ func TestNormalizeTokenGroupsPreservesOrderAndCompatibilityGroup(t *testing.T) {
 }
 
 func TestNormalizeTokenGroupsKeepsAutoExclusive(t *testing.T) {
-	token := model.Token{Groups: []string{"default", "auto", "vip"}}
+	token := model.Token{GroupAggregationEnabled: true, Groups: []string{"default", "auto", "vip"}}
 
 	normalizeTokenGroups(&token)
 
 	require.Equal(t, []string{"default", "vip"}, token.Groups)
 	require.Equal(t, "default", token.Group)
+}
+
+func TestNormalizeTokenGroupsUsesOnlyFirstGroupWhenAggregationDisabled(t *testing.T) {
+	token := model.Token{Groups: []string{"vip", "default"}}
+
+	normalizeTokenGroups(&token)
+
+	require.Equal(t, []string{"vip"}, token.Groups)
+	require.Equal(t, "vip", token.Group)
 }
 
 func TestGetTokenKeyRequiresOwnershipAndReturnsFullKey(t *testing.T) {

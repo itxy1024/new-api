@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, ChevronsUpDown, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -48,6 +48,7 @@ type ApiKeyGroupComboboxProps = {
   options: ApiKeyGroupOption[]
   value: string[]
   onValueChange: (value: string[]) => void
+  aggregationEnabled: boolean
   placeholder?: string
   disabled?: boolean
 }
@@ -100,6 +101,7 @@ export function ApiKeyGroupCombobox({
   options,
   value,
   onValueChange,
+  aggregationEnabled,
   placeholder,
   disabled,
 }: ApiKeyGroupComboboxProps) {
@@ -128,6 +130,12 @@ export function ApiKeyGroupCombobox({
   }, [options, searchValue])
 
   const handleSelect = (selectedValue: string) => {
+    if (!aggregationEnabled) {
+      onValueChange([selectedValue])
+      setOpen(false)
+      setSearchValue('')
+      return
+    }
     if (selectedValue === 'auto') {
       onValueChange(['auto'])
       setOpen(false)
@@ -143,84 +151,174 @@ export function ApiKeyGroupCombobox({
     onValueChange([...withoutAuto, selectedValue])
   }
 
+  const moveGroup = (index: number, direction: -1 | 1) => {
+    const nextIndex = index + direction
+    if (nextIndex < 0 || nextIndex >= value.length) return
+    const reordered = [...value]
+    ;[reordered[index], reordered[nextIndex]] = [
+      reordered[nextIndex],
+      reordered[index],
+    ]
+    onValueChange(reordered)
+  }
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <Button
-            type='button'
-            variant='outline'
-            role='combobox'
-            aria-expanded={open}
-            disabled={disabled}
-            className='border-input bg-muted/40 hover:bg-muted/55 hover:text-foreground active:bg-background data-popup-open:border-ring data-popup-open:bg-background data-popup-open:ring-ring/20 h-auto min-h-14 w-full justify-between gap-2 rounded-lg px-3 py-2 text-start shadow-none transition-[background-color,border-color,box-shadow] duration-150 data-popup-open:ring-[3px] sm:min-h-20 sm:gap-3 sm:px-4 sm:py-3'
-          />
-        }
-      >
-        <span className='flex min-w-0 flex-1 items-center justify-between gap-2 sm:gap-3'>
-          <span className='min-w-0'>
-            <span className='block truncate font-medium'>
-              {selectedOptions.length > 0
-                ? selectedOptions.map((option) => option.label).join(' -> ')
-                : placeholder || t('Select groups')}
-            </span>
-            {selectedOptions.length === 1 && selectedOptions[0]?.desc && (
-              <span className='text-muted-foreground block truncate text-[11px] sm:text-xs'>
-                {selectedOptions[0].desc}
+    <div className='space-y-3'>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
+          render={
+            <Button
+              type='button'
+              variant='outline'
+              role='combobox'
+              aria-expanded={open}
+              disabled={disabled}
+              className='border-input bg-muted/40 hover:bg-muted/55 hover:text-foreground active:bg-background data-popup-open:border-ring data-popup-open:bg-background data-popup-open:ring-ring/20 h-auto min-h-14 w-full justify-between gap-2 rounded-lg px-3 py-2 text-start shadow-none transition-[background-color,border-color,box-shadow] duration-150 data-popup-open:ring-[3px] sm:min-h-20 sm:gap-3 sm:px-4 sm:py-3'
+            />
+          }
+        >
+          <span className='flex min-w-0 flex-1 items-center justify-between gap-2 sm:gap-3'>
+            {aggregationEnabled && selectedOptions.length > 0 ? (
+              <span className='flex min-w-0 flex-1 flex-wrap gap-1.5'>
+                {selectedOptions.map((option) => (
+                  <Badge
+                    key={option.value}
+                    variant='secondary'
+                    className='max-w-40 truncate rounded-md px-2 py-0.5'
+                  >
+                    {option.label}
+                  </Badge>
+                ))}
+              </span>
+            ) : (
+              <span className='min-w-0'>
+                <span className='block truncate font-medium'>
+                  {selectedOptions[0]?.label ||
+                    placeholder ||
+                    t('Select a group')}
+                </span>
+                {selectedOptions[0]?.desc && (
+                  <span className='text-muted-foreground block truncate text-[11px] sm:text-xs'>
+                    {selectedOptions[0].desc}
+                  </span>
+                )}
+              </span>
+            )}
+            {!aggregationEnabled && (
+              <span className='hidden sm:block'>
+                <GroupRatioBadge ratio={selectedOptions[0]?.ratio} />
               </span>
             )}
           </span>
-          <span className='hidden sm:block'>
-            <GroupRatioBadge ratio={selectedOptions[0]?.ratio} />
-          </span>
-        </span>
-        <ChevronsUpDown className='h-4 w-4 shrink-0 opacity-50' />
-      </PopoverTrigger>
-      <PopoverContent
-        className='data-closed:zoom-out-100 data-open:zoom-in-100 data-[side=bottom]:slide-in-from-top-0 data-[side=left]:slide-in-from-right-0 data-[side=right]:slide-in-from-left-0 data-[side=top]:slide-in-from-bottom-0 w-[var(--anchor-width)] overflow-hidden rounded-xl p-0 shadow-lg data-closed:duration-75 data-open:duration-100'
-        onWheel={(event) => event.stopPropagation()}
-        onTouchMove={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-      >
-        <Command shouldFilter={false}>
-          <CommandInput
-            placeholder={t('Search...')}
-            value={searchValue}
-            onValueChange={setSearchValue}
-          />
-          <CommandList className='max-h-[360px]'>
-            <CommandEmpty>{t('No group found.')}</CommandEmpty>
-            <CommandGroup>
-              {filteredOptions.map((option) => (
-                <CommandItem
-                  key={option.value}
-                  value={option.value}
-                  onSelect={() => handleSelect(option.value)}
-                  className='data-[selected=true]:bg-muted items-start gap-3 rounded-lg px-3 py-3 transition-colors'
-                >
-                  <Check
-                    className={cn(
-                      'mt-0.5 h-4 w-4',
-                      value.includes(option.value) ? 'opacity-100' : 'opacity-0'
-                    )}
-                  />
-                  <span className='min-w-0 flex-1'>
-                    <span className='block truncate font-medium'>
-                      {option.label}
-                    </span>
-                    {option.desc && (
-                      <span className='text-muted-foreground block truncate text-xs'>
-                        {option.desc}
+          <ChevronsUpDown className='h-4 w-4 shrink-0 opacity-50' />
+        </PopoverTrigger>
+        <PopoverContent
+          className='data-closed:zoom-out-100 data-open:zoom-in-100 data-[side=bottom]:slide-in-from-top-0 data-[side=left]:slide-in-from-right-0 data-[side=right]:slide-in-from-left-0 data-[side=top]:slide-in-from-bottom-0 w-[var(--anchor-width)] overflow-hidden rounded-xl p-0 shadow-lg data-closed:duration-75 data-open:duration-100'
+          onWheel={(event) => event.stopPropagation()}
+          onTouchMove={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <Command shouldFilter={false}>
+            <CommandInput
+              placeholder={t('Search...')}
+              value={searchValue}
+              onValueChange={setSearchValue}
+            />
+            <CommandList className='max-h-[360px]'>
+              <CommandEmpty>{t('No group found.')}</CommandEmpty>
+              <CommandGroup>
+                {filteredOptions.map((option) => (
+                  <CommandItem
+                    key={option.value}
+                    value={option.value}
+                    onSelect={() => handleSelect(option.value)}
+                    className='data-[selected=true]:bg-muted items-start gap-3 rounded-lg px-3 py-3 transition-colors'
+                  >
+                    <Check
+                      className={cn(
+                        'mt-0.5 h-4 w-4',
+                        value.includes(option.value)
+                          ? 'opacity-100'
+                          : 'opacity-0'
+                      )}
+                    />
+                    <span className='min-w-0 flex-1'>
+                      <span className='block truncate font-medium'>
+                        {option.label}
                       </span>
-                    )}
-                  </span>
+                      {option.desc && (
+                        <span className='text-muted-foreground block truncate text-xs'>
+                          {option.desc}
+                        </span>
+                      )}
+                    </span>
+                    <GroupRatioBadge ratio={option.ratio} />
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {aggregationEnabled && selectedOptions.length > 0 && (
+        <div className='divide-border overflow-hidden rounded-lg border'>
+          {selectedOptions.map((option, index) => (
+            <div
+              key={option.value}
+              className='flex min-w-0 items-center gap-3 px-3 py-3'
+            >
+              <span className='bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold tabular-nums'>
+                {index + 1}
+              </span>
+              <span className='min-w-0 flex-1'>
+                <span className='flex min-w-0 items-center gap-2'>
+                  <span className='truncate font-medium'>{option.label}</span>
                   <GroupRatioBadge ratio={option.ratio} />
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+                </span>
+                {option.desc && (
+                  <span className='text-muted-foreground block truncate text-xs'>
+                    {option.desc}
+                  </span>
+                )}
+              </span>
+              <span className='flex shrink-0 items-center'>
+                <Button
+                  type='button'
+                  variant='ghost'
+                  size='icon'
+                  disabled={index === 0}
+                  aria-label={t('Move group up')}
+                  onClick={() => moveGroup(index, -1)}
+                >
+                  <ArrowUp className='size-4' />
+                </Button>
+                <Button
+                  type='button'
+                  variant='ghost'
+                  size='icon'
+                  disabled={index === selectedOptions.length - 1}
+                  aria-label={t('Move group down')}
+                  onClick={() => moveGroup(index, 1)}
+                >
+                  <ArrowDown className='size-4' />
+                </Button>
+                <Button
+                  type='button'
+                  variant='ghost'
+                  size='icon'
+                  disabled={value.length === 1}
+                  aria-label={t('Remove group')}
+                  onClick={() =>
+                    onValueChange(value.filter((item) => item !== option.value))
+                  }
+                >
+                  <X className='size-4' />
+                </Button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
