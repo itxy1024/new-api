@@ -20,7 +20,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 
-import { BadgeCell, TruncatedCell } from '@/components/data-table'
+import { BadgeCell, BadgeListCell } from '@/components/data-table'
 import { GroupBadge } from '@/components/group-badge'
 import { StatusBadge } from '@/components/status-badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -202,7 +202,6 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
         const apiKey = row.original
         const group = row.getValue('group') as string
         const groups = apiKey.groups?.length > 0 ? apiKey.groups : [group]
-        const ratio = group && group !== 'auto' ? groupRatios[group] : undefined
 
         if (group === 'auto') {
           return (
@@ -230,20 +229,17 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
           )
         }
         return (
-          <TruncatedCell
-            className='-ml-1.5'
-            tooltipContent={groups.filter(Boolean).join(' -> ') || '-'}
-            tooltipClassName='break-all'
-          >
-            <GroupBadge group={group} ratio={ratio} />
-            {groups.length > 1 && (
-              <StatusBadge
-                label={`+${groups.length - 1}`}
-                variant='neutral'
-                copyable={false}
+          <BadgeListCell
+            max={1}
+            items={groups.filter(Boolean).map((groupName) => (
+              <GroupBadge
+                key={groupName}
+                group={groupName}
+                ratio={groupRatios[groupName]}
+                size='sm'
               />
-            )}
-          </TruncatedCell>
+            ))}
+          />
         )
       },
       size: 160,
