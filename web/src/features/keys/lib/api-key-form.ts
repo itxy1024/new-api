@@ -151,8 +151,12 @@ export function transformApiKeyToFormDefaults(
 
 export function buildQuickGroupUpdatePayload(
   apiKey: ApiKey,
-  group: string
+  groups: string[]
 ): ApiKeyFormData & { id: number } {
+  const normalizedGroups = apiKey.group_aggregation_enabled
+    ? groups
+    : groups.slice(0, 1)
+
   return {
     id: apiKey.id,
     name: apiKey.name,
@@ -162,9 +166,10 @@ export function buildQuickGroupUpdatePayload(
     model_limits_enabled: apiKey.model_limits_enabled,
     model_limits: apiKey.model_limits || '',
     allow_ips: apiKey.allow_ips || '',
-    group,
-    groups: [group],
-    group_aggregation_enabled: false,
-    cross_group_retry: group === 'auto' && apiKey.cross_group_retry,
+    group: normalizedGroups[0] || '',
+    groups: normalizedGroups,
+    group_aggregation_enabled: apiKey.group_aggregation_enabled,
+    cross_group_retry:
+      normalizedGroups[0] === 'auto' && apiKey.cross_group_retry,
   }
 }

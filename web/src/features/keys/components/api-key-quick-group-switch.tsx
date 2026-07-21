@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react'
+import { Check, ChevronsUpDown, Loader2, X } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -59,15 +59,20 @@ export function ApiKeyQuickGroupSwitch(props: ApiKeyQuickGroupSwitchProps) {
   const currentGroups = props.apiKey.groups.length
     ? props.apiKey.groups
     : [props.apiKey.group]
-  const visibleGroups = currentGroups.filter(Boolean)
+  const visibleGroups = currentGroups.filter((group): group is string =>
+    Boolean(group)
+  )
+  const [pendingGroups, setPendingGroups] = useState(visibleGroups)
   const currentRatio = props.options.find(
     (option) => option.value === visibleGroups[0]
   )?.ratio
 
-  const handleSelect = async (group: string) => {
+  const saveGroups = async (groups: string[]) => {
+    if (isUpdating || groups.length === 0) return
+
     if (
-      isUpdating ||
-      (!props.apiKey.group_aggregation_enabled && group === props.apiKey.group)
+      !props.apiKey.group_aggregation_enabled &&
+      groups[0] === props.apiKey.group
     ) {
       setOpen(false)
       return
@@ -76,7 +81,7 @@ export function ApiKeyQuickGroupSwitch(props: ApiKeyQuickGroupSwitchProps) {
     setIsUpdating(true)
     try {
       const result = await updateApiKey(
-        buildQuickGroupUpdatePayload(props.apiKey, group)
+        buildQuickGroupUpdatePayload(props.apiKey, groups)
       )
       if (!result.success) {
         toast.error(result.message || t(ERROR_MESSAGES.UPDATE_FAILED))
@@ -90,6 +95,31 @@ export function ApiKeyQuickGroupSwitch(props: ApiKeyQuickGroupSwitchProps) {
     } finally {
       setIsUpdating(false)
     }
+  }
+
+  const handleSelect = (group: string) => {
+    if (!props.apiKey.group_aggregation_enabled) {
+      void saveGroups([group])
+      return
+    }
+
+    if (group === 'auto') {
+      setPendingGroups(['auto'])
+      return
+    }
+
+    setPendingGroups((groups) => {
+      const groupsWithoutAuto = groups.filter((item) => item !== 'auto')
+      if (groupsWithoutAuto.includes(group)) {
+        return groupsWithoutAuto.filter((item) => item !== group)
+      }
+      return [...groupsWithoutAuto, group]
+    })
+  }
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) setPendingGroups(visibleGroups)
+    setOpen(nextOpen)
   }
 
   return (
@@ -116,7 +146,7 @@ export function ApiKeyQuickGroupSwitch(props: ApiKeyQuickGroupSwitchProps) {
           />
         )}
       </div>
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger
           render={
             <Button
@@ -145,6 +175,29 @@ export function ApiKeyQuickGroupSwitch(props: ApiKeyQuickGroupSwitchProps) {
           onPointerDown={(event) => event.stopPropagation()}
         >
           <Command>
+            {props.apiKey.group_aggregation_enabled &&
+              pendingGroups.length > 0 && (
+                <div className='border-border flex flex-wrap gap-1.5 border-b p-2'>
+                  {pendingGroups.map((group) => (
+                    <span
+                      key={group}
+                      className='bg-muted flex min-w-0 items-center gap-1 rounded-md py-0.5 pr-0.5 pl-1.5'
+                    >
+                      <GroupBadge group={group} size='sm' />
+                      <Button
+                        type='button'
+                        variant='ghost'
+                        size='icon-xs'
+                        aria-label={`${t('Remove group')}: ${group}`}
+                        onClick={() => handleSelect(group)}
+                        className='size-5'
+                      >
+                        <X className='size-3' />
+                      </Button>
+                    </span>
+                  ))}
+                </div>
+              )}
             <CommandInput placeholder={t('Search groups...')} />
             <CommandList className='max-h-80'>
               <CommandEmpty>{t('No group found.')}</CommandEmpty>
@@ -153,13 +206,16 @@ export function ApiKeyQuickGroupSwitch(props: ApiKeyQuickGroupSwitchProps) {
                   <CommandItem
                     key={option.value}
                     value={`${option.label} ${option.desc || ''} ${option.ratio ?? ''}`}
-                    onSelect={() => void handleSelect(option.value)}
+                    onSelect={() => handleSelect(option.value)}
                     className='items-start gap-2 px-2.5 py-2.5'
                   >
                     <Check
                       className={cn(
                         'mt-0.5 size-4',
-                        currentGroups.includes(option.value)
+                        (props.apiKey.group_aggregation_enabled
+                          ? pendingGroups
+                          : currentGroups
+                        ).includes(option.value)
                           ? 'opacity-100'
                           : 'opacity-0'
                       )}
@@ -186,6 +242,28 @@ export function ApiKeyQuickGroupSwitch(props: ApiKeyQuickGroupSwitchProps) {
                 ))}
               </CommandGroup>
             </CommandList>
+            {props.apiKey.group_aggregation_enabled && (
+              <div className='border-border flex justify-end gap-2 border-t p-2'>
+                <Button
+                  type='button'
+                  variant='ghost'
+                  size='sm'
+                  onClick={() => setOpen(false)}
+                  disabled={isUpdating}
+                >
+                  {t('Cancel')}
+                </Button>
+                <Button
+                  type='button'
+                  size='sm'
+                  onClick={() => void saveGroups(pendingGroups)}
+                  disabled={isUpdating || pendingGroups.length === 0}
+                >
+                  {isUpdating && <Loader2 className='size-3.5 animate-spin' />}
+                  {t('Save changes')}
+                </Button>
+              </div>
+            )}
           </Command>
         </PopoverContent>
       </Popover>

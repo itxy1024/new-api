@@ -43,8 +43,8 @@ const apiKey: ApiKey = {
 }
 
 describe('API key quick group update payload', () => {
-  test('switches to one selected group without overwriting other settings', () => {
-    const payload = buildQuickGroupUpdatePayload(apiKey, 'vip')
+  test('preserves aggregation mode and selected group order', () => {
+    const payload = buildQuickGroupUpdatePayload(apiKey, ['vip', 'backup'])
 
     assert.deepEqual(payload, {
       id: 7,
@@ -56,15 +56,26 @@ describe('API key quick group update payload', () => {
       model_limits: 'gpt-5.6',
       allow_ips: '127.0.0.1',
       group: 'vip',
-      groups: ['vip'],
-      group_aggregation_enabled: false,
+      groups: ['vip', 'backup'],
+      group_aggregation_enabled: true,
       cross_group_retry: false,
     })
   })
 
   test('keeps cross-group retry when switching to the auto group', () => {
-    const payload = buildQuickGroupUpdatePayload(apiKey, 'auto')
+    const payload = buildQuickGroupUpdatePayload(apiKey, ['auto'])
 
     assert.equal(payload.cross_group_retry, true)
+    assert.equal(payload.group_aggregation_enabled, true)
+  })
+
+  test('keeps a normal API key in single-group mode', () => {
+    const payload = buildQuickGroupUpdatePayload(
+      { ...apiKey, group_aggregation_enabled: false },
+      ['vip', 'backup']
+    )
+
+    assert.deepEqual(payload.groups, ['vip'])
+    assert.equal(payload.group_aggregation_enabled, false)
   })
 })
