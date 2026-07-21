@@ -22,7 +22,7 @@ import { z } from 'zod'
 import { parseQuotaFromDollars, quotaUnitsToDollars } from '@/lib/format'
 
 import { DEFAULT_GROUP } from '../constants'
-import { type ApiKeyFormData, type ApiKey } from '../types'
+import type { ApiKey, ApiKeyFormData } from '../types'
 
 // ============================================================================
 // Form Schema
@@ -146,5 +146,25 @@ export function transformApiKeyToFormDefaults(
     group_aggregation_enabled: apiKey.group_aggregation_enabled,
     cross_group_retry: !!apiKey.cross_group_retry,
     tokenCount: 1,
+  }
+}
+
+export function buildQuickGroupUpdatePayload(
+  apiKey: ApiKey,
+  group: string
+): ApiKeyFormData & { id: number } {
+  return {
+    id: apiKey.id,
+    name: apiKey.name,
+    remain_quota: apiKey.remain_quota,
+    expired_time: apiKey.expired_time,
+    unlimited_quota: apiKey.unlimited_quota,
+    model_limits_enabled: apiKey.model_limits_enabled,
+    model_limits: apiKey.model_limits || '',
+    allow_ips: apiKey.allow_ips || '',
+    group,
+    groups: [group],
+    group_aggregation_enabled: false,
+    cross_group_retry: group === 'auto' && apiKey.cross_group_retry,
   }
 }

@@ -20,8 +20,6 @@ import { useQuery } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 
-import { BadgeCell, BadgeListCell } from '@/components/data-table'
-import { GroupBadge } from '@/components/group-badge'
 import { StatusBadge } from '@/components/status-badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
@@ -38,6 +36,8 @@ import { cn } from '@/lib/utils'
 
 import { API_KEY_STATUSES } from '../constants'
 import type { ApiKey } from '../types'
+import type { ApiKeyGroupOption } from './api-key-group-combobox'
+import { ApiKeyQuickGroupSwitch } from './api-key-quick-group-switch'
 import { ApiKeyTimestampCell } from './api-key-timestamp-cell'
 import {
   ApiKeyCell,
@@ -53,29 +53,32 @@ function getQuotaProgressColor(percentage: number): string {
   return '[&_[data-slot=progress-indicator]]:bg-emerald-500'
 }
 
-function useGroupRatios(): Record<string, number> {
+function useGroupOptions(): ApiKeyGroupOption[] {
   const { data } = useQuery({
     queryKey: ['user-groups'],
     queryFn: getUserGroups,
     staleTime: 0,
     select: (res) => {
-      if (!res.success || !res.data) return {}
-      const ratios: Record<string, number> = {}
+      if (!res.success || !res.data) return []
+      const options: ApiKeyGroupOption[] = []
       for (const [group, info] of Object.entries(res.data)) {
-        if (typeof info.ratio === 'number') {
-          ratios[group] = info.ratio
-        }
+        options.push({
+          value: group,
+          label: group,
+          desc: info.desc || group,
+          ratio: info.ratio,
+        })
       }
-      return ratios
+      return options
     },
   })
 
-  return data ?? {}
+  return data ?? []
 }
 
 export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
   const { t, i18n } = useTranslation()
-  const groupRatios = useGroupRatios()
+  const groupOptions = useGroupOptions()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const justNowLabel = t('Just now')
   const staleAccessThreshold = dayjs(now).subtract(3, 'month').valueOf()
@@ -194,49 +197,9 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
       header: t('Group'),
       cell: ({ row }) => {
         const apiKey = row.original
-        const group = row.getValue('group') as string
-        const groups = apiKey.groups?.length > 0 ? apiKey.groups : [group]
-
-        if (group === 'auto') {
-          return (
-            <Tooltip>
-              <TooltipTrigger
-                render={<BadgeCell className='gap-1.5 text-xs' />}
-              >
-                <GroupBadge group='auto' />
-                {apiKey.cross_group_retry && (
-                  <StatusBadge
-                    label={t('Cross-group')}
-                    variant='info'
-                    copyable={false}
-                  />
-                )}
-              </TooltipTrigger>
-              <TooltipContent>
-                <span className='text-xs'>
-                  {t(
-                    'Automatically selects the best available group with circuit breaker mechanism'
-                  )}
-                </span>
-              </TooltipContent>
-            </Tooltip>
-          )
-        }
-        return (
-          <BadgeListCell
-            max={1}
-            items={groups.filter(Boolean).map((groupName) => (
-              <GroupBadge
-                key={groupName}
-                group={groupName}
-                ratio={groupRatios[groupName]}
-                size='sm'
-              />
-            ))}
-          />
-        )
+        return <ApiKeyQuickGroupSwitch apiKey={apiKey} options={groupOptions} />
       },
-      size: 160,
+      size: 240,
       meta: { mobileHidden: true },
     },
     {
