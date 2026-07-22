@@ -266,6 +266,13 @@ export function formatGroupsString(groups: string[]): string {
   return groups.join(',')
 }
 
+export function mergeChannelGroupOptions(
+  availableGroups: string[],
+  currentGroups: string[]
+): string[] {
+  return [...new Set([...availableGroups, ...currentGroups])]
+}
+
 // ============================================================================
 // Settings Parsing
 // ============================================================================
