@@ -174,6 +174,9 @@ type RelayInfo struct {
 	BillingRequestInput   *billingexpr.RequestInput
 
 	Request dto.Request
+	// RequestInput 保存客户端原始 messages/input 的纯文本摘要，仅写入超级管理员可见的消费日志。
+	RequestInput          string
+	RequestInputTruncated bool
 
 	// RequestConversionChain records request format conversions in order, e.g.
 	// ["openai", "openai_responses"] or ["openai", "claude"].
@@ -501,6 +504,9 @@ func genBaseRelayInfo(c *gin.Context, request dto.Request) *RelayInfo {
 			//promptTokens: common.GetContextKeyInt(c, constant.ContextKeyPromptTokens),
 			estimatePromptTokens: common.GetContextKeyInt(c, constant.ContextKeyEstimatedTokens),
 		},
+	}
+	if common.LogConsumeEnabled {
+		info.RequestInput, info.RequestInputTruncated = ExtractRequestInput(request)
 	}
 
 	if info.RelayMode == relayconstant.RelayModeUnknown {

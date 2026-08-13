@@ -41,6 +41,9 @@ func GetAllLogs(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if c.GetInt("role") != common.RoleRootUser {
+		model.FormatAdminLogs(logs)
+	}
 	if !canViewChannel {
 		model.FormatUserLogs(logs, pageInfo.GetStartIdx())
 	}

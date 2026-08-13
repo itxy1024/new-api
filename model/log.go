@@ -133,6 +133,24 @@ func FormatUserLogs(logs []*Log, startIdx int) {
 	assignDisplayLogIds(logs, startIdx)
 }
 
+// FormatAdminLogs 清除仅允许超级管理员查看的日志字段，同时保留普通管理员已有的诊断信息。
+func FormatAdminLogs(logs []*Log) {
+	for i := range logs {
+		otherMap, _ := common.StrToMap(logs[i].Other)
+		if otherMap == nil {
+			continue
+		}
+		adminInfo, ok := otherMap["admin_info"].(map[string]interface{})
+		if !ok || adminInfo == nil {
+			continue
+		}
+		delete(adminInfo, "request_input")
+		delete(adminInfo, "request_input_truncated")
+		otherMap["admin_info"] = adminInfo
+		logs[i].Other = common.MapToJsonStr(otherMap)
+	}
+}
+
 func GetLogByTokenId(tokenId int) (logs []*Log, err error) {
 	order := "id desc"
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {

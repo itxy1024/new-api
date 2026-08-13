@@ -64,6 +64,7 @@ import {
   isTimingLogType,
 } from '../../lib/utils'
 import { USAGE_BILLING_PATH, type LogOtherData } from '../../types'
+import { RequestInputSection } from './request-input-section'
 
 // Maps a channel-update changed-field token (as recorded by the backend audit)
 // to its i18n label key for display in the audit details.
@@ -761,6 +762,13 @@ export function DetailsDialog(props: DetailsDialogProps) {
               </div>
             </div>
           </DetailSection>
+        )}
+
+        {adminInfo?.request_input && (
+          <RequestInputSection
+            content={adminInfo.request_input}
+            truncated={Boolean(adminInfo.request_input_truncated)}
+          />
         )}
 
         {/* Quota saturation marker (admin only) */}

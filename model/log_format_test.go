@@ -33,3 +33,23 @@ func TestFormatUserLogsStripsQuotaSaturation(t *testing.T) {
 	// Non-admin billing fields remain visible.
 	require.Contains(t, parsed, "model_price")
 }
+
+func TestFormatAdminLogsStripsRequestInputOnly(t *testing.T) {
+	other := common.MapToJsonStr(map[string]interface{}{
+		"admin_info": map[string]interface{}{
+			"request_input":           "[user]\nsecret",
+			"request_input_truncated": true,
+			"use_channel":             []int{12},
+		},
+	})
+	logs := []*Log{{Other: other}}
+
+	FormatAdminLogs(logs)
+
+	parsed, err := common.StrToMap(logs[0].Other)
+	require.NoError(t, err)
+	adminInfo := parsed["admin_info"].(map[string]interface{})
+	require.NotContains(t, adminInfo, "request_input")
+	require.NotContains(t, adminInfo, "request_input_truncated")
+	require.Contains(t, adminInfo, "use_channel")
+}

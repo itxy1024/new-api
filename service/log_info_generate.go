@@ -106,6 +106,12 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	}
 
 	AppendChannelAffinityAdminInfo(ctx, adminInfo)
+	if relayInfo.RequestInput != "" {
+		adminInfo["request_input"] = relayInfo.RequestInput
+		if relayInfo.RequestInputTruncated {
+			adminInfo["request_input_truncated"] = true
+		}
+	}
 
 	other["admin_info"] = adminInfo
 	appendRequestPath(ctx, relayInfo, other)

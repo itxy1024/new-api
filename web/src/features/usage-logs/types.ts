@@ -141,6 +141,8 @@ export interface LogOtherData {
       original: number
       clamped: number
     }
+    request_input?: string
+    request_input_truncated?: boolean
   }
   // Language-independent operation descriptor (audit/login logs).
   // Frontend renders localized content from action + params via i18n templates.
