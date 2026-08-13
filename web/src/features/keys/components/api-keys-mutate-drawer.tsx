@@ -18,8 +18,14 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, KeyRound, Layers3, Settings2, WalletCards } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import {
+  ChevronDown,
+  KeyRound,
+  Layers3,
+  Settings2,
+  WalletCards,
+} from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm, type SubmitErrorHandler } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -67,7 +73,12 @@ import { getUserModels, getUserGroups } from '@/lib/api'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 
-import { createApiKey, updateApiKey, getApiKey } from '../api'
+import {
+  createApiKey,
+  updateApiKey,
+  getApiKey,
+  getTokenAutoGroups,
+} from '../api'
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
 import {
   getApiKeyFormSchema,
@@ -82,6 +93,7 @@ import {
   type ApiKeyGroupOption,
 } from './api-key-group-combobox'
 import { useApiKeys } from './api-keys-provider'
+import { AutoGroupOrderEditor } from './auto-group-order-editor'
 
 type ApiKeyMutateDrawerProps = {
   open: boolean
@@ -118,18 +130,51 @@ export function ApiKeysMutateDrawer({
     staleTime: 0,
   })
 
+  const { data: autoGroupsData } = useQuery({
+    queryKey: ['token-auto-groups'],
+    queryFn: getTokenAutoGroups,
+    enabled: open,
+    staleTime: 0,
+  })
+
   const models = modelsData?.data || []
-  const groupsRaw = groupsData?.data || {}
-  const groups: ApiKeyGroupOption[] = Object.entries(groupsRaw).map(
-    ([key, info]) => ({
-      value: key,
-      label: key,
-      desc: info.desc || key,
-      ratio: info.ratio,
-    })
+  const groups = useMemo<ApiKeyGroupOption[]>(
+    () =>
+      Object.entries(groupsData?.data || {}).map(([key, info]) => ({
+        value: key,
+        label: key,
+        desc: info.desc || key,
+        ratio: info.ratio,
+      })),
+    [groupsData]
   )
   const backendHasAuto = groups.some((g) => g.value === 'auto')
-  const schema = getApiKeyFormSchema(t)
+  const availableAutoGroupNames = useMemo(
+    () =>
+      groups
+        .filter((group) => group.value !== 'auto')
+        .map((group) => group.value),
+    [groups]
+  )
+  const globalAutoGroupOptions = useMemo(() => {
+    const availableAutoGroupSet = new Set(availableAutoGroupNames)
+    const groupsByValue = new Map(groups.map((group) => [group.value, group]))
+    return (autoGroupsData?.data?.groups || [])
+      .filter((group) => availableAutoGroupSet.has(group))
+      .flatMap((group) => {
+        const option = groupsByValue.get(group)
+        return option ? [option] : []
+      })
+  }, [autoGroupsData, availableAutoGroupNames, groups])
+  const maxAutoGroups =
+    Number.isInteger(autoGroupsData?.data?.max_count) &&
+    Number(autoGroupsData?.data?.max_count) > 0
+      ? Number(autoGroupsData?.data?.max_count)
+      : 5
+  const schema = useMemo(
+    () => getApiKeyFormSchema(t, maxAutoGroups),
+    [t, maxAutoGroups]
+  )
 
   const form = useForm<ApiKeyFormValues>({
     resolver: zodResolver(schema),
@@ -141,7 +186,13 @@ export function ApiKeysMutateDrawer({
     if (open && isUpdate && currentRow) {
       void getApiKey(currentRow.id).then((result) => {
         if (result.success && result.data) {
-          form.reset(transformApiKeyToFormDefaults(result.data))
+          form.reset(
+            transformApiKeyToFormDefaults(
+              result.data,
+              availableAutoGroupNames,
+              maxAutoGroups
+            )
+          )
         }
       })
     } else if (open && !isUpdate) {
@@ -149,7 +200,16 @@ export function ApiKeysMutateDrawer({
         getApiKeyFormDefaultValues(defaultUseAutoGroup && backendHasAuto)
       )
     }
-  }, [open, isUpdate, currentRow, form, defaultUseAutoGroup, backendHasAuto])
+  }, [
+    open,
+    isUpdate,
+    currentRow,
+    form,
+    defaultUseAutoGroup,
+    backendHasAuto,
+    maxAutoGroups,
+    availableAutoGroupNames,
+  ])
 
   // Correct group after groups load: if the form value is not in available groups, fall back
   useEffect(() => {
@@ -165,6 +225,8 @@ export function ApiKeysMutateDrawer({
         ''
       form.setValue('groups', availableGroups.length > 0 ? availableGroups : [fallback])
       if (currentGroups.includes('auto') && !availableGroups.includes('auto')) {
+        form.setValue('auto_groups', [])
+        form.setValue('auto_groups_mode', 'inherit')
         form.setValue('cross_group_retry', false)
       }
     }
@@ -252,6 +314,7 @@ export function ApiKeysMutateDrawer({
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
   const selectedGroups = form.watch('groups')
   const groupAggregationEnabled = form.watch('group_aggregation_enabled')
+  const autoGroupsMode = form.watch('auto_groups_mode')
   const unlimitedQuota = form.watch('unlimited_quota')
 
   return (
@@ -351,7 +414,20 @@ export function ApiKeysMutateDrawer({
                       <ApiKeyGroupCombobox
                         options={groups}
                         value={field.value}
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                          field.onChange(value)
+                          if (value[0] === 'auto') {
+                            form.setValue('cross_group_retry', true, {
+                              shouldDirty: true,
+                            })
+                            return
+                          }
+                          form.setValue('auto_groups', [])
+                          form.setValue('auto_groups_mode', 'inherit')
+                          form.setValue('cross_group_retry', false, {
+                            shouldDirty: true,
+                          })
+                        }}
                         aggregationEnabled={groupAggregationEnabled}
                         placeholder={
                           groupAggregationEnabled
@@ -371,6 +447,41 @@ export function ApiKeysMutateDrawer({
                   </FormItem>
                 )}
               />
+
+              {selectedGroups[0] === 'auto' && (
+                <FormField
+                  control={form.control}
+                  name='auto_groups'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Auto group order')}</FormLabel>
+                      <FormDescription>
+                        {t('Choose and order the groups this API key will try.')}
+                      </FormDescription>
+                      <FormControl>
+                        <AutoGroupOrderEditor
+                          value={field.value}
+                          mode={autoGroupsMode}
+                          options={groups}
+                          globalOptions={globalAutoGroupOptions}
+                          maxCount={maxAutoGroups}
+                          onChange={(value) => {
+                            form.setValue('auto_groups_mode', value.mode, {
+                              shouldDirty: true,
+                            })
+                            form.setValue(
+                              'auto_groups',
+                              value.groups.slice(0, maxAutoGroups),
+                              { shouldDirty: true, shouldValidate: true }
+                            )
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               {selectedGroups[0] === 'auto' && (
                 <FormField

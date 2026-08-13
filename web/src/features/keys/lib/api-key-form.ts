@@ -28,7 +28,10 @@ import type { ApiKey, ApiKeyFormData } from '../types'
 // Form Schema
 // ============================================================================
 
-export function getApiKeyFormSchema(t: TFunction) {
+export function getApiKeyFormSchema(t: TFunction, maxAutoGroups = 5) {
+  const autoGroupLimit =
+    Number.isInteger(maxAutoGroups) && maxAutoGroups > 0 ? maxAutoGroups : 5
+
   return z
     .object({
       name: z.string().min(1, t('Please enter a name')),
@@ -39,10 +42,41 @@ export function getApiKeyFormSchema(t: TFunction) {
       allow_ips: z.string().optional(),
       groups: z.array(z.string()).min(1, t('Please select at least one group')),
       group_aggregation_enabled: z.boolean(),
+      auto_groups_mode: z.enum(['inherit', 'custom']),
+      auto_groups: z.array(z.string()),
       cross_group_retry: z.boolean().optional(),
       tokenCount: z.number().min(1).optional(),
     })
     .superRefine((data, ctx) => {
+      if (data.groups[0] === 'auto') {
+        if (
+          data.auto_groups_mode === 'custom' &&
+          data.auto_groups.length === 0
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['auto_groups'],
+            message: t('Select at least one Auto group or restore global Auto.'),
+          })
+        }
+        if (data.auto_groups.length > autoGroupLimit) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['auto_groups'],
+            message: t('Select at most {{max}} Auto groups', {
+              max: autoGroupLimit,
+            }),
+          })
+        }
+        if (new Set(data.auto_groups).size !== data.auto_groups.length) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['auto_groups'],
+            message: t('Auto groups must not contain duplicates'),
+          })
+        }
+      }
+
       if (data.unlimited_quota) {
         return
       }
@@ -75,6 +109,8 @@ export const API_KEY_FORM_DEFAULT_VALUES: ApiKeyFormValues = {
   allow_ips: '',
   groups: [DEFAULT_GROUP],
   group_aggregation_enabled: false,
+  auto_groups_mode: 'inherit',
+  auto_groups: [],
   cross_group_retry: true,
   tokenCount: 1,
 }
@@ -86,6 +122,8 @@ export function getApiKeyFormDefaultValues(
     ...API_KEY_FORM_DEFAULT_VALUES,
     groups: [defaultUseAutoGroup ? 'auto' : DEFAULT_GROUP],
     group_aggregation_enabled: false,
+    auto_groups_mode: 'inherit',
+    auto_groups: [],
     cross_group_retry: defaultUseAutoGroup,
   }
 }
@@ -115,6 +153,10 @@ export function transformFormDataToPayload(
     group: data.groups[0] || '',
     groups: data.groups,
     group_aggregation_enabled: data.group_aggregation_enabled,
+    auto_groups:
+      data.groups[0] === 'auto' && data.auto_groups_mode === 'custom'
+        ? data.auto_groups
+        : [],
     cross_group_retry:
       data.groups[0] === 'auto' ? !!data.cross_group_retry : false,
   }
@@ -124,8 +166,16 @@ export function transformFormDataToPayload(
  * Transform API key data to form defaults
  */
 export function transformApiKeyToFormDefaults(
-  apiKey: ApiKey
+  apiKey: ApiKey,
+  availableAutoGroups: string[] = [],
+  maxAutoGroups = 5
 ): ApiKeyFormValues {
+  const availableSet = new Set(availableAutoGroups)
+  const storedAutoGroups = apiKey.auto_groups ?? []
+  const autoGroups = storedAutoGroups
+    .filter((group) => availableSet.has(group))
+    .slice(0, Math.max(0, maxAutoGroups))
+
   return {
     name: apiKey.name,
     remain_quota_dollars: apiKey.unlimited_quota
@@ -144,6 +194,8 @@ export function transformApiKeyToFormDefaults(
       ? apiKey.groups
       : [apiKey.group || DEFAULT_GROUP],
     group_aggregation_enabled: apiKey.group_aggregation_enabled,
+    auto_groups_mode: storedAutoGroups.length > 0 ? 'custom' : 'inherit',
+    auto_groups: autoGroups,
     cross_group_retry: !!apiKey.cross_group_retry,
     tokenCount: 1,
   }
@@ -169,6 +221,8 @@ export function buildQuickGroupUpdatePayload(
     group: normalizedGroups[0] || '',
     groups: normalizedGroups,
     group_aggregation_enabled: apiKey.group_aggregation_enabled,
+    auto_groups:
+      normalizedGroups[0] === 'auto' ? apiKey.auto_groups ?? [] : [],
     cross_group_retry:
       normalizedGroups[0] === 'auto' && apiKey.cross_group_retry,
   }

@@ -74,7 +74,9 @@ func TestRechargeEpayAwardsInviterByCreditedQuotaOnce(t *testing.T) {
 	setupTopUpCommissionTest(t)
 	insertTopUpCommissionOrder(t, "commission-epay")
 
-	require.NoError(t, RechargeEpay("commission-epay", "alipay", "127.0.0.1"))
+	alreadyDone, err := RechargeEpay("commission-epay", "alipay", "127.0.0.1")
+	require.NoError(t, err)
+	require.False(t, alreadyDone)
 
 	inviter, invitee := getTopUpCommissionUsers(t)
 	assert.Equal(t, 100, invitee.Quota)
@@ -84,7 +86,9 @@ func TestRechargeEpayAwardsInviterByCreditedQuotaOnce(t *testing.T) {
 	require.NoError(t, DB.Where("user_id = ? AND content LIKE ?", inviter.Id, "受邀用户在线充值返利%").First(&commissionLog).Error)
 	assert.Contains(t, commissionLog.Content, "（返利比例 10%）")
 
-	require.NoError(t, RechargeEpay("commission-epay", "alipay", "127.0.0.1"))
+	alreadyDone, err = RechargeEpay("commission-epay", "alipay", "127.0.0.1")
+	require.NoError(t, err)
+	require.True(t, alreadyDone)
 	inviter, invitee = getTopUpCommissionUsers(t)
 	assert.Equal(t, 100, invitee.Quota)
 	assert.Equal(t, 13, inviter.AffQuota)
@@ -167,7 +171,9 @@ func TestTopUpCommissionRequiresPaymentCompliance(t *testing.T) {
 	operation_setting.GetPaymentSetting().ComplianceConfirmed = false
 	insertTopUpCommissionOrder(t, "commission-without-compliance")
 
-	require.NoError(t, RechargeEpay("commission-without-compliance", "alipay", "127.0.0.1"))
+	alreadyDone, err := RechargeEpay("commission-without-compliance", "alipay", "127.0.0.1")
+	require.NoError(t, err)
+	require.False(t, alreadyDone)
 
 	inviter, invitee := getTopUpCommissionUsers(t)
 	assert.Equal(t, 100, invitee.Quota)

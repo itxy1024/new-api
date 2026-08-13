@@ -36,6 +36,7 @@ const apiKey: ApiKey = {
   group: 'default',
   groups: ['default', 'backup'],
   group_aggregation_enabled: true,
+  auto_groups: null,
   cross_group_retry: true,
   model_limits_enabled: true,
   model_limits: 'gpt-5.6',
@@ -58,6 +59,7 @@ describe('API key quick group update payload', () => {
       group: 'vip',
       groups: ['vip', 'backup'],
       group_aggregation_enabled: true,
+      auto_groups: [],
       cross_group_retry: false,
     })
   })
