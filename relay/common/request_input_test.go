@@ -11,9 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestExtractRequestInputPreservesAllMessageRoles(t *testing.T) {
+func TestExtractRequestInputOnlyIncludesUserMessages(t *testing.T) {
 	request := &dto.GeneralOpenAIRequest{Messages: []dto.Message{
 		{Role: "system", Content: "follow policy"},
+		{Role: "developer", Content: "developer instruction"},
 		{Role: "user", Content: []any{
 			map[string]any{"type": "text", "text": "hello"},
 			map[string]any{"type": "image_url", "image_url": "data:image/png;base64,secret"},
@@ -25,8 +26,23 @@ func TestExtractRequestInputPreservesAllMessageRoles(t *testing.T) {
 	content, truncated := ExtractRequestInput(request)
 
 	require.False(t, truncated)
-	assert.Equal(t, "[system]\nfollow policy\n\n[user]\nhello\n\n[assistant]\nanswer\n\n[assistant]\nweather: {\"city\":\"Shanghai\"}\n\n[tool]\ntool result", content)
+	assert.Equal(t, "[user]\nhello", content)
 	assert.NotContains(t, content, "base64")
+	assert.NotContains(t, content, "developer instruction")
+	assert.NotContains(t, content, "follow policy")
+	assert.NotContains(t, content, "tool result")
+}
+
+func TestExtractRequestInputIgnoresLargeDeveloperPromptBeforeUserMessage(t *testing.T) {
+	request := &dto.GeneralOpenAIRequest{Messages: []dto.Message{
+		{Role: "developer", Content: strings.Repeat("internal instruction", requestInputLogLimit)},
+		{Role: "user", Content: "actual user input"},
+	}}
+
+	content, truncated := ExtractRequestInput(request)
+
+	require.False(t, truncated)
+	assert.Equal(t, "[user]\nactual user input", content)
 }
 
 func TestExtractRequestInputReadsResponsesTextAndToolPayloads(t *testing.T) {
@@ -40,28 +56,54 @@ func TestExtractRequestInputReadsResponsesTextAndToolPayloads(t *testing.T) {
 
 	require.False(t, truncated)
 	assert.Contains(t, content, "[user]\nquestion")
-	assert.Contains(t, content, "[function_call]\n{\"city\":\"Shanghai\"}")
-	assert.Contains(t, content, "[function_call_output]\nsunny")
+	assert.NotContains(t, content, "Shanghai")
+	assert.NotContains(t, content, "sunny")
 	assert.NotContains(t, content, "base64")
 }
 
 func TestExtractRequestInputExcludesClaudeToolResultMedia(t *testing.T) {
-	request := &dto.ClaudeRequest{Messages: []dto.ClaudeMessage{{
-		Role: "user",
-		Content: []any{map[string]any{
-			"type": "tool_result",
-			"content": []any{
-				map[string]any{"type": "text", "text": "tool text"},
-				map[string]any{"type": "image", "source": map[string]any{"data": "base64-secret"}},
-			},
-		}},
-	}}}
+	request := &dto.ClaudeRequest{
+		System: []any{"system secret"},
+		Messages: []dto.ClaudeMessage{
+			{Role: "assistant", Content: "assistant secret"},
+			{Role: "user", Content: []any{
+				map[string]any{"type": "text", "text": "user text"},
+				map[string]any{
+					"type": "tool_result",
+					"content": []any{
+						map[string]any{"type": "text", "text": "tool text"},
+						map[string]any{"type": "image", "source": map[string]any{"data": "base64-secret"}},
+					},
+				},
+			}},
+		},
+	}
 
 	content, truncated := ExtractRequestInput(request)
 
 	require.False(t, truncated)
-	assert.Equal(t, "[user]\ntool text", content)
+	assert.Equal(t, "[user]\nuser text", content)
+	assert.NotContains(t, content, "system secret")
+	assert.NotContains(t, content, "assistant secret")
+	assert.NotContains(t, content, "tool text")
 	assert.NotContains(t, content, "base64-secret")
+}
+
+func TestExtractRequestInputOnlyIncludesGeminiUserContent(t *testing.T) {
+	request := &dto.GeminiChatRequest{
+		SystemInstructions: &dto.GeminiChatContent{Parts: []dto.GeminiPart{{Text: "system secret"}}},
+		Contents: []dto.GeminiChatContent{
+			{Role: "user", Parts: []dto.GeminiPart{{Text: "user text"}}},
+			{Role: "model", Parts: []dto.GeminiPart{{Text: "model secret"}}},
+		},
+	}
+
+	content, truncated := ExtractRequestInput(request)
+
+	require.False(t, truncated)
+	assert.Equal(t, "[user]\nuser text", content)
+	assert.NotContains(t, content, "system secret")
+	assert.NotContains(t, content, "model secret")
 }
 
 func TestExtractRequestInputTruncatesAtValidUTF8Boundary(t *testing.T) {

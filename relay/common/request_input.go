@@ -1,7 +1,6 @@
 package common
 
 import (
-	"fmt"
 	"strings"
 	"unicode/utf8"
 
@@ -50,15 +49,21 @@ func (b *requestInputBuilder) result() (string, bool) {
 	return b.builder.String(), b.truncated
 }
 
+func isUserRole(role string) bool {
+	return strings.EqualFold(strings.TrimSpace(role), "user")
+}
+
 // ExtractRequestInput 提取客户端原始请求中的消息或 input 文本，供超级管理员排查调用。
-// 图片、音频、文件及工具定义不写入日志，结果按 UTF-8 字节限制为 10 KiB。
+// 仅保留用户实际输入；系统、开发者、助手、工具内容及多媒体不写入日志，结果按 UTF-8 字节限制为 10 KiB。
 func ExtractRequestInput(request dto.Request) (string, bool) {
 	builder := &requestInputBuilder{}
 	switch req := request.(type) {
 	case *dto.GeneralOpenAIRequest:
 		for _, message := range req.Messages {
+			if !isUserRole(message.Role) {
+				continue
+			}
 			builder.add(message.Role, message.StringContent())
-			addOpenAIToolCalls(builder, message.Role, message.ToolCalls)
 			if builder.truncated {
 				break
 			}
@@ -72,23 +77,19 @@ func ExtractRequestInput(request dto.Request) (string, bool) {
 	case *dto.OpenAIResponsesCompactionRequest:
 		addResponsesInput(builder, req.Input)
 	case *dto.ClaudeRequest:
-		if req.System != nil {
-			if req.IsStringSystem() {
-				builder.add("system", req.GetStringSystem())
-			} else {
-				for _, part := range req.ParseSystem() {
-					builder.add("system", claudePartText(part))
-				}
-			}
-		}
 		for _, message := range req.Messages {
+			if !isUserRole(message.Role) {
+				continue
+			}
 			if message.IsStringContent() {
 				builder.add(message.Role, message.GetStringContent())
 				continue
 			}
 			parts, _ := message.ParseContent()
 			for _, part := range parts {
-				builder.add(message.Role, claudePartText(part))
+				if part.Type == "text" {
+					builder.add(message.Role, claudePartText(part))
+				}
 				if builder.truncated {
 					break
 				}
@@ -98,11 +99,11 @@ func ExtractRequestInput(request dto.Request) (string, bool) {
 			}
 		}
 	case *dto.GeminiChatRequest:
-		if req.SystemInstructions != nil {
-			addGeminiContent(builder, "system", *req.SystemInstructions)
-		}
 		for _, content := range req.Contents {
-			addGeminiContent(builder, content.Role, content)
+			if content.Role != "" && !isUserRole(content.Role) {
+				continue
+			}
+			addGeminiContent(builder, "user", content)
 			if builder.truncated {
 				break
 			}
@@ -113,29 +114,6 @@ func ExtractRequestInput(request dto.Request) (string, bool) {
 		}
 	}
 	return builder.result()
-}
-
-func addOpenAIToolCalls(builder *requestInputBuilder, role string, toolCalls []byte) {
-	if len(toolCalls) == 0 {
-		return
-	}
-	var calls []map[string]any
-	if err := common.Unmarshal(toolCalls, &calls); err != nil {
-		return
-	}
-	for _, call := range calls {
-		function, ok := call["function"].(map[string]any)
-		if !ok {
-			continue
-		}
-		arguments, _ := function["arguments"].(string)
-		name, _ := function["name"].(string)
-		if name != "" && arguments != "" {
-			builder.add(role, name+": "+arguments)
-		} else {
-			builder.add(role, arguments)
-		}
-	}
 }
 
 func addStringValues(builder *requestInputBuilder, label string, value any) {
@@ -178,48 +156,29 @@ func addResponsesValue(builder *requestInputBuilder, label string, value any) {
 			addResponsesValue(builder, label, item)
 		}
 	case map[string]any:
-		itemLabel := label
-		if role, ok := typed["role"].(string); ok && role != "" {
-			itemLabel = role
-		} else if itemType, ok := typed["type"].(string); ok && itemType != "" && label == "input" {
-			itemLabel = itemType
+		if role, ok := typed["role"].(string); ok && role != "" && !isUserRole(role) {
+			return
+		}
+		if itemType, ok := typed["type"].(string); ok {
+			switch itemType {
+			case "function_call", "function_call_output":
+				return
+			}
 		}
 		if content, ok := typed["content"]; ok {
-			addResponsesValue(builder, itemLabel, content)
+			addResponsesValue(builder, "user", content)
 		}
-		for _, key := range []string{"text", "arguments", "output"} {
+		for _, key := range []string{"text"} {
 			if text, ok := typed[key].(string); ok {
-				builder.add(itemLabel, text)
+				builder.add("user", text)
 			}
 		}
 	}
 }
 
 func claudePartText(part dto.ClaudeMediaMessage) string {
-	switch part.Type {
-	case "text":
+	if part.Type == "text" {
 		return part.GetText()
-	case "tool_use":
-		if part.Input != nil {
-			return fmt.Sprintf("%s: %s", part.Name, common.GetJsonString(part.Input))
-		}
-	case "tool_result":
-		switch content := part.Content.(type) {
-		case string:
-			return content
-		case []any:
-			texts := make([]string, 0, len(content))
-			for _, item := range content {
-				itemMap, ok := item.(map[string]any)
-				if !ok || itemMap["type"] != "text" {
-					continue
-				}
-				if text, ok := itemMap["text"].(string); ok && text != "" {
-					texts = append(texts, text)
-				}
-			}
-			return strings.Join(texts, "\n")
-		}
 	}
 	return ""
 }
@@ -231,18 +190,6 @@ func addGeminiContent(builder *requestInputBuilder, fallbackRole string, content
 	}
 	for _, part := range content.Parts {
 		builder.add(role, part.Text)
-		if part.FunctionCall != nil {
-			builder.add(role, fmt.Sprintf("%s: %s", part.FunctionCall.FunctionName, common.GetJsonString(part.FunctionCall.Arguments)))
-		}
-		if part.FunctionResponse != nil {
-			builder.add(role, fmt.Sprintf("%s: %s", part.FunctionResponse.Name, common.GetJsonString(part.FunctionResponse.Response)))
-		}
-		if part.ExecutableCode != nil {
-			builder.add(role, part.ExecutableCode.Code)
-		}
-		if part.CodeExecutionResult != nil {
-			builder.add(role, part.CodeExecutionResult.Output)
-		}
 		if builder.truncated {
 			break
 		}
