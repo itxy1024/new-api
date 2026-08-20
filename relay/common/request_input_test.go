@@ -21,12 +21,14 @@ func TestExtractRequestInputOnlyIncludesUserMessages(t *testing.T) {
 		}},
 		{Role: "assistant", Content: "answer", ToolCalls: []byte(`[{"function":{"name":"weather","arguments":"{\"city\":\"Shanghai\"}"}}]`)},
 		{Role: "tool", Content: "tool result"},
+		{Role: "user", Content: "latest user input"},
 	}}
 
 	content, truncated := ExtractRequestInput(request)
 
 	require.False(t, truncated)
-	assert.Equal(t, "[user]\nhello", content)
+	assert.Equal(t, "[user]\nlatest user input", content)
+	assert.NotContains(t, content, "hello")
 	assert.NotContains(t, content, "base64")
 	assert.NotContains(t, content, "developer instruction")
 	assert.NotContains(t, content, "follow policy")
@@ -48,6 +50,8 @@ func TestExtractRequestInputIgnoresLargeDeveloperPromptBeforeUserMessage(t *test
 func TestExtractRequestInputReadsResponsesTextAndToolPayloads(t *testing.T) {
 	request := &dto.OpenAIResponsesRequest{Input: []byte(`[
 		{"role":"user","content":[{"type":"input_text","text":"question"},{"type":"input_image","image_url":"data:image/png;base64,secret"}]},
+		{"role":"assistant","content":[{"type":"output_text","text":"old answer"}]},
+		{"role":"user","content":[{"type":"input_text","text":"latest question"}]},
 		{"type":"function_call","arguments":"{\"city\":\"Shanghai\"}"},
 		{"type":"function_call_output","output":"sunny"}
 	]`)}
@@ -55,7 +59,8 @@ func TestExtractRequestInputReadsResponsesTextAndToolPayloads(t *testing.T) {
 	content, truncated := ExtractRequestInput(request)
 
 	require.False(t, truncated)
-	assert.Contains(t, content, "[user]\nquestion")
+	assert.Equal(t, "[user]\nlatest question", content)
+	assert.NotContains(t, content, "question\n")
 	assert.NotContains(t, content, "Shanghai")
 	assert.NotContains(t, content, "sunny")
 	assert.NotContains(t, content, "base64")
@@ -66,6 +71,7 @@ func TestExtractRequestInputExcludesClaudeToolResultMedia(t *testing.T) {
 		System: []any{"system secret"},
 		Messages: []dto.ClaudeMessage{
 			{Role: "assistant", Content: "assistant secret"},
+			{Role: "user", Content: "older user text"},
 			{Role: "user", Content: []any{
 				map[string]any{"type": "text", "text": "user text"},
 				map[string]any{
@@ -83,6 +89,7 @@ func TestExtractRequestInputExcludesClaudeToolResultMedia(t *testing.T) {
 
 	require.False(t, truncated)
 	assert.Equal(t, "[user]\nuser text", content)
+	assert.NotContains(t, content, "older user text")
 	assert.NotContains(t, content, "system secret")
 	assert.NotContains(t, content, "assistant secret")
 	assert.NotContains(t, content, "tool text")
@@ -93,6 +100,7 @@ func TestExtractRequestInputOnlyIncludesGeminiUserContent(t *testing.T) {
 	request := &dto.GeminiChatRequest{
 		SystemInstructions: &dto.GeminiChatContent{Parts: []dto.GeminiPart{{Text: "system secret"}}},
 		Contents: []dto.GeminiChatContent{
+			{Role: "user", Parts: []dto.GeminiPart{{Text: "older user text"}}},
 			{Role: "user", Parts: []dto.GeminiPart{{Text: "user text"}}},
 			{Role: "model", Parts: []dto.GeminiPart{{Text: "model secret"}}},
 		},
@@ -102,6 +110,7 @@ func TestExtractRequestInputOnlyIncludesGeminiUserContent(t *testing.T) {
 
 	require.False(t, truncated)
 	assert.Equal(t, "[user]\nuser text", content)
+	assert.NotContains(t, content, "older user text")
 	assert.NotContains(t, content, "system secret")
 	assert.NotContains(t, content, "model secret")
 }

@@ -54,80 +54,75 @@ func isUserRole(role string) bool {
 }
 
 // ExtractRequestInput 提取客户端原始请求中的消息或 input 文本，供超级管理员排查调用。
-// 仅保留用户实际输入；系统、开发者、助手、工具内容及多媒体不写入日志，结果按 UTF-8 字节限制为 10 KiB。
+// 仅保留本次请求最后一条用户输入；系统、开发者、助手、工具内容及多媒体不写入日志，结果按 UTF-8 字节限制为 10 KiB。
 func ExtractRequestInput(request dto.Request) (string, bool) {
 	builder := &requestInputBuilder{}
 	switch req := request.(type) {
 	case *dto.GeneralOpenAIRequest:
-		for _, message := range req.Messages {
-			if !isUserRole(message.Role) {
-				continue
-			}
-			builder.add(message.Role, message.StringContent())
-			if builder.truncated {
+		for index := len(req.Messages) - 1; index >= 0; index-- {
+			message := req.Messages[index]
+			if isUserRole(message.Role) {
+				builder.add("user", message.StringContent())
 				break
 			}
 		}
 		if len(req.Messages) == 0 {
-			addStringValues(builder, "input", req.Input)
-			addStringValues(builder, "prompt", req.Prompt)
+			addLastStringValue(builder, "input", req.Input)
+			addLastStringValue(builder, "prompt", req.Prompt)
 		}
 	case *dto.OpenAIResponsesRequest:
 		addResponsesInput(builder, req.Input)
 	case *dto.OpenAIResponsesCompactionRequest:
 		addResponsesInput(builder, req.Input)
 	case *dto.ClaudeRequest:
-		for _, message := range req.Messages {
+		for index := len(req.Messages) - 1; index >= 0; index-- {
+			message := req.Messages[index]
 			if !isUserRole(message.Role) {
 				continue
 			}
 			if message.IsStringContent() {
-				builder.add(message.Role, message.GetStringContent())
-				continue
+				builder.add("user", message.GetStringContent())
+				break
 			}
 			parts, _ := message.ParseContent()
 			for _, part := range parts {
 				if part.Type == "text" {
-					builder.add(message.Role, claudePartText(part))
-				}
-				if builder.truncated {
-					break
+					builder.add("user", claudePartText(part))
 				}
 			}
-			if builder.truncated {
-				break
-			}
+			break
 		}
 	case *dto.GeminiChatRequest:
-		for _, content := range req.Contents {
+		for index := len(req.Contents) - 1; index >= 0; index-- {
+			content := req.Contents[index]
 			if content.Role != "" && !isUserRole(content.Role) {
 				continue
 			}
 			addGeminiContent(builder, "user", content)
-			if builder.truncated {
-				break
-			}
+			break
 		}
 	case *dto.EmbeddingRequest:
-		for _, input := range req.ParseInput() {
-			builder.add("input", input)
+		inputs := req.ParseInput()
+		if len(inputs) > 0 {
+			builder.add("input", inputs[len(inputs)-1])
 		}
 	}
 	return builder.result()
 }
 
-func addStringValues(builder *requestInputBuilder, label string, value any) {
+func addLastStringValue(builder *requestInputBuilder, label string, value any) {
 	switch typed := value.(type) {
 	case string:
 		builder.add(label, typed)
 	case []string:
-		for _, item := range typed {
-			builder.add(label, item)
+		if len(typed) > 0 {
+			builder.add(label, typed[len(typed)-1])
 		}
 	case []any:
-		for _, item := range typed {
-			if text, ok := item.(string); ok {
+		for index := len(typed) - 1; index >= 0; index-- {
+			if text, ok := typed[index].(string); ok {
 				builder.add(label, text)
+				break
 			}
 		}
 	}
@@ -141,39 +136,37 @@ func addResponsesInput(builder *requestInputBuilder, input []byte) {
 	if err := common.Unmarshal(input, &value); err != nil {
 		return
 	}
-	addResponsesValue(builder, "input", value)
+	builder.add("user", lastResponsesUserText(value))
 }
 
-func addResponsesValue(builder *requestInputBuilder, label string, value any) {
-	if builder.truncated {
-		return
-	}
+func lastResponsesUserText(value any) string {
 	switch typed := value.(type) {
 	case string:
-		builder.add(label, typed)
+		return typed
 	case []any:
-		for _, item := range typed {
-			addResponsesValue(builder, label, item)
+		for index := len(typed) - 1; index >= 0; index-- {
+			if text := lastResponsesUserText(typed[index]); strings.TrimSpace(text) != "" {
+				return text
+			}
 		}
 	case map[string]any:
 		if role, ok := typed["role"].(string); ok && role != "" && !isUserRole(role) {
-			return
+			return ""
 		}
 		if itemType, ok := typed["type"].(string); ok {
 			switch itemType {
 			case "function_call", "function_call_output":
-				return
+				return ""
 			}
 		}
 		if content, ok := typed["content"]; ok {
-			addResponsesValue(builder, "user", content)
+			return lastResponsesUserText(content)
 		}
-		for _, key := range []string{"text"} {
-			if text, ok := typed[key].(string); ok {
-				builder.add("user", text)
-			}
+		if text, ok := typed["text"].(string); ok {
+			return text
 		}
 	}
+	return ""
 }
 
 func claudePartText(part dto.ClaudeMediaMessage) string {
