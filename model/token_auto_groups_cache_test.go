@@ -28,6 +28,59 @@ func TestTokenAutoGroupsRoundTripThroughRedisHashCache(t *testing.T) {
 	assert.Equal(t, []string{"vip", "default"}, groups)
 }
 
+func TestTokenAggregateGroupsRoundTripThroughRedisHashCache(t *testing.T) {
+	useUserCacheMiniRedis(t)
+	token := Token{
+		Id:                      43,
+		UserId:                  7,
+		Key:                     "token-aggregate-groups-cache-key",
+		Name:                    "aggregate-cache",
+		Group:                   "vip",
+		Groups:                  []string{"vip", "default"},
+		GroupAggregationEnabled: true,
+	}
+
+	require.NoError(t, cacheSetTokenForTest(token))
+	cached, err := cacheGetTokenByKey(token.Key)
+	require.NoError(t, err)
+	assert.True(t, cached.GroupAggregationEnabled)
+	assert.Equal(t, []string{"vip", "default"}, cached.GetGroups())
+}
+
+func TestOutdatedTokenCacheRehydratesAggregateGroupsWithoutOverwritingQuota(t *testing.T) {
+	truncateTables(t)
+	useUserCacheMiniRedis(t)
+	token := Token{
+		UserId:                  7,
+		Key:                     "token-outdated-aggregate-cache-key",
+		Name:                    "outdated-aggregate-cache",
+		Status:                  common.TokenStatusEnabled,
+		ExpiredTime:             -1,
+		RemainQuota:             100,
+		Group:                   "vip",
+		Groups:                  []string{"vip", "default"},
+		GroupAggregationEnabled: true,
+	}
+	require.NoError(t, token.Insert())
+
+	cacheKey := getTokenCacheKey(token.Key)
+	require.NoError(t, common.RDB.HSet(t.Context(), cacheKey,
+		"Id", token.Id,
+		"UserId", token.UserId,
+		"Group", token.Group,
+		"RemainQuota", 75,
+	).Err())
+
+	loaded, err := GetTokenByKey(token.Key, false)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"vip", "default"}, loaded.GetGroups())
+
+	cached, err := cacheGetTokenByKey(token.Key)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"vip", "default"}, cached.GetGroups())
+	assert.Equal(t, 75, cached.RemainQuota)
+}
+
 func TestTokenUpdateSynchronouslyNarrowsPreheatedAutoGroupsCache(t *testing.T) {
 	truncateTables(t)
 	useUserCacheMiniRedis(t)
