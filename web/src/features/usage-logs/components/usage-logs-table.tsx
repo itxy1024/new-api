@@ -85,6 +85,8 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     isRootView: isRoot,
     viewAccess,
   } = useLogsViewScope()
+  const hasChannelPermission = useCanViewLogChannel()
+  const canViewChannel = isAdmin && hasChannelPermission
   const isMobile = useMediaQuery('(max-width: 640px)')
   const searchParams = route.useSearch()
 
@@ -170,7 +172,12 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   })
 
   const logs = data?.items || []
-  const columns = useColumnsByCategory(logCategory, isAdmin, isRoot)
+  const columns = useColumnsByCategory(
+    logCategory,
+    isAdmin,
+    isRoot,
+    canViewChannel
+  )
   const isLoadingData = isLoading || (isFetching && !data)
 
   const { table } = useDataTable({

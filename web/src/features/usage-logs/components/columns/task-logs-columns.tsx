@@ -84,7 +84,8 @@ function TaskDetailsCell(props: {
 
 export function useTaskLogsColumns(
   isAdmin: boolean,
-  isRoot: boolean
+  isRoot: boolean,
+  canViewChannel: boolean
 ): ColumnDef<TaskLog>[] {
   const { t } = useTranslation()
   const columns: ColumnDef<TaskLog>[] = [
@@ -116,7 +117,9 @@ export function useTaskLogsColumns(
 
   if (isAdmin) {
     columns.push(
-      createChannelColumn<TaskLog>({ headerLabel: t('Channel') }),
+      ...(canViewChannel
+        ? [createChannelColumn<TaskLog>({ headerLabel: t('Channel') })]
+        : []),
       {
         id: 'user',
         header: t('User'),

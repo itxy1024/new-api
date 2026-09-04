@@ -293,7 +293,8 @@ function buildTypeDetailSegments(
 
 export function useCommonLogsColumns(
   isAdmin: boolean,
-  isRoot: boolean
+  isRoot: boolean,
+  canViewChannel: boolean
 ): ColumnDef<UsageLog>[] {
   const { t } = useTranslation()
   const columns: ColumnDef<UsageLog>[] = [
@@ -786,6 +787,7 @@ export function useCommonLogsColumns(
               log={log}
               isAdmin={isAdmin}
               isRoot={isRoot}
+              canViewChannel={canViewChannel}
               open={dialogOpen}
               onOpenChange={setDialogOpen}
             />

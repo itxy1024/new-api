@@ -478,6 +478,7 @@ interface DetailsDialogProps {
   log: UsageLog
   isAdmin: boolean
   isRoot: boolean
+  canViewChannel?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -488,6 +489,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
   const details = props.log.content ?? ''
   const other = parseLogOther(props.log.other)
   const typeConfig = getLogTypeConfig(props.log.type)
+  const canViewChannel = props.canViewChannel ?? props.isRoot
 
   const isViolation = isViolationFeeLog(other)
   const isRefund = props.log.type === 6
@@ -663,7 +665,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
             />
           )}
 
-          {props.canViewChannel && props.log.channel > 0 && (
+          {canViewChannel && props.log.channel > 0 && (
             <DetailRow
               label={t('Channel')}
               value={
@@ -681,7 +683,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
             />
           )}
 
-          {channelChain && props.canViewChannel && (
+          {channelChain && canViewChannel && (
             <DetailRow label={t('Retry Chain')} value={channelChain} mono />
           )}
 
