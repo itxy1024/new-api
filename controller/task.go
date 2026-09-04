@@ -17,6 +17,7 @@ import (
 	relaychannel "github.com/QuantumNous/new-api/relay/channel"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 )
@@ -331,19 +332,6 @@ func TaskArtifactContent(c *gin.Context) {
 		_ = artifactStore.Serve(c, task, ref)
 		return
 	}
-	showChannel := authz.Can(c.GetInt("id"), c.GetInt("role"), authz.LogChannelView)
-	if !showChannel {
-		queryParams.ChannelID = ""
-	}
-	if c.GetInt("role") != common.RoleRootUser {
-		excludedUserIds, err := model.GetRootUserIds()
-		if err != nil {
-			common.ApiError(c, err)
-			return
-		}
-		queryParams.ExcludedUserIDs = excludedUserIds
-	}
-
 	adaptor, err := initTaskArtifactAdaptor(task)
 	if err != nil {
 		writeTaskArtifactProjectionError(c, err)
@@ -388,9 +376,27 @@ func GetAllTask(c *gin.Context) {
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	queryParams := model.SyncTaskQueryParams{Platform: constant.TaskPlatform(c.Query("platform")), TaskID: c.Query("task_id"), Status: c.Query("status"), Action: c.Query("action"), StartTimestamp: startTimestamp, EndTimestamp: endTimestamp, ChannelID: c.Query("channel_id")}
+	showChannel := authz.Can(c.GetInt("id"), c.GetInt("role"), authz.LogChannelView)
+	if !showChannel {
+		queryParams.ChannelID = ""
+	}
+	if c.GetInt("role") != common.RoleRootUser {
+		excludedUserIds, err := model.GetRootUserIds()
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		queryParams.ExcludedUserIDs = excludedUserIds
+	}
 	items := model.TaskGetAllTasks(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
 	pageInfo.SetTotal(int(model.TaskCountAllTasks(queryParams)))
-	pageInfo.SetItems(tasksToDto(items, true, c.GetInt("role")))
+	result := tasksToDto(items, true, c.GetInt("role"))
+	if !showChannel {
+		for _, task := range result {
+			task.ChannelId = 0
+		}
+	}
+	pageInfo.SetItems(result)
 	common.ApiSuccess(c, pageInfo)
 }
 
