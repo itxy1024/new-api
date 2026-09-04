@@ -90,6 +90,12 @@ func AppendRelayLogAdminInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo,
 	if common.GetContextKeyBool(ctx, constant.ContextKeyLocalCountTokens) {
 		other.SetAdmin("local_count_tokens", true)
 	}
+	if relayInfo != nil && relayInfo.RequestInput != "" {
+		other.SetAdmin("request_input", relayInfo.RequestInput)
+		if relayInfo.RequestInputTruncated {
+			other.SetAdmin("request_input_truncated", true)
+		}
+	}
 
 	AppendChannelAffinityAdminInfo(ctx, other)
 }

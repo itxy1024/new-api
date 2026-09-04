@@ -46,6 +46,9 @@ func GetAllLogs(c *gin.Context) {
 	} else {
 		model.FormatRootLogs(logs)
 	}
+	if !canViewChannel {
+		model.FormatUserLogs(logs, pageInfo.GetStartIdx())
+	}
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(logs)
 	common.ApiSuccess(c, pageInfo)

@@ -164,6 +164,13 @@ func UpdateOption(c *gin.Context) {
 			return
 		}
 	}
+	if option.Key == "TopUpCommissionRatio" {
+		ratio, parseErr := strconv.ParseFloat(option.Value.(string), 64)
+		if parseErr != nil || math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio < 0 || ratio > 100 {
+			common.ApiErrorMsg(c, "充值返利比例必须在 0 到 100 之间")
+			return
+		}
+	}
 	switch option.Key {
 	case "GitHubOAuthEnabled":
 		if option.Value == "true" && common.GitHubClientId == "" {
