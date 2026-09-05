@@ -50,6 +50,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api'
 
+import { CreativeDetailModal } from './CreativeDetailModal'
 import { CreativeLightbox } from './CreativeLightbox'
 import { SizePickerModal } from './SizePickerModal'
 
@@ -169,6 +170,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [showSizePicker, setShowSizePicker] = useState(false)
   const [lightboxItem, setLightboxItem] = useState<StoredMedia | null>(null)
+  const [detailItem, setDetailItem] = useState<StoredMedia | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const selectedKey = useMemo(
     () => keys.find((item) => String(item.id) === keyId),
@@ -284,7 +286,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
     setBusy(true)
     try {
       if (mode === 'image') {
-        const response = await api.post('/api/creative/images', {
+        const imagePayload: Record<string, unknown> = {
           key_id: Number(keyId),
           model,
           ...(modelGroup ? { group: modelGroup } : {}),
@@ -299,7 +301,9 @@ export function CreativePage({ mode }: { mode: Mode }) {
           n: Number(quantity),
           interface_mode: interfaceMode,
           retry_count: Number(retries),
-        })
+        }
+        if (inputImage.trim()) imagePayload.images = [inputImage.trim()]
+        const response = await api.post('/api/creative/images', imagePayload)
         const raw = response.data?.data
         const items = Array.isArray(raw) ? raw : raw?.data || []
         const generated = items
@@ -467,6 +471,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
               {filteredResults.map((item) => (
                 <article
                   key={item.id}
+                  onClick={() => setDetailItem(item)}
                   className='group bg-background flex h-50 overflow-hidden rounded-2xl border shadow-sm transition hover:shadow-md'
                 >
                   <div className='bg-muted relative h-50 w-50 min-w-50 overflow-hidden'>
@@ -474,7 +479,10 @@ export function CreativePage({ mode }: { mode: Mode }) {
                       <button
                         type='button'
                         className='size-full cursor-zoom-in'
-                        onClick={() => setLightboxItem(item)}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setDetailItem(item)
+                        }}
                       >
                         <img
                           src={item.url}
@@ -487,6 +495,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
                       <video
                         src={item.url}
                         controls
+                        onClick={(event) => event.stopPropagation()}
                         className='size-full bg-black object-cover'
                       />
                     )}
@@ -503,6 +512,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
                       download
                       className='absolute right-2 bottom-2 rounded-lg bg-black/55 p-1.5 text-white opacity-0 transition group-hover:opacity-100'
                       aria-label={t('Download')}
+                      onClick={(event) => event.stopPropagation()}
                     >
                       <Download className='size-4' />
                     </a>
@@ -517,7 +527,8 @@ export function CreativePage({ mode }: { mode: Mode }) {
                           variant='ghost'
                           size='sm'
                           className='h-7 px-1.5 text-xs'
-                          onClick={() => {
+                          onClick={(event) => {
+                            event.stopPropagation()
                             void navigator.clipboard?.writeText(
                               item.prompt || ''
                             )
@@ -530,7 +541,10 @@ export function CreativePage({ mode }: { mode: Mode }) {
                           variant='ghost'
                           size='sm'
                           className='h-7 px-1.5 text-xs'
-                          onClick={() => setPrompt(item.prompt || '')}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setPrompt(item.prompt || '')
+                          }}
                         >
                           {t('Expand')}
                         </Button>
@@ -548,7 +562,10 @@ export function CreativePage({ mode }: { mode: Mode }) {
                         variant='ghost'
                         size='icon-sm'
                         className={`size-7 ${item.favorite ? 'text-amber-500' : 'text-muted-foreground'}`}
-                        onClick={() => void toggleFavorite(item)}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void toggleFavorite(item)
+                        }}
                         aria-label={t('Favorites')}
                       >
                         <Star
@@ -559,7 +576,10 @@ export function CreativePage({ mode }: { mode: Mode }) {
                         variant='ghost'
                         size='icon-sm'
                         className='text-muted-foreground size-7'
-                        onClick={() => setPrompt(item.prompt || '')}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setPrompt(item.prompt || '')
+                        }}
                         aria-label={t('Reuse')}
                       >
                         <RotateCcw className='size-4' />
@@ -568,7 +588,10 @@ export function CreativePage({ mode }: { mode: Mode }) {
                         variant='ghost'
                         size='icon-sm'
                         className='text-muted-foreground size-7'
-                        onClick={() => setPrompt(item.prompt || '')}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setPrompt(item.prompt || '')
+                        }}
                         aria-label={t('Edit')}
                       >
                         <Pencil className='size-4' />
@@ -577,7 +600,10 @@ export function CreativePage({ mode }: { mode: Mode }) {
                         variant='ghost'
                         size='icon-sm'
                         className='text-muted-foreground size-7'
-                        onClick={() => void removeResult(item)}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void removeResult(item)
+                        }}
                         aria-label={t('Delete')}
                       >
                         <Trash2 className='size-4' />
@@ -949,6 +975,28 @@ export function CreativePage({ mode }: { mode: Mode }) {
           <CreativeLightbox
             src={lightboxItem.url}
             onClose={() => setLightboxItem(null)}
+          />
+        )}
+        {detailItem && (
+          <CreativeDetailModal
+            item={detailItem}
+            onClose={() => setDetailItem(null)}
+            onPreview={() => setLightboxItem(detailItem)}
+            onReuse={() => {
+              setPrompt(detailItem.prompt || '')
+              setSize(detailItem.size || size)
+              setDetailItem(null)
+            }}
+            onEdit={() => {
+              setPrompt(detailItem.prompt || '')
+              setInputImage(detailItem.url)
+              setDetailItem(null)
+            }}
+            onDelete={() => {
+              void removeResult(detailItem)
+              setDetailItem(null)
+            }}
+            onFavorite={() => void toggleFavorite(detailItem)}
           />
         )}
       </div>
