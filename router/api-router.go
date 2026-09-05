@@ -25,6 +25,26 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/status", controller.GetStatus)
 		apiRouter.GET("/uptime/status", controller.GetUptimeKumaStatus)
 		apiRouter.GET("/models", middleware.UserAuth(), controller.DashboardListModels)
+		creativeRoute := apiRouter.Group("/creative")
+		creativeRoute.Use(middleware.UserAuth())
+		{
+			creativeRoute.POST("/images",
+				controller.PrepareCreativeImageContext,
+				middleware.ModelRequestRateLimit(),
+				middleware.Distribute(),
+				controller.CreativeImage,
+			)
+			creativeRoute.POST("/videos",
+				controller.PrepareCreativeVideoContext,
+				middleware.PinTaskPluginEndpoint(),
+				middleware.TaskPluginEndpointOnly(middleware.ModelRequestRateLimit()),
+				middleware.PrepareTaskPluginEndpoint(),
+				middleware.Distribute(),
+				func(c *gin.Context) { controller.RelayTaskPluginEndpoint(c, controller.CreativeVideo) },
+			)
+			creativeRoute.GET("/videos/:task_id", controller.CreativeVideoFetch)
+			creativeRoute.GET("/videos/:task_id/content", controller.CreativeVideoContent)
+		}
 		apiRouter.GET("/status/test", middleware.AdminAuth(), controller.TestStatus)
 		apiRouter.GET("/notice", controller.GetNotice)
 		apiRouter.GET("/user-agreement", controller.GetUserAgreement)

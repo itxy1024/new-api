@@ -37,6 +37,11 @@ type SidebarModulesUserConfig = SidebarModulesAdminConfig | null
  * Default sidebar modules configuration
  */
 const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
+  creative: {
+    enabled: true,
+    image: true,
+    video: true,
+  },
   chat: {
     enabled: true,
     playground: true,
@@ -96,6 +101,8 @@ const mergeWithDefaultSidebarModules = (
  */
 const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/playground': { section: 'chat', module: 'playground' },
+  '/creative/image': { section: 'creative', module: 'image' },
+  '/creative/video': { section: 'creative', module: 'video' },
   '/dashboard': { section: 'console', module: 'detail' },
   '/dashboard/overview': { section: 'console', module: 'detail' },
   '/dashboard/models': { section: 'console', module: 'detail' },
