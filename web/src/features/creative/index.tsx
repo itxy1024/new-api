@@ -1,7 +1,6 @@
 import {
   Download,
   Loader2,
-  Maximize2,
   Settings2,
   Sparkles,
   Trash2,
@@ -33,7 +32,7 @@ import { toast } from 'sonner'
 
 import { Main } from '@/components/layout'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -291,52 +290,123 @@ export function CreativePage({ mode }: { mode: Mode }) {
   }
 
   return (
-    <Main className='bg-muted/20 min-h-full p-3 md:p-6'>
-      <div className='mx-auto flex w-full max-w-7xl flex-col gap-5'>
-        <div className='flex flex-wrap items-center justify-between gap-4'>
-          <div className='flex items-center gap-3'>
-            {mode === 'image' ? (
-              <div className='bg-primary/10 text-primary flex size-11 items-center justify-center rounded-2xl'>
-                <Sparkles className='size-6' aria-hidden='true' />
-              </div>
-            ) : (
-              <div className='bg-primary/10 text-primary flex size-11 items-center justify-center rounded-2xl'>
-                <VideoIcon className='size-6' aria-hidden='true' />
-              </div>
-            )}
-            <div>
-              <h1 className='text-2xl font-semibold tracking-tight'>{title}</h1>
-              <p className='text-muted-foreground text-sm'>
+    <Main className='bg-muted/20 min-h-full overflow-hidden p-0'>
+      <div className='relative flex min-h-[calc(100vh-4rem)] flex-col'>
+        <header className='bg-background/85 z-10 flex items-center justify-between border-b px-4 py-3 backdrop-blur md:px-6'>
+          <div className='flex min-w-0 items-center gap-3'>
+            <div className='bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-xl'>
+              {mode === 'image' ? (
+                <Sparkles className='size-5' aria-hidden='true' />
+              ) : (
+                <VideoIcon className='size-5' aria-hidden='true' />
+              )}
+            </div>
+            <div className='min-w-0'>
+              <h1 className='truncate text-base font-semibold'>{title}</h1>
+              <p className='text-muted-foreground hidden text-xs sm:block'>
                 {t('Powered by your selected NewAPI API key')}
               </p>
             </div>
           </div>
-          <div className='text-muted-foreground flex items-center gap-2 text-xs'>
-            <span className='bg-background rounded-full border px-3 py-1.5'>
+          <div className='flex items-center gap-2'>
+            <span className='bg-muted hidden max-w-64 truncate rounded-full px-3 py-1.5 text-xs sm:inline-flex'>
               {selectedKey ? getKeyLabel(selectedKey) : t('Select an API key')}
             </span>
-            <span className='bg-background rounded-full border px-3 py-1.5'>
-              {models.length} {t('Model')}
-            </span>
+            <Button variant='ghost' size='icon-sm' aria-label={t('Settings')}>
+              <Settings2 className='size-4' aria-hidden='true' />
+            </Button>
           </div>
-        </div>
-        <Card>
-          <CardHeader className='border-b'>
-            <div className='flex items-center justify-between gap-3'>
-              <div>
-                <CardTitle>{t('Create')}</CardTitle>
-                <p className='text-muted-foreground mt-1 text-xs'>{helper}</p>
-              </div>
-              <Settings2
-                className='text-muted-foreground size-5'
-                aria-hidden='true'
-              />
+        </header>
+
+        <section className='flex-1 overflow-auto px-3 pt-3 pb-44 md:px-6'>
+          <div className='mx-auto flex h-full w-full max-w-7xl flex-col gap-3'>
+            <div className='flex items-center justify-between px-1'>
+              <h2 className='text-sm font-medium'>{t('Recent results')}</h2>
+              {results.length > 0 && (
+                <Button
+                  variant='ghost'
+                  size='sm'
+                  onClick={() => setResults([])}
+                >
+                  <Trash2 className='mr-2 size-3.5' aria-hidden='true' />
+                  {t('Clear')}
+                </Button>
+              )}
             </div>
-          </CardHeader>
-          <CardContent className='grid gap-5 pt-1'>
-            <div className='grid gap-4 md:grid-cols-2'>
-              <label className='grid gap-2 text-sm'>
-                <span>{t('API Key')}</span>
+            {results.length === 0 ? (
+              <div className='border-border/70 bg-background/60 flex min-h-[52vh] flex-1 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center'>
+                <div className='bg-primary/10 text-primary mb-4 flex size-14 items-center justify-center rounded-2xl'>
+                  {mode === 'image' ? (
+                    <Sparkles className='size-7' aria-hidden='true' />
+                  ) : (
+                    <VideoIcon className='size-7' aria-hidden='true' />
+                  )}
+                </div>
+                <h2 className='text-lg font-semibold'>{t('Create')}</h2>
+                <p className='text-muted-foreground mt-2 max-w-md text-sm'>
+                  {helper}
+                </p>
+              </div>
+            ) : (
+              <div className='columns-1 gap-3 sm:columns-2 lg:columns-3 xl:columns-4'>
+                {results.map((item) => (
+                  <Card key={item.id} className='group mb-3 break-inside-avoid'>
+                    <CardContent className='p-0'>
+                      <div className='bg-muted relative overflow-hidden'>
+                        {item.kind === 'image' ? (
+                          <img
+                            src={item.url}
+                            alt={t('Generated result')}
+                            className='h-auto max-h-[70vh] w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]'
+                            loading='lazy'
+                          />
+                        ) : (
+                          <video
+                            src={item.url}
+                            controls
+                            className='aspect-video w-full bg-black'
+                          />
+                        )}
+                        <a
+                          href={item.url}
+                          download
+                          className='bg-background/90 absolute top-2 right-2 rounded-md p-2 opacity-0 shadow transition-opacity group-hover:opacity-100'
+                          aria-label={t('Download')}
+                        >
+                          <Download className='size-4' aria-hidden='true' />
+                        </a>
+                      </div>
+                      <div className='text-muted-foreground flex items-center justify-between px-3 py-2 text-xs'>
+                        <span>
+                          {item.kind === 'image' ? t('Image') : t('Video')}
+                        </span>
+                        <span>{new Date(item.createdAt).toLocaleString()}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <Card className='bg-background/95 fixed right-3 bottom-3 left-3 z-20 mx-auto max-w-5xl gap-0 rounded-2xl shadow-2xl ring-1 backdrop-blur md:right-6 md:bottom-5 md:left-6'>
+          <CardContent className='grid gap-3 p-3 md:p-4'>
+            <label className='grid gap-2'>
+              <span className='sr-only'>{t('Prompt')}</span>
+              <Textarea
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                placeholder={helper}
+                rows={2}
+                className='min-h-14 resize-none border-0 bg-transparent px-1 text-base shadow-none focus-visible:ring-0'
+              />
+            </label>
+            <div className='flex flex-wrap items-center gap-2 border-t pt-3'>
+              <label className='flex min-w-44 flex-1 items-center gap-2 text-xs'>
+                <span className='text-muted-foreground shrink-0'>
+                  {t('API Key')}
+                </span>
                 <Select
                   value={keyId}
                   onValueChange={(value) => {
@@ -346,7 +416,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
                     setModel('')
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className='h-8 min-w-0 flex-1'>
                     <SelectValue placeholder={t('Select an API key')}>
                       {(value: string | null) => {
                         const item = keys.find(
@@ -365,14 +435,19 @@ export function CreativePage({ mode }: { mode: Mode }) {
                   </SelectContent>
                 </Select>
               </label>
-              <label className='grid gap-2 text-sm'>
-                <span>{t('Model')}</span>
+              <label className='flex min-w-40 flex-1 items-center gap-2 text-xs'>
+                <span className='text-muted-foreground shrink-0'>
+                  {t('Model')}
+                </span>
                 <Select
                   key={`model-${keyId}`}
                   value={model}
                   onValueChange={(value) => setModel(String(value))}
                 >
-                  <SelectTrigger disabled={!models.length}>
+                  <SelectTrigger
+                    className='h-8 min-w-0 flex-1'
+                    disabled={!models.length}
+                  >
                     <SelectValue placeholder={t('Select a model')}>
                       {(value: string | null) => value || t('Select a model')}
                     </SelectValue>
@@ -386,134 +461,75 @@ export function CreativePage({ mode }: { mode: Mode }) {
                   </SelectContent>
                 </Select>
               </label>
-            </div>
-            <label className='grid gap-2 text-sm'>
-              <span>{t('Prompt')}</span>
-              <Textarea
-                value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
-                placeholder={helper}
-                rows={6}
-                className='min-h-36 resize-y text-base'
-              />
-            </label>
-            <div className='grid gap-4 md:grid-cols-3'>
               <label className='grid gap-2 text-sm'>
-                <span>{mode === 'image' ? t('Size') : t('Aspect ratio')}</span>
+                <span className='sr-only'>
+                  {mode === 'image' ? t('Size') : t('Aspect ratio')}
+                </span>
                 <Input
                   value={size}
                   onChange={(event) => setSize(event.target.value)}
+                  className='h-8 w-24'
+                  aria-label={mode === 'image' ? t('Size') : t('Aspect ratio')}
                 />
               </label>
               {mode === 'video' && (
-                <label className='grid gap-2 text-sm'>
-                  <span>{t('Duration (seconds)')}</span>
+                <label className='flex items-center gap-2 text-xs'>
+                  <span className='text-muted-foreground'>
+                    {t('Duration (seconds)')}
+                  </span>
                   <Input
                     type='number'
                     min={1}
                     max={60}
                     value={seconds}
                     onChange={(event) => setSeconds(event.target.value)}
+                    className='h-8 w-20'
                   />
                 </label>
               )}
               {mode === 'video' && (
-                <label className='grid gap-2 text-sm'>
-                  <span>{t('Input image URL')}</span>
+                <label className='flex min-w-44 flex-1 items-center gap-2 text-xs'>
+                  <span className='text-muted-foreground shrink-0'>
+                    {t('Input image URL')}
+                  </span>
                   <Input
                     value={inputImage}
                     onChange={(event) => setInputImage(event.target.value)}
                     placeholder='https://...'
+                    className='h-8 min-w-0 flex-1'
                   />
                 </label>
               )}
-            </div>
-            <label className='grid gap-2 text-sm'>
-              <span>{t('Advanced JSON')}</span>
-              <Textarea
-                value={advanced}
-                onChange={(event) => setAdvanced(event.target.value)}
-                placeholder='{"quality":"high"}'
-                rows={3}
-              />
-            </label>
-            <Button
-              className='h-10 w-full md:w-fit md:min-w-40'
-              onClick={submit}
-              disabled={!canSubmit}
-            >
-              {busy ? (
-                <Loader2
-                  className='mr-2 size-4 animate-spin'
-                  aria-hidden='true'
+              <label className='flex items-center gap-2 text-xs'>
+                <span className='text-muted-foreground'>
+                  {t('Advanced JSON')}
+                </span>
+                <Input
+                  value={advanced}
+                  onChange={(event) => setAdvanced(event.target.value)}
+                  placeholder='{"quality":"high"}'
+                  className='h-8 w-36'
+                  aria-label={t('Advanced JSON')}
                 />
-              ) : (
-                <Upload className='mr-2 size-4' aria-hidden='true' />
-              )}
-              {busy ? t('Generating...') : t('Generate')}
-            </Button>
+              </label>
+              <Button
+                className='h-8 md:min-w-32'
+                onClick={submit}
+                disabled={!canSubmit}
+              >
+                {busy ? (
+                  <Loader2
+                    className='mr-2 size-4 animate-spin'
+                    aria-hidden='true'
+                  />
+                ) : (
+                  <Upload className='mr-2 size-4' aria-hidden='true' />
+                )}
+                {busy ? t('Generating...') : t('Generate')}
+              </Button>
+            </div>
           </CardContent>
         </Card>
-        <section className='grid gap-3'>
-          <div className='flex items-center justify-between'>
-            <h2 className='text-lg font-semibold'>{t('Recent results')}</h2>
-            {results.length > 0 && (
-              <Button variant='ghost' size='sm' onClick={() => setResults([])}>
-                <Trash2 className='mr-2 size-4' aria-hidden='true' />
-                {t('Clear')}
-              </Button>
-            )}
-          </div>
-          {results.length === 0 ? (
-            <p className='text-muted-foreground text-sm'>
-              {t('Your generated results will appear here.')}
-            </p>
-          ) : (
-            <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'>
-              {results.map((item) => (
-                <Card key={item.id} className='group overflow-hidden'>
-                  <CardContent className='p-0'>
-                    <div className='bg-muted relative overflow-hidden'>
-                      {item.kind === 'image' ? (
-                        <img
-                          src={item.url}
-                          alt={t('Generated result')}
-                          className='aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]'
-                          loading='lazy'
-                        />
-                      ) : (
-                        <video
-                          src={item.url}
-                          controls
-                          className='aspect-video w-full bg-black'
-                        />
-                      )}
-                      <div className='pointer-events-none absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100'>
-                        <span className='bg-background/90 rounded-md p-1.5 shadow'>
-                          <Maximize2 className='size-3.5' aria-hidden='true' />
-                        </span>
-                        <a
-                          href={item.url}
-                          download
-                          className='bg-background/90 pointer-events-auto rounded-md p-1.5 shadow'
-                          aria-label={t('Download')}
-                        >
-                          <Download className='size-3.5' aria-hidden='true' />
-                        </a>
-                      </div>
-                    </div>
-                    <div className='text-muted-foreground flex items-center justify-between px-3 py-2 text-xs'>
-                      <span>
-                        {item.kind === 'image' ? t('Image') : t('Video')}
-                      </span>
-                      <span>{new Date(item.createdAt).toLocaleString()}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </section>
       </div>
     </Main>
   )
