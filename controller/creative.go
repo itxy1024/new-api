@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -12,7 +13,6 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relaykit/types"
-	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -31,6 +31,16 @@ func PrepareCreativeImageContext(c *gin.Context) {
 	c.Request.URL.Path = "/v1/images/generations"
 	c.Request.RequestURI = c.Request.URL.Path
 	c.Next()
+}
+
+// CreativeModels 返回当前用户指定 API Key 可用的模型列表。
+func CreativeModels(c *gin.Context) {
+	if err := prepareCreativeKeyContext(c, c.Query("key_id")); err != nil {
+		writeCreativeError(c, err, http.StatusBadRequest)
+		return
+	}
+	c.Request.URL.Path = "/v1/models"
+	ListModels(c, constant.ChannelTypeOpenAI)
 }
 
 // 使用登录态复用视频任务 relay，厂商适配由后台渠道决定。
@@ -52,11 +62,11 @@ func PrepareCreativeVideoContext(c *gin.Context) {
 
 // 返回 OpenAI 视频任务状态格式。
 func CreativeVideoFetch(c *gin.Context) {
-	group := ""
-	if task, exists, err := model.GetByTaskId(c.GetInt("id"), c.Param("task_id")); err == nil && exists && task != nil {
-		group = task.Group
+	keyID := ""
+	if task, exists, err := model.GetByTaskId(c.GetInt("id"), c.Param("task_id")); err == nil && exists && task != nil && task.TokenId > 0 {
+		keyID = strconv.Itoa(task.TokenId)
 	}
-	if err := prepareCreativeContextWithGroup(c, group); err != nil {
+	if err := prepareCreativeKeyContext(c, keyID); err != nil {
 		writeCreativeError(c, err, http.StatusBadRequest)
 		return
 	}
@@ -72,7 +82,11 @@ func CreativeVideoContent(c *gin.Context) {
 		writeCreativeError(c, errors.New("task not found"), http.StatusNotFound)
 		return
 	}
-	if err := prepareCreativeContextWithGroup(c, task.Group); err != nil {
+	keyID := ""
+	if task.TokenId > 0 {
+		keyID = strconv.Itoa(task.TokenId)
+	}
+	if err := prepareCreativeKeyContext(c, keyID); err != nil {
 		writeCreativeError(c, err, http.StatusBadRequest)
 		return
 	}
@@ -88,35 +102,36 @@ func prepareCreativeContext(c *gin.Context) error {
 	}
 	c.Request.Body = io.NopCloser(bytes.NewReader(body))
 	var envelope struct {
-		Group string `json:"group"`
+		KeyID int `json:"key_id"`
 	}
 	if len(body) > 0 && common.Unmarshal(body, &envelope) != nil {
 		return errors.New("invalid creative request")
 	}
-	return prepareCreativeContextWithGroup(c, envelope.Group)
+	if envelope.KeyID <= 0 {
+		return errors.New("creative key_id is required")
+	}
+	return prepareCreativeKeyContext(c, strconv.Itoa(envelope.KeyID))
 }
 
-func prepareCreativeContextWithGroup(c *gin.Context, requestedGroup string) error {
+func prepareCreativeKeyContext(c *gin.Context, requestedKeyID string) error {
 	user, err := model.GetUserCache(c.GetInt("id"))
 	if err != nil || user == nil {
 		return errors.New("user not found")
 	}
-	group := strings.TrimSpace(requestedGroup)
-	if group == "" {
-		group = user.Group
+	keyID, err := strconv.Atoi(strings.TrimSpace(requestedKeyID))
+	if err != nil || keyID <= 0 {
+		return errors.New("creative key_id is required")
 	}
-	if group == "" {
-		return errors.New("creative group is required")
+	token, err := model.GetTokenByIds(keyID, user.Id)
+	if err != nil || token == nil {
+		return errors.New("creative key is not available")
 	}
-	if _, ok := service.GetUserUsableGroups(user.Group)[group]; !ok {
-		return errors.New("creative group is not available")
+	if token.Status != common.TokenStatusEnabled {
+		return errors.New("creative key is disabled")
 	}
 	user.WriteContext(c)
-	common.SetContextKey(c, constant.ContextKeyUsingGroup, group)
-	common.SetContextKey(c, constant.ContextKeyTokenGroup, group)
-	common.SetContextKey(c, constant.ContextKeyTokenGroups, []string{group})
-	// 临时令牌只承载用户和分组上下文，不落库也不向浏览器返回。
-	if err := middleware.SetupContextForToken(c, &model.Token{UserId: user.Id, Group: group}); err != nil {
+	// 临时上下文只承载用户选择的 Key，不向浏览器返回真实 Key。
+	if err := middleware.SetupContextForToken(c, token); err != nil {
 		return err
 	}
 	return nil

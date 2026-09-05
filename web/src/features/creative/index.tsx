@@ -37,7 +37,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api'
 
 type Mode = 'image' | 'video'
-type GroupMap = Record<string, { desc?: string; ratio?: number | string }>
+type ApiKeyOption = { id: number; name: string; key: string; status: number }
 type StoredMedia = {
   id: string
   kind: Mode
@@ -111,8 +111,8 @@ function normalizeImageUrl(item: { url?: string; b64_json?: string }): string {
 
 export function CreativePage({ mode }: { mode: Mode }) {
   const { t } = useTranslation()
-  const [groups, setGroups] = useState<GroupMap>({})
-  const [group, setGroup] = useState('')
+  const [keys, setKeys] = useState<ApiKeyOption[]>([])
+  const [keyId, setKeyId] = useState('')
   const [models, setModels] = useState<string[]>([])
   const [model, setModel] = useState('')
   const [prompt, setPrompt] = useState('')
@@ -125,23 +125,29 @@ export function CreativePage({ mode }: { mode: Mode }) {
 
   useEffect(() => {
     api
-      .get('/api/user/self/groups')
+      .get('/api/token/', { params: { p: 1, size: 100 } })
       .then((response) => {
-        const next = (response.data?.data || {}) as GroupMap
-        setGroups(next)
-        const first = Object.keys(next)[0] || ''
-        setGroup((current) => (current && next[current] ? current : first))
+        const next = (response.data?.data?.items || []) as ApiKeyOption[]
+        const enabled = next.filter((item) => item.status === 1)
+        setKeys(enabled)
+        setKeyId((current) =>
+          current && enabled.some((item) => String(item.id) === current)
+            ? current
+            : String(enabled[0]?.id || '')
+        )
       })
       .catch(() => toast.error(t('Failed to load creative groups')))
   }, [t])
 
   useEffect(() => {
-    if (!group) return
+    if (!keyId) return
     api
-      .get('/api/user/models', { params: { group } })
+      .get('/api/creative/models', { params: { key_id: keyId } })
       .then((response) => {
         const next = Array.isArray(response.data?.data)
-          ? (response.data.data as string[])
+          ? (response.data.data as Array<string | { id?: string }>)
+              .map((item) => (typeof item === 'string' ? item : item.id || ''))
+              .filter(Boolean)
           : []
         setModels(next)
         setModel((current) =>
@@ -149,7 +155,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
         )
       })
       .catch(() => toast.error(t('Failed to load creative models')))
-  }, [group, t])
+  }, [keyId, t])
 
   useEffect(() => {
     loadMedia(mode)
@@ -159,7 +165,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
 
   const title =
     mode === 'image' ? t('AI Image Generation') : t('Video Generation')
-  const canSubmit = Boolean(group && model && prompt.trim() && !busy)
+  const canSubmit = Boolean(keyId && model && prompt.trim() && !busy)
   const helper = useMemo(
     () =>
       mode === 'image'
@@ -175,7 +181,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
       const metadata = advanced.trim() ? JSON.parse(advanced) : {}
       if (mode === 'image') {
         const response = await api.post('/api/creative/images', {
-          group,
+          key_id: Number(keyId),
           model,
           prompt,
           size,
@@ -196,7 +202,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
         setResults((current) => [...cached, ...current])
       } else {
         const payload: Record<string, unknown> = {
-          group,
+          key_id: Number(keyId),
           model,
           prompt,
           size,
@@ -262,7 +268,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
           <div>
             <h1 className='text-2xl font-semibold'>{title}</h1>
             <p className='text-muted-foreground text-sm'>
-              {t('Powered by your NewAPI model groups')}
+              {t('Powered by your selected NewAPI API key')}
             </p>
           </div>
         </div>
@@ -273,19 +279,18 @@ export function CreativePage({ mode }: { mode: Mode }) {
           <CardContent className='grid gap-4'>
             <div className='grid gap-4 md:grid-cols-2'>
               <label className='grid gap-2 text-sm'>
-                <span>{t('Group')}</span>
+                <span>{t('API Key')}</span>
                 <Select
-                  value={group}
-                  onValueChange={(value) => setGroup(String(value))}
+                  value={keyId}
+                  onValueChange={(value) => setKeyId(String(value))}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={t('Select a group')} />
+                    <SelectValue placeholder={t('Select an API key')} />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(groups).map(([name, info]) => (
-                      <SelectItem key={name} value={name}>
-                        {name}
-                        {info.desc ? ` - ${info.desc}` : ''}
+                    {keys.map((item) => (
+                      <SelectItem key={item.id} value={String(item.id)}>
+                        {item.name || item.key}
                       </SelectItem>
                     ))}
                   </SelectContent>

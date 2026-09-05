@@ -28,6 +28,7 @@ func SetApiRouter(router *gin.Engine) {
 		creativeRoute := apiRouter.Group("/creative")
 		creativeRoute.Use(middleware.UserAuth())
 		{
+			creativeRoute.GET("/models", controller.CreativeModels)
 			creativeRoute.POST("/images",
 				controller.PrepareCreativeImageContext,
 				middleware.ModelRequestRateLimit(),
