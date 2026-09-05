@@ -592,8 +592,8 @@ export function CreativePage({ mode }: { mode: Mode }) {
           )}
         </section>
         <div className='pointer-events-none fixed right-3 bottom-3 left-3 z-40 mx-auto max-w-6xl md:right-8 md:bottom-5 md:left-8'>
-          <div className='pointer-events-auto space-y-2'>
-            <div className='bg-background/95 border-border/70 flex items-center gap-2 rounded-3xl border px-4 py-2 shadow-xl backdrop-blur-2xl md:px-5'>
+          <div className='pointer-events-auto rounded-3xl border border-white/60 bg-white/90 p-2 shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-2xl md:p-3 dark:border-white/[0.08] dark:bg-gray-900/85 dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)]'>
+            <div className='flex min-h-[4.25rem] items-center gap-2 rounded-[2rem] border border-gray-200/70 bg-white px-4 py-2 shadow-sm md:px-5 dark:border-white/[0.08] dark:bg-gray-900/70'>
               <Textarea
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
@@ -627,7 +627,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
               )}
               <Button
                 size='icon'
-                className='rounded-xl bg-sky-500 text-white hover:bg-sky-600'
+                className='size-10 rounded-full bg-sky-400 text-white shadow-sm hover:bg-sky-500'
                 onClick={submit}
                 disabled={!canSubmit}
                 aria-label={busy ? t('Generating...') : t('Generate')}
@@ -639,7 +639,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
                 )}
               </Button>
             </div>
-            <div className='bg-background/95 border-border/70 flex flex-wrap items-end gap-2 rounded-3xl border px-4 py-3 shadow-xl backdrop-blur-2xl md:px-5'>
+            <div className='mt-2 flex flex-wrap items-end gap-2 border-t border-gray-100 px-2 pt-3 pb-1 md:px-3 dark:border-white/[0.08]'>
               <label className='min-w-36 flex-1 text-xs'>
                 <span className='text-muted-foreground ml-1'>
                   {t('API Key')}
@@ -879,7 +879,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
               </Button>
             </div>
             {showAdvanced && (
-              <div className='bg-background/95 border-border/70 rounded-3xl border px-4 py-3 shadow-xl backdrop-blur-2xl md:px-5'>
+              <div className='border-t border-gray-100 px-2 pt-3 md:px-3 dark:border-white/[0.08]'>
                 <div className='grid gap-3 sm:grid-cols-3'>
                   {mode === 'image' && (
                     <label className='text-xs'>
