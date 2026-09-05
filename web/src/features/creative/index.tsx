@@ -30,7 +30,6 @@ import {
   RotateCcw,
   Search,
   Settings2,
-  Sparkles,
   Star,
   Trash2,
 } from 'lucide-react'
@@ -664,7 +663,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
                         }
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent side='top' sideOffset={8}>
                       {keys.map((item) => (
                         <SelectItem key={item.id} value={String(item.id)}>
                           {keyLabel(item)}
@@ -700,7 +699,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
                         {() => model || t('Select a model')}
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent side='top' sideOffset={8}>
                       {models.map((item) => (
                         <SelectItem
                           key={`${item.group || 'default'}-${item.id}`}
@@ -761,7 +760,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
                         <SelectTrigger className='mt-1 h-9 rounded-xl'>
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent side='top' sideOffset={8}>
                           {['auto', 'high', 'medium', 'low'].map((item) => (
                             <SelectItem key={item} value={item}>
                               {item}
@@ -783,7 +782,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
                         <SelectTrigger className='mt-1 h-9 rounded-xl'>
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent side='top' sideOffset={8}>
                           {['png', 'jpeg', 'webp'].map((item) => (
                             <SelectItem key={item} value={item}>
                               {item.toUpperCase()}
@@ -806,7 +805,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
                         <SelectTrigger className='mt-1 h-9 rounded-xl'>
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent side='top' sideOffset={8}>
                           <SelectItem value='false'>false</SelectItem>
                           <SelectItem value='true'>true</SelectItem>
                         </SelectContent>
@@ -825,7 +824,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
                         <SelectTrigger className='mt-1 h-9 rounded-xl'>
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent side='top' sideOffset={8}>
                           <SelectItem value='auto'>auto</SelectItem>
                           <SelectItem value='low'>low</SelectItem>
                         </SelectContent>
@@ -868,18 +867,6 @@ export function CreativePage({ mode }: { mode: Mode }) {
                   aria-label={t('Advanced options')}
                 >
                   <Settings2 className='size-4' />
-                </Button>
-                <Button
-                  className='mt-2 h-9 w-fit basis-full justify-self-start rounded-xl bg-sky-400 px-6 text-white hover:bg-sky-500'
-                  onClick={submit}
-                  disabled={!canSubmit}
-                >
-                  {busy ? (
-                    <Loader2 className='mr-2 size-4 animate-spin' />
-                  ) : (
-                    <Sparkles className='mr-2 size-4' />
-                  )}
-                  {busy ? t('Generating...') : t('Generate')}
                 </Button>
               </div>
             </div>
