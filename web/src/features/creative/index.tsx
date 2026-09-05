@@ -385,13 +385,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
                 <FolderOpen className='size-3.5' /> {t('My assets')}
               </button>
             </nav>
-            <div className='flex items-center gap-2'>
-              <span
-                className='bg-muted hidden max-w-40 truncate rounded-full px-3 py-1.5 text-xs sm:inline-flex'
-                title={selectedKey ? keyLabel(selectedKey) : undefined}
-              >
-                {selectedKey ? keyLabel(selectedKey) : t('Select an API key')}
-              </span>
+            <div className='flex items-center gap-1'>
               <Button variant='ghost' size='icon-sm' aria-label={t('Settings')}>
                 <Settings2 className='size-4' />
               </Button>
@@ -459,27 +453,35 @@ export function CreativePage({ mode }: { mode: Mode }) {
                       <Download className='size-4' />
                     </a>
                   </div>
-                  <div className='border-border/60 flex items-center justify-end gap-1 border-b px-2 py-1.5'>
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      className='h-7 px-2 text-[11px]'
-                    >
-                      {t('Load')}
-                    </Button>
-                    <Button
-                      variant='ghost'
-                      size='icon-sm'
-                      className='size-7'
-                      aria-label={t('More')}
-                    >
-                      <MoreHorizontal className='size-3.5' />
-                    </Button>
-                  </div>
                   <div className='space-y-2 p-2.5'>
-                    <p className='line-clamp-2 text-xs leading-5'>
-                      {item.prompt || helper}
-                    </p>
+                    <div className='flex items-start gap-2'>
+                      <p className='line-clamp-2 min-w-0 flex-1 text-xs leading-5'>
+                        {item.prompt || helper}
+                      </p>
+                      <div className='flex shrink-0 items-center gap-0.5'>
+                        <Button
+                          variant='ghost'
+                          size='sm'
+                          className='h-7 px-2 text-[11px]'
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void navigator.clipboard?.writeText(
+                              item.prompt || ''
+                            )
+                            toast.success(t('Copied'))
+                          }}
+                        >
+                          {t('Copy')}
+                        </Button>
+                        <Button
+                          variant='ghost'
+                          size='sm'
+                          className='h-7 px-2 text-[11px]'
+                        >
+                          {t('Expand')}
+                        </Button>
+                      </div>
+                    </div>
                     <div className='flex flex-wrap gap-1'>
                       {chip(t('Uncategorized'))}
                       {chip(new Date(item.createdAt).toLocaleString())}
@@ -490,9 +492,23 @@ export function CreativePage({ mode }: { mode: Mode }) {
                       {chip(item.size || size)}
                     </div>
                     <div className='border-border/60 flex items-center justify-between border-t pt-2 text-xs'>
-                      <span className='text-muted-foreground'>
-                        {t('Generated result')}
-                      </span>
+                      <div className='flex items-center gap-1'>
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          className='h-7 px-2 text-[11px]'
+                        >
+                          {t('Load')}
+                        </Button>
+                        <Button
+                          variant='ghost'
+                          size='icon-sm'
+                          className='size-7'
+                          aria-label={t('More')}
+                        >
+                          <MoreHorizontal className='size-3.5' />
+                        </Button>
+                      </div>
                       <Check className='size-3.5 text-emerald-500' />
                     </div>
                   </div>
