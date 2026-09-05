@@ -63,8 +63,8 @@ func PrepareCreativeVideoContext(c *gin.Context) {
 // 返回 OpenAI 视频任务状态格式。
 func CreativeVideoFetch(c *gin.Context) {
 	keyID := ""
-	if task, exists, err := model.GetByTaskId(c.GetInt("id"), c.Param("task_id")); err == nil && exists && task != nil && task.TokenId > 0 {
-		keyID = strconv.Itoa(task.TokenId)
+	if task, exists, err := model.GetByTaskId(c.GetInt("id"), c.Param("task_id")); err == nil && exists && task != nil && task.PrivateData.TokenId > 0 {
+		keyID = strconv.Itoa(task.PrivateData.TokenId)
 	}
 	if err := prepareCreativeKeyContext(c, keyID); err != nil {
 		writeCreativeError(c, err, http.StatusBadRequest)
@@ -83,8 +83,8 @@ func CreativeVideoContent(c *gin.Context) {
 		return
 	}
 	keyID := ""
-	if task.TokenId > 0 {
-		keyID = strconv.Itoa(task.TokenId)
+	if task.PrivateData.TokenId > 0 {
+		keyID = strconv.Itoa(task.PrivateData.TokenId)
 	}
 	if err := prepareCreativeKeyContext(c, keyID); err != nil {
 		writeCreativeError(c, err, http.StatusBadRequest)
