@@ -591,7 +591,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
             </div>
           )}
         </section>
-        <div className='pointer-events-none fixed right-3 bottom-3 left-3 z-40 mx-auto max-w-6xl md:right-8 md:bottom-5 md:left-8'>
+        <div className='pointer-events-none fixed right-3 bottom-3 left-3 z-40 mx-auto max-w-[1440px] md:right-8 md:bottom-5 md:left-8'>
           <div className='pointer-events-auto rounded-3xl border border-white/60 bg-white/90 p-2 shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-2xl md:p-3 dark:border-white/[0.08] dark:bg-gray-900/85 dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)]'>
             <div className='flex min-h-[4.25rem] items-center gap-2 rounded-[2rem] border border-gray-200/70 bg-white px-4 py-2 shadow-sm md:px-5 dark:border-white/[0.08] dark:bg-gray-900/70'>
               <Textarea
@@ -639,244 +639,249 @@ export function CreativePage({ mode }: { mode: Mode }) {
                 )}
               </Button>
             </div>
-            <div className='mt-2 flex flex-wrap items-end gap-2 border-t border-gray-100 px-2 pt-3 pb-1 md:px-3 dark:border-white/[0.08]'>
-              <label className='min-w-36 flex-1 text-xs'>
-                <span className='text-muted-foreground ml-1'>
-                  {t('API Key')}
-                </span>
-                <Select
-                  value={keyId}
-                  onValueChange={(value) => {
-                    if (value == null) return
-                    setKeyId(String(value))
-                    setModels([])
-                    setModel('')
-                    setModelGroup('')
-                  }}
-                >
-                  <SelectTrigger className='mt-1 h-9 w-full rounded-xl'>
-                    <SelectValue placeholder={t('Select an API key')}>
-                      {() =>
-                        selectedKey
-                          ? keyLabel(selectedKey)
-                          : t('Select an API key')
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {keys.map((item) => (
-                      <SelectItem key={item.id} value={String(item.id)}>
-                        {keyLabel(item)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-              <label className='min-w-36 flex-1 text-xs'>
-                <span className='text-muted-foreground ml-1'>{t('Model')}</span>
-                <Select
-                  key={`model-${keyId}`}
-                  value={selectedModelValue}
-                  onValueChange={(value) => {
-                    if (value == null) return
-                    const selected = models.find(
-                      (item) =>
-                        `${item.group || ''}\x00${item.id}` === String(value)
-                    )
-                    setModel(
-                      selected?.id || String(value).split('\x00').pop() || ''
-                    )
-                    setModelGroup(selected?.group || '')
-                  }}
-                >
-                  <SelectTrigger
-                    className='mt-1 h-9 w-full rounded-xl'
-                    disabled={!models.length}
-                  >
-                    <SelectValue placeholder={t('Select a model')}>
-                      {() => model || t('Select a model')}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {models.map((item) => (
-                      <SelectItem
-                        key={`${item.group || 'default'}-${item.id}`}
-                        value={`${item.group || ''}\x00${item.id}`}
-                      >
-                        {item.id}
-                        {item.group ? ` · ${item.group}` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-              {mode === 'image' && (
-                <label className='text-xs'>
+            <div className='mt-2 overflow-x-auto border-t border-gray-100 px-2 pt-3 pb-1 md:px-3 dark:border-white/[0.08]'>
+              <div className='flex min-w-[1180px] flex-wrap items-end gap-2'>
+                <label className='w-48 shrink-0 text-xs'>
                   <span className='text-muted-foreground ml-1'>
-                    {t('Interface mode')}
+                    {t('API Key')}
                   </span>
-                  <div className='bg-muted mt-1 flex h-9 items-center rounded-xl p-1'>
-                    {(['img', 'resp'] as const).map((item) => (
-                      <button
-                        key={item}
-                        type='button'
-                        onClick={() => setInterfaceMode(item)}
-                        className={`h-7 rounded-lg px-3 text-xs ${interfaceMode === item ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}
-                      >
-                        {item}
-                      </button>
-                    ))}
-                  </div>
+                  <Select
+                    value={keyId}
+                    onValueChange={(value) => {
+                      if (value == null) return
+                      setKeyId(String(value))
+                      setModels([])
+                      setModel('')
+                      setModelGroup('')
+                    }}
+                  >
+                    <SelectTrigger className='mt-1 h-9 w-full rounded-xl'>
+                      <SelectValue placeholder={t('Select an API key')}>
+                        {() =>
+                          selectedKey
+                            ? keyLabel(selectedKey)
+                            : t('Select an API key')
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {keys.map((item) => (
+                        <SelectItem key={item.id} value={String(item.id)}>
+                          {keyLabel(item)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </label>
-              )}
-              <label className='w-24 text-xs'>
-                <span className='text-muted-foreground ml-1'>
-                  {mode === 'image' ? t('Size') : t('Aspect ratio')}
-                </span>
-                <Button
-                  type='button'
-                  variant='outline'
-                  className='mt-1 h-9 w-full justify-between rounded-xl px-3 font-normal'
-                  onClick={() => setShowSizePicker(true)}
-                >
-                  {size}
-                  <ChevronDown className='size-4' />
-                </Button>
-              </label>
-              {mode === 'image' ? (
-                <>
-                  <label className='w-24 text-xs'>
-                    <span className='text-muted-foreground ml-1'>
-                      {t('Quality')}
-                    </span>
-                    <Select
-                      value={quality}
-                      onValueChange={(value) =>
-                        value != null && setQuality(String(value))
-                      }
+                <label className='w-56 shrink-0 text-xs'>
+                  <span className='text-muted-foreground ml-1'>
+                    {t('Model')}
+                  </span>
+                  <Select
+                    key={`model-${keyId}`}
+                    value={selectedModelValue}
+                    onValueChange={(value) => {
+                      if (value == null) return
+                      const selected = models.find(
+                        (item) =>
+                          `${item.group || ''}\x00${item.id}` === String(value)
+                      )
+                      setModel(
+                        selected?.id || String(value).split('\x00').pop() || ''
+                      )
+                      setModelGroup(selected?.group || '')
+                    }}
+                  >
+                    <SelectTrigger
+                      className='mt-1 h-9 w-full rounded-xl'
+                      disabled={!models.length}
                     >
-                      <SelectTrigger className='mt-1 h-9 rounded-xl'>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {['auto', 'high', 'medium', 'low'].map((item) => (
-                          <SelectItem key={item} value={item}>
-                            {item}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label className='w-24 text-xs'>
+                      <SelectValue placeholder={t('Select a model')}>
+                        {() => model || t('Select a model')}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {models.map((item) => (
+                        <SelectItem
+                          key={`${item.group || 'default'}-${item.id}`}
+                          value={`${item.group || ''}\x00${item.id}`}
+                        >
+                          {item.id}
+                          {item.group ? ` · ${item.group}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+                {mode === 'image' && (
+                  <label className='w-28 shrink-0 text-xs'>
                     <span className='text-muted-foreground ml-1'>
-                      {t('Format')}
+                      {t('Interface mode')}
                     </span>
-                    <Select
-                      value={outputFormat}
-                      onValueChange={(value) =>
-                        value != null && setOutputFormat(String(value))
-                      }
-                    >
-                      <SelectTrigger className='mt-1 h-9 rounded-xl'>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {['png', 'jpeg', 'webp'].map((item) => (
-                          <SelectItem key={item} value={item}>
-                            {item.toUpperCase()}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className='bg-muted mt-1 flex h-9 items-center rounded-xl p-1'>
+                      {(['img', 'resp'] as const).map((item) => (
+                        <button
+                          key={item}
+                          type='button'
+                          onClick={() => setInterfaceMode(item)}
+                          className={`h-7 rounded-lg px-3 text-xs ${interfaceMode === item ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
                   </label>
-                  <label className='w-28 text-xs'>
+                )}
+                <label className='w-28 shrink-0 text-xs'>
+                  <span className='text-muted-foreground ml-1'>
+                    {mode === 'image' ? t('Size') : t('Aspect ratio')}
+                  </span>
+                  <Button
+                    type='button'
+                    variant='outline'
+                    className='mt-1 h-9 w-full justify-between rounded-xl px-3 font-normal'
+                    onClick={() => setShowSizePicker(true)}
+                  >
+                    {size}
+                    <ChevronDown className='size-4' />
+                  </Button>
+                </label>
+                {mode === 'image' ? (
+                  <>
+                    <label className='w-24 shrink-0 text-xs'>
+                      <span className='text-muted-foreground ml-1'>
+                        {t('Quality')}
+                      </span>
+                      <Select
+                        value={quality}
+                        onValueChange={(value) =>
+                          value != null && setQuality(String(value))
+                        }
+                      >
+                        <SelectTrigger className='mt-1 h-9 rounded-xl'>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {['auto', 'high', 'medium', 'low'].map((item) => (
+                            <SelectItem key={item} value={item}>
+                              {item}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    <label className='w-24 shrink-0 text-xs'>
+                      <span className='text-muted-foreground ml-1'>
+                        {t('Format')}
+                      </span>
+                      <Select
+                        value={outputFormat}
+                        onValueChange={(value) =>
+                          value != null && setOutputFormat(String(value))
+                        }
+                      >
+                        <SelectTrigger className='mt-1 h-9 rounded-xl'>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {['png', 'jpeg', 'webp'].map((item) => (
+                            <SelectItem key={item} value={item}>
+                              {item.toUpperCase()}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    <label className='w-32 shrink-0 text-xs'>
+                      <span className='text-muted-foreground ml-1'>
+                        {t('Transparent background')}
+                      </span>
+                      <Select
+                        value={transparentBackground}
+                        onValueChange={(value) =>
+                          value != null &&
+                          setTransparentBackground(String(value))
+                        }
+                      >
+                        <SelectTrigger className='mt-1 h-9 rounded-xl'>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value='false'>false</SelectItem>
+                          <SelectItem value='true'>true</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    <label className='w-24 shrink-0 text-xs'>
+                      <span className='text-muted-foreground ml-1'>
+                        {t('Moderation')}
+                      </span>
+                      <Select
+                        value={moderation}
+                        onValueChange={(value) =>
+                          value != null && setModeration(String(value))
+                        }
+                      >
+                        <SelectTrigger className='mt-1 h-9 rounded-xl'>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value='auto'>auto</SelectItem>
+                          <SelectItem value='low'>low</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    <label className='w-24 shrink-0 text-xs'>
+                      <span className='text-muted-foreground ml-1'>
+                        {t('Quantity')}
+                      </span>
+                      <Input
+                        type='number'
+                        min={1}
+                        max={10}
+                        value={quantity}
+                        onChange={(event) => setQuantity(event.target.value)}
+                        className='mt-1 h-9 rounded-xl'
+                      />
+                    </label>
+                  </>
+                ) : (
+                  <label className='w-28 shrink-0 text-xs'>
                     <span className='text-muted-foreground ml-1'>
-                      {t('Transparent background')}
-                    </span>
-                    <Select
-                      value={transparentBackground}
-                      onValueChange={(value) =>
-                        value != null && setTransparentBackground(String(value))
-                      }
-                    >
-                      <SelectTrigger className='mt-1 h-9 rounded-xl'>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value='false'>false</SelectItem>
-                        <SelectItem value='true'>true</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label className='w-24 text-xs'>
-                    <span className='text-muted-foreground ml-1'>
-                      {t('Moderation')}
-                    </span>
-                    <Select
-                      value={moderation}
-                      onValueChange={(value) =>
-                        value != null && setModeration(String(value))
-                      }
-                    >
-                      <SelectTrigger className='mt-1 h-9 rounded-xl'>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value='auto'>auto</SelectItem>
-                        <SelectItem value='low'>low</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label className='w-20 text-xs'>
-                    <span className='text-muted-foreground ml-1'>
-                      {t('Quantity')}
+                      {t('Duration (seconds)')}
                     </span>
                     <Input
                       type='number'
                       min={1}
-                      max={10}
-                      value={quantity}
-                      onChange={(event) => setQuantity(event.target.value)}
+                      max={60}
+                      value={seconds}
+                      onChange={(event) => setSeconds(event.target.value)}
                       className='mt-1 h-9 rounded-xl'
                     />
                   </label>
-                </>
-              ) : (
-                <label className='w-24 text-xs'>
-                  <span className='text-muted-foreground ml-1'>
-                    {t('Duration (seconds)')}
-                  </span>
-                  <Input
-                    type='number'
-                    min={1}
-                    max={60}
-                    value={seconds}
-                    onChange={(event) => setSeconds(event.target.value)}
-                    className='mt-1 h-9 rounded-xl'
-                  />
-                </label>
-              )}
-              <Button
-                variant={showAdvanced ? 'secondary' : 'outline'}
-                size='icon'
-                className='h-9 w-9 rounded-xl'
-                onClick={() => setShowAdvanced((value) => !value)}
-                aria-label={t('Advanced options')}
-              >
-                <Settings2 className='size-4' />
-              </Button>
-              <Button
-                className='h-9 rounded-xl bg-sky-500 px-5 text-white hover:bg-sky-600'
-                onClick={submit}
-                disabled={!canSubmit}
-              >
-                {busy ? (
-                  <Loader2 className='mr-2 size-4 animate-spin' />
-                ) : (
-                  <Sparkles className='mr-2 size-4' />
                 )}
-                {busy ? t('Generating...') : t('Generate')}
-              </Button>
+                <Button
+                  variant={showAdvanced ? 'secondary' : 'outline'}
+                  size='icon'
+                  className='h-9 w-9 shrink-0 rounded-xl'
+                  onClick={() => setShowAdvanced((value) => !value)}
+                  aria-label={t('Advanced options')}
+                >
+                  <Settings2 className='size-4' />
+                </Button>
+                <Button
+                  className='mt-2 h-9 w-fit basis-full justify-self-start rounded-xl bg-sky-400 px-6 text-white hover:bg-sky-500'
+                  onClick={submit}
+                  disabled={!canSubmit}
+                >
+                  {busy ? (
+                    <Loader2 className='mr-2 size-4 animate-spin' />
+                  ) : (
+                    <Sparkles className='mr-2 size-4' />
+                  )}
+                  {busy ? t('Generating...') : t('Generate')}
+                </Button>
+              </div>
             </div>
             {showAdvanced && (
               <div className='border-t border-gray-100 px-2 pt-3 md:px-3 dark:border-white/[0.08]'>
