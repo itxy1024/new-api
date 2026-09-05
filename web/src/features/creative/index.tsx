@@ -398,7 +398,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
             </div>
           </div>
         </header>
-        <section className='mx-auto max-w-[1600px] px-3 pt-5 pb-52 md:px-8'>
+        <section className='mx-auto max-w-[1900px] px-3 pt-5 pb-52 md:px-6'>
           <div className='mb-4 flex items-center justify-between'>
             <div>
               <h2 className='text-sm font-semibold'>{t('Recent results')}</h2>
@@ -429,11 +429,11 @@ export function CreativePage({ mode }: { mode: Mode }) {
               </p>
             </div>
           ) : (
-            <div className='columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4'>
+            <div className='columns-1 gap-3 sm:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5'>
               {results.map((item) => (
                 <article
                   key={item.id}
-                  className='group border-border/70 bg-background mb-4 break-inside-avoid overflow-hidden rounded-2xl border shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg'
+                  className='group border-border/70 bg-background mb-3 break-inside-avoid overflow-hidden rounded-xl border shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg'
                 >
                   <div className='bg-muted relative overflow-hidden'>
                     {item.kind === 'image' ? (
@@ -459,15 +459,35 @@ export function CreativePage({ mode }: { mode: Mode }) {
                       <Download className='size-4' />
                     </a>
                   </div>
-                  <div className='space-y-2 p-3'>
+                  <div className='border-border/60 flex items-center justify-end gap-1 border-b px-2 py-1.5'>
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      className='h-7 px-2 text-[11px]'
+                    >
+                      {t('Load')}
+                    </Button>
+                    <Button
+                      variant='ghost'
+                      size='icon-sm'
+                      className='size-7'
+                      aria-label={t('More')}
+                    >
+                      <MoreHorizontal className='size-3.5' />
+                    </Button>
+                  </div>
+                  <div className='space-y-2 p-2.5'>
                     <p className='line-clamp-2 text-xs leading-5'>
                       {item.prompt || helper}
                     </p>
-                    <div className='flex flex-wrap gap-1.5'>
+                    <div className='flex flex-wrap gap-1'>
+                      {chip(t('Uncategorized'))}
+                      {chip(new Date(item.createdAt).toLocaleString())}
+                      {chip(t('Channel'))}
                       {chip(item.model || model)}
-                      {chip(item.kind === 'image' ? t('Image') : t('Video'))}
+                      {chip(item.kind === 'image' ? t('Images') : t('Video'))}
+                      {chip(`${t('Quality')} ${quality}`)}
                       {chip(item.size || size)}
-                      {chip(new Date(item.createdAt).toLocaleTimeString())}
                     </div>
                     <div className='border-border/60 flex items-center justify-between border-t pt-2 text-xs'>
                       <span className='text-muted-foreground'>
