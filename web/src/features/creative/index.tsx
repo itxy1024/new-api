@@ -1,6 +1,11 @@
+import { Link } from '@tanstack/react-router'
 import {
+  BookOpen,
   Download,
+  FolderOpen,
+  Grid2X2,
   Loader2,
+  Paperclip,
   Settings2,
   Sparkles,
   Trash2,
@@ -308,6 +313,38 @@ export function CreativePage({ mode }: { mode: Mode }) {
               </p>
             </div>
           </div>
+          <nav className='bg-muted/70 hidden items-center gap-1 rounded-xl p-1 md:flex'>
+            <Link
+              to='/creative/image'
+              className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors ${mode === 'image' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <Grid2X2 className='size-3.5' aria-hidden='true' />
+              {t('Image workspace')}
+            </Link>
+            <Link
+              to='/creative/video'
+              className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors ${mode === 'video' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <Sparkles className='size-3.5' aria-hidden='true' />
+              {t('Video workspace')}
+            </Link>
+            <button
+              type='button'
+              className='text-muted-foreground flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs'
+              disabled
+            >
+              <BookOpen className='size-3.5' aria-hidden='true' />
+              {t('Prompt library')}
+            </button>
+            <button
+              type='button'
+              className='text-muted-foreground flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs'
+              disabled
+            >
+              <FolderOpen className='size-3.5' aria-hidden='true' />
+              {t('My assets')}
+            </button>
+          </nav>
           <div className='flex items-center gap-2'>
             <span className='bg-muted hidden max-w-64 truncate rounded-full px-3 py-1.5 text-xs sm:inline-flex'>
               {selectedKey ? getKeyLabel(selectedKey) : t('Select an API key')}
@@ -512,6 +549,14 @@ export function CreativePage({ mode }: { mode: Mode }) {
                   aria-label={t('Advanced JSON')}
                 />
               </label>
+              <Button
+                variant='outline'
+                size='icon-sm'
+                aria-label={t('Attach reference image')}
+                title={t('Attach reference image')}
+              >
+                <Paperclip className='size-4' aria-hidden='true' />
+              </Button>
               <Button
                 className='h-8 md:min-w-32'
                 onClick={submit}
