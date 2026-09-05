@@ -5,7 +5,6 @@ import {
   FolderOpen,
   Grid2X2,
   Loader2,
-  Paperclip,
   Settings2,
   Sparkles,
   Trash2,
@@ -124,9 +123,7 @@ function normalizeImageUrl(item: { url?: string; b64_json?: string }): string {
 
 function getKeyLabel(item: ApiKeyOption): string {
   const name = item.name?.trim()
-  const maskedKey = item.key?.trim()
-  if (name && maskedKey) return `${name} · ${maskedKey}`
-  return name || maskedKey || 'API Key'
+  return name || 'API Key'
 }
 
 export function CreativePage({ mode }: { mode: Mode }) {
@@ -138,8 +135,14 @@ export function CreativePage({ mode }: { mode: Mode }) {
   const [prompt, setPrompt] = useState('')
   const [size, setSize] = useState(mode === 'image' ? '1024x1024' : '16:9')
   const [seconds, setSeconds] = useState('5')
-  const [advanced, setAdvanced] = useState('')
   const [inputImage, setInputImage] = useState('')
+  const [quality, setQuality] = useState('auto')
+  const [outputFormat, setOutputFormat] = useState('png')
+  const [compression, setCompression] = useState('100')
+  const [moderation, setModeration] = useState('auto')
+  const [quantity, setQuantity] = useState('1')
+  const [retries, setRetries] = useState('0')
+  const [interfaceMode, setInterfaceMode] = useState<'img' | 'resp'>('img')
   const [results, setResults] = useState<StoredMedia[]>([])
   const [busy, setBusy] = useState(false)
   const selectedKey = useMemo(
@@ -216,14 +219,24 @@ export function CreativePage({ mode }: { mode: Mode }) {
     if (!canSubmit) return
     setBusy(true)
     try {
-      const metadata = advanced.trim() ? JSON.parse(advanced) : {}
       if (mode === 'image') {
         const response = await api.post('/api/creative/images', {
           key_id: Number(keyId),
           model,
           prompt,
           size,
-          ...metadata,
+          ...(mode === 'image'
+            ? {
+                quality,
+                output_format: outputFormat,
+                output_compression:
+                  outputFormat === 'png' ? undefined : Number(compression),
+                moderation,
+                n: Number(quantity),
+                interface_mode: interfaceMode,
+                retry_count: Number(retries),
+              }
+            : {}),
         })
         const items = Array.isArray(response.data?.data)
           ? response.data.data
@@ -245,7 +258,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
           prompt,
           size,
           seconds: Number(seconds),
-          metadata,
+          retry_count: Number(retries),
         }
         if (inputImage.trim()) payload.images = [inputImage.trim()]
         const response = await api.post('/api/creative/videos', payload)
@@ -258,8 +271,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
       toast.success(t('Generation submitted'))
     } catch (error) {
       let message = t('Generation failed')
-      if (error instanceof SyntaxError) message = t('Advanced JSON is invalid')
-      else if (error instanceof Error) message = error.message
+      if (error instanceof Error) message = error.message
       toast.error(message)
     } finally {
       setBusy(false)
@@ -498,17 +510,130 @@ export function CreativePage({ mode }: { mode: Mode }) {
                   </SelectContent>
                 </Select>
               </label>
-              <label className='grid gap-2 text-sm'>
-                <span className='sr-only'>
+              {mode === 'image' && (
+                <label className='flex flex-col gap-0.5 text-xs'>
+                  <span className='text-muted-foreground ml-1'>
+                    {t('Interface mode')}
+                  </span>
+                  <div className='bg-muted flex h-8 items-center rounded-lg p-0.5'>
+                    {(['img', 'resp'] as const).map((item) => (
+                      <button
+                        key={item}
+                        type='button'
+                        onClick={() => setInterfaceMode(item)}
+                        className={`h-7 rounded-md px-2 text-xs transition-colors ${interfaceMode === item ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
+                </label>
+              )}
+              <label className='flex min-w-24 flex-col gap-0.5 text-xs'>
+                <span className='text-muted-foreground ml-1'>
                   {mode === 'image' ? t('Size') : t('Aspect ratio')}
                 </span>
                 <Input
                   value={size}
                   onChange={(event) => setSize(event.target.value)}
-                  className='h-8 w-24'
+                  className='h-8 w-full'
                   aria-label={mode === 'image' ? t('Size') : t('Aspect ratio')}
                 />
               </label>
+              {mode === 'image' && (
+                <>
+                  <label className='flex min-w-20 flex-col gap-0.5 text-xs'>
+                    <span className='text-muted-foreground ml-1'>
+                      {t('Quality')}
+                    </span>
+                    <Select
+                      value={quality}
+                      onValueChange={(value) =>
+                        value != null && setQuality(String(value))
+                      }
+                    >
+                      <SelectTrigger className='h-8 w-full'>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {['auto', 'high', 'medium', 'low'].map((item) => (
+                          <SelectItem key={item} value={item}>
+                            {item}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                  <label className='flex min-w-20 flex-col gap-0.5 text-xs'>
+                    <span className='text-muted-foreground ml-1'>
+                      {t('Format')}
+                    </span>
+                    <Select
+                      value={outputFormat}
+                      onValueChange={(value) =>
+                        value != null && setOutputFormat(String(value))
+                      }
+                    >
+                      <SelectTrigger className='h-8 w-full'>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {['png', 'jpeg', 'webp'].map((item) => (
+                          <SelectItem key={item} value={item}>
+                            {item.toUpperCase()}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                  <label className='flex min-w-20 flex-col gap-0.5 text-xs'>
+                    <span className='text-muted-foreground ml-1'>
+                      {t('Compression')}
+                    </span>
+                    <Input
+                      type='number'
+                      min={0}
+                      max={100}
+                      value={compression}
+                      onChange={(event) => setCompression(event.target.value)}
+                      disabled={outputFormat === 'png'}
+                      className='h-8 w-full'
+                    />
+                  </label>
+                  <label className='flex min-w-20 flex-col gap-0.5 text-xs'>
+                    <span className='text-muted-foreground ml-1'>
+                      {t('Moderation')}
+                    </span>
+                    <Select
+                      value={moderation}
+                      onValueChange={(value) =>
+                        value != null && setModeration(String(value))
+                      }
+                    >
+                      <SelectTrigger className='h-8 w-full'>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value='auto'>auto</SelectItem>
+                        <SelectItem value='low'>low</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </label>
+                  <label className='flex min-w-16 flex-col gap-0.5 text-xs'>
+                    <span className='text-muted-foreground ml-1'>
+                      {t('Quantity')}
+                    </span>
+                    <Input
+                      type='number'
+                      min={1}
+                      max={10}
+                      value={quantity}
+                      onChange={(event) => setQuantity(event.target.value)}
+                      className='h-8 w-full'
+                    />
+                  </label>
+                </>
+              )}
               {mode === 'video' && (
                 <label className='flex items-center gap-2 text-xs'>
                   <span className='text-muted-foreground'>
@@ -537,26 +662,19 @@ export function CreativePage({ mode }: { mode: Mode }) {
                   />
                 </label>
               )}
-              <label className='flex items-center gap-2 text-xs'>
-                <span className='text-muted-foreground'>
-                  {t('Advanced JSON')}
+              <label className='flex min-w-16 flex-col gap-0.5 text-xs'>
+                <span className='text-muted-foreground ml-1'>
+                  {t('Retries')}
                 </span>
                 <Input
-                  value={advanced}
-                  onChange={(event) => setAdvanced(event.target.value)}
-                  placeholder='{"quality":"high"}'
-                  className='h-8 w-36'
-                  aria-label={t('Advanced JSON')}
+                  type='number'
+                  min={0}
+                  max={5}
+                  value={retries}
+                  onChange={(event) => setRetries(event.target.value)}
+                  className='h-8 w-full'
                 />
               </label>
-              <Button
-                variant='outline'
-                size='icon-sm'
-                aria-label={t('Attach reference image')}
-                title={t('Attach reference image')}
-              >
-                <Paperclip className='size-4' aria-hidden='true' />
-              </Button>
               <Button
                 className='h-8 md:min-w-32'
                 onClick={submit}
