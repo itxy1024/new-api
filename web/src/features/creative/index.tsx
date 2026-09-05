@@ -1,4 +1,13 @@
-import { Loader2, Sparkles, Upload, Video as VideoIcon } from 'lucide-react'
+import {
+  Download,
+  Loader2,
+  Maximize2,
+  Settings2,
+  Sparkles,
+  Trash2,
+  Upload,
+  Video as VideoIcon,
+} from 'lucide-react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -109,6 +118,13 @@ function normalizeImageUrl(item: { url?: string; b64_json?: string }): string {
   return item.b64_json ? `data:image/png;base64,${item.b64_json}` : ''
 }
 
+function getKeyLabel(item: ApiKeyOption): string {
+  const name = item.name?.trim()
+  const maskedKey = item.key?.trim()
+  if (name && maskedKey) return `${name} · ${maskedKey}`
+  return name || maskedKey || 'API Key'
+}
+
 export function CreativePage({ mode }: { mode: Mode }) {
   const { t } = useTranslation()
   const [keys, setKeys] = useState<ApiKeyOption[]>([])
@@ -122,13 +138,18 @@ export function CreativePage({ mode }: { mode: Mode }) {
   const [inputImage, setInputImage] = useState('')
   const [results, setResults] = useState<StoredMedia[]>([])
   const [busy, setBusy] = useState(false)
+  const selectedKey = useMemo(
+    () => keys.find((item) => String(item.id) === keyId),
+    [keys, keyId]
+  )
 
   useEffect(() => {
     api
       .get('/api/token/', { params: { p: 1, size: 100 } })
       .then((response) => {
-        const next = (response.data?.data?.items || []) as ApiKeyOption[]
-        const enabled = next.filter((item) => item.status === 1)
+        const rawItems = response.data?.data?.items ?? response.data?.data ?? []
+        const next = (Array.isArray(rawItems) ? rawItems : []) as ApiKeyOption[]
+        const enabled = next.filter((item) => Number(item.status) === 1)
         setKeys(enabled)
         setKeyId((current) =>
           current && enabled.some((item) => String(item.id) === current)
@@ -136,14 +157,22 @@ export function CreativePage({ mode }: { mode: Mode }) {
             : String(enabled[0]?.id || '')
         )
       })
-      .catch(() => toast.error(t('Failed to load creative groups')))
+      .catch(() => toast.error(t('Failed to load creative keys')))
   }, [t])
 
   useEffect(() => {
-    if (!keyId) return
+    if (!keyId) {
+      setModels([])
+      setModel('')
+      return
+    }
+    let active = true
+    setModels([])
+    setModel('')
     api
       .get('/api/creative/models', { params: { key_id: keyId } })
       .then((response) => {
+        if (!active) return
         const next = Array.isArray(response.data?.data)
           ? (response.data.data as Array<string | { id?: string }>)
               .map((item) => (typeof item === 'string' ? item : item.id || ''))
@@ -154,7 +183,12 @@ export function CreativePage({ mode }: { mode: Mode }) {
           current && next.includes(current) ? current : next[0] || ''
         )
       })
-      .catch(() => toast.error(t('Failed to load creative models')))
+      .catch(() => {
+        if (active) toast.error(t('Failed to load creative models'))
+      })
+    return () => {
+      active = false
+    }
   }, [keyId, t])
 
   useEffect(() => {
@@ -257,40 +291,75 @@ export function CreativePage({ mode }: { mode: Mode }) {
   }
 
   return (
-    <Main className='p-4 md:p-6'>
-      <div className='mx-auto flex w-full max-w-6xl flex-col gap-6'>
-        <div className='flex items-center gap-3'>
-          {mode === 'image' ? (
-            <Sparkles className='text-primary size-6' aria-hidden='true' />
-          ) : (
-            <VideoIcon className='text-primary size-6' aria-hidden='true' />
-          )}
-          <div>
-            <h1 className='text-2xl font-semibold'>{title}</h1>
-            <p className='text-muted-foreground text-sm'>
-              {t('Powered by your selected NewAPI API key')}
-            </p>
+    <Main className='bg-muted/20 min-h-full p-3 md:p-6'>
+      <div className='mx-auto flex w-full max-w-7xl flex-col gap-5'>
+        <div className='flex flex-wrap items-center justify-between gap-4'>
+          <div className='flex items-center gap-3'>
+            {mode === 'image' ? (
+              <div className='bg-primary/10 text-primary flex size-11 items-center justify-center rounded-2xl'>
+                <Sparkles className='size-6' aria-hidden='true' />
+              </div>
+            ) : (
+              <div className='bg-primary/10 text-primary flex size-11 items-center justify-center rounded-2xl'>
+                <VideoIcon className='size-6' aria-hidden='true' />
+              </div>
+            )}
+            <div>
+              <h1 className='text-2xl font-semibold tracking-tight'>{title}</h1>
+              <p className='text-muted-foreground text-sm'>
+                {t('Powered by your selected NewAPI API key')}
+              </p>
+            </div>
+          </div>
+          <div className='text-muted-foreground flex items-center gap-2 text-xs'>
+            <span className='bg-background rounded-full border px-3 py-1.5'>
+              {selectedKey ? getKeyLabel(selectedKey) : t('Select an API key')}
+            </span>
+            <span className='bg-background rounded-full border px-3 py-1.5'>
+              {models.length} {t('Model')}
+            </span>
           </div>
         </div>
         <Card>
-          <CardHeader>
-            <CardTitle>{t('Create')}</CardTitle>
+          <CardHeader className='border-b'>
+            <div className='flex items-center justify-between gap-3'>
+              <div>
+                <CardTitle>{t('Create')}</CardTitle>
+                <p className='text-muted-foreground mt-1 text-xs'>{helper}</p>
+              </div>
+              <Settings2
+                className='text-muted-foreground size-5'
+                aria-hidden='true'
+              />
+            </div>
           </CardHeader>
-          <CardContent className='grid gap-4'>
+          <CardContent className='grid gap-5 pt-1'>
             <div className='grid gap-4 md:grid-cols-2'>
               <label className='grid gap-2 text-sm'>
                 <span>{t('API Key')}</span>
                 <Select
                   value={keyId}
-                  onValueChange={(value) => setKeyId(String(value))}
+                  onValueChange={(value) => {
+                    if (value == null) return
+                    setKeyId(String(value))
+                    setModels([])
+                    setModel('')
+                  }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={t('Select an API key')} />
+                    <SelectValue placeholder={t('Select an API key')}>
+                      {(value: string | null) => {
+                        const item = keys.find(
+                          (candidate) => String(candidate.id) === String(value)
+                        )
+                        return item ? getKeyLabel(item) : t('Select an API key')
+                      }}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {keys.map((item) => (
                       <SelectItem key={item.id} value={String(item.id)}>
-                        {item.name || item.key}
+                        {getKeyLabel(item)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -299,11 +368,14 @@ export function CreativePage({ mode }: { mode: Mode }) {
               <label className='grid gap-2 text-sm'>
                 <span>{t('Model')}</span>
                 <Select
+                  key={`model-${keyId}`}
                   value={model}
                   onValueChange={(value) => setModel(String(value))}
                 >
                   <SelectTrigger disabled={!models.length}>
-                    <SelectValue placeholder={t('Select a model')} />
+                    <SelectValue placeholder={t('Select a model')}>
+                      {(value: string | null) => value || t('Select a model')}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {models.map((name) => (
@@ -321,7 +393,8 @@ export function CreativePage({ mode }: { mode: Mode }) {
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
                 placeholder={helper}
-                rows={5}
+                rows={6}
+                className='min-h-36 resize-y text-base'
               />
             </label>
             <div className='grid gap-4 md:grid-cols-3'>
@@ -365,7 +438,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
               />
             </label>
             <Button
-              className='w-full md:w-fit'
+              className='h-10 w-full md:w-fit md:min-w-40'
               onClick={submit}
               disabled={!canSubmit}
             >
@@ -382,30 +455,59 @@ export function CreativePage({ mode }: { mode: Mode }) {
           </CardContent>
         </Card>
         <section className='grid gap-3'>
-          <h2 className='text-lg font-semibold'>{t('Recent results')}</h2>
+          <div className='flex items-center justify-between'>
+            <h2 className='text-lg font-semibold'>{t('Recent results')}</h2>
+            {results.length > 0 && (
+              <Button variant='ghost' size='sm' onClick={() => setResults([])}>
+                <Trash2 className='mr-2 size-4' aria-hidden='true' />
+                {t('Clear')}
+              </Button>
+            )}
+          </div>
           {results.length === 0 ? (
             <p className='text-muted-foreground text-sm'>
               {t('Your generated results will appear here.')}
             </p>
           ) : (
-            <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
+            <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'>
               {results.map((item) => (
-                <Card key={item.id} className='overflow-hidden'>
+                <Card key={item.id} className='group overflow-hidden'>
                   <CardContent className='p-0'>
-                    {item.kind === 'image' ? (
-                      <img
-                        src={item.url}
-                        alt={t('Generated result')}
-                        className='aspect-square w-full object-cover'
-                        loading='lazy'
-                      />
-                    ) : (
-                      <video
-                        src={item.url}
-                        controls
-                        className='aspect-video w-full bg-black'
-                      />
-                    )}
+                    <div className='bg-muted relative overflow-hidden'>
+                      {item.kind === 'image' ? (
+                        <img
+                          src={item.url}
+                          alt={t('Generated result')}
+                          className='aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]'
+                          loading='lazy'
+                        />
+                      ) : (
+                        <video
+                          src={item.url}
+                          controls
+                          className='aspect-video w-full bg-black'
+                        />
+                      )}
+                      <div className='pointer-events-none absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100'>
+                        <span className='bg-background/90 rounded-md p-1.5 shadow'>
+                          <Maximize2 className='size-3.5' aria-hidden='true' />
+                        </span>
+                        <a
+                          href={item.url}
+                          download
+                          className='bg-background/90 pointer-events-auto rounded-md p-1.5 shadow'
+                          aria-label={t('Download')}
+                        >
+                          <Download className='size-3.5' aria-hidden='true' />
+                        </a>
+                      </div>
+                    </div>
+                    <div className='text-muted-foreground flex items-center justify-between px-3 py-2 text-xs'>
+                      <span>
+                        {item.kind === 'image' ? t('Image') : t('Video')}
+                      </span>
+                      <span>{new Date(item.createdAt).toLocaleString()}</span>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
