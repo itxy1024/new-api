@@ -51,6 +51,9 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api'
 
+import { CreativeLightbox } from './CreativeLightbox'
+import { SizePickerModal } from './SizePickerModal'
+
 type Mode = 'image' | 'video'
 type ApiKeyOption = { id: number; name?: string; status: number }
 type CreativeModel = { id: string; group?: string }
@@ -167,9 +170,6 @@ export function CreativePage({ mode }: { mode: Mode }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [showSizePicker, setShowSizePicker] = useState(false)
   const [lightboxItem, setLightboxItem] = useState<StoredMedia | null>(null)
-  const [sizeMode, setSizeMode] = useState<'auto' | 'aspect' | 'custom'>('auto')
-  const [customWidth, setCustomWidth] = useState('1024')
-  const [customHeight, setCustomHeight] = useState('1024')
   const fileRef = useRef<HTMLInputElement>(null)
   const selectedKey = useMemo(
     () => keys.find((item) => String(item.id) === keyId),
@@ -369,13 +369,16 @@ export function CreativePage({ mode }: { mode: Mode }) {
     setResults((current) => current.filter((result) => result.id !== item.id))
   }
 
-  function applySize() {
-    if (sizeMode === 'auto') setSize('auto')
-    if (sizeMode === 'aspect' && !size.includes(':')) {
-      setSize(mode === 'image' ? '1:1' : '16:9')
+  function downloadLatest() {
+    const latest = results[0]
+    if (!latest) {
+      toast.info(t('Create'))
+      return
     }
-    if (sizeMode === 'custom') setSize(`${customWidth}x${customHeight}`)
-    setShowSizePicker(false)
+    const link = document.createElement('a')
+    link.href = latest.url
+    link.download = `${latest.kind}-${latest.id}`
+    link.click()
   }
 
   return (
@@ -396,19 +399,34 @@ export function CreativePage({ mode }: { mode: Mode }) {
                 </Link>
                 <button
                   type='button'
-                  disabled
-                  className='text-muted-foreground rounded-xl px-5 py-2 text-sm opacity-70'
+                  onClick={() => toast.info(t('Agent'))}
+                  className='text-muted-foreground hover:bg-background hover:text-foreground rounded-xl px-5 py-2 text-sm transition'
                 >
                   {t('Agent')}
                 </button>
               </div>
-              <Button variant='ghost' size='icon-sm' aria-label={t('Download')}>
+              <Button
+                variant='ghost'
+                size='icon-sm'
+                onClick={downloadLatest}
+                aria-label={t('Download')}
+              >
                 <Download className='size-5' />
               </Button>
-              <Button variant='ghost' size='icon-sm' aria-label={t('Help')}>
+              <Button
+                variant='ghost'
+                size='icon-sm'
+                onClick={() => toast.info(t('Advanced options'))}
+                aria-label={t('Help')}
+              >
                 <HelpCircle className='size-5' />
               </Button>
-              <Button variant='ghost' size='icon-sm' aria-label={t('Settings')}>
+              <Button
+                variant='ghost'
+                size='icon-sm'
+                onClick={() => setShowAdvanced(true)}
+                aria-label={t('Settings')}
+              >
                 <Settings2 className='size-5' />
               </Button>
             </div>
@@ -573,9 +591,9 @@ export function CreativePage({ mode }: { mode: Mode }) {
             </div>
           )}
         </section>
-        <div className='fixed right-3 bottom-3 left-3 z-40 mx-auto max-w-6xl md:right-8 md:bottom-5 md:left-8'>
-          <div className='bg-background/95 border-border/70 overflow-hidden rounded-3xl border shadow-2xl backdrop-blur-2xl'>
-            <div className='flex items-center gap-2 border-b px-3 py-2 md:px-4'>
+        <div className='pointer-events-none fixed right-3 bottom-3 left-3 z-40 mx-auto max-w-6xl md:right-8 md:bottom-5 md:left-8'>
+          <div className='pointer-events-auto space-y-2'>
+            <div className='bg-background/95 border-border/70 flex items-center gap-2 rounded-3xl border px-4 py-2 shadow-xl backdrop-blur-2xl md:px-5'>
               <Textarea
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
@@ -621,7 +639,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
                 )}
               </Button>
             </div>
-            <div className='flex flex-wrap items-end gap-2 px-3 py-3 md:px-4'>
+            <div className='bg-background/95 border-border/70 flex flex-wrap items-end gap-2 rounded-3xl border px-4 py-3 shadow-xl backdrop-blur-2xl md:px-5'>
               <label className='min-w-36 flex-1 text-xs'>
                 <span className='text-muted-foreground ml-1'>
                   {t('API Key')}
@@ -861,7 +879,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
               </Button>
             </div>
             {showAdvanced && (
-              <div className='bg-muted/30 border-t px-3 py-3 md:px-4'>
+              <div className='bg-background/95 border-border/70 rounded-3xl border px-4 py-3 shadow-xl backdrop-blur-2xl md:px-5'>
                 <div className='grid gap-3 sm:grid-cols-3'>
                   {mode === 'image' && (
                     <label className='text-xs'>
@@ -928,137 +946,18 @@ export function CreativePage({ mode }: { mode: Mode }) {
           }}
         />
         {showSizePicker && (
-          <div
-            className='fixed inset-0 z-[70] flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm'
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) setShowSizePicker(false)
-            }}
-          >
-            <div className='bg-background w-full max-w-xl rounded-3xl p-6 shadow-2xl'>
-              <div className='flex items-start justify-between'>
-                <div>
-                  <h2 className='text-lg font-semibold'>
-                    {t('Set image size')}
-                  </h2>
-                  <p className='text-muted-foreground mt-1 text-sm'>
-                    {t('Current')}: {size}
-                  </p>
-                </div>
-                <Button
-                  variant='ghost'
-                  size='icon-sm'
-                  onClick={() => setShowSizePicker(false)}
-                  aria-label={t('Close')}
-                >
-                  <span className='text-xl leading-none'>×</span>
-                </Button>
-              </div>
-              <div className='bg-muted mt-5 grid grid-cols-3 rounded-2xl p-1'>
-                {(['auto', 'aspect', 'custom'] as const).map((item) => (
-                  <button
-                    type='button'
-                    key={item}
-                    onClick={() => setSizeMode(item)}
-                    className={`rounded-xl py-2 text-sm ${sizeMode === item ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}
-                  >
-                    {(() => {
-                      if (item === 'auto') return t('Auto')
-                      if (item === 'aspect') return t('By aspect ratio')
-                      return t('Custom height')
-                    })()}
-                  </button>
-                ))}
-              </div>
-              {sizeMode === 'auto' && (
-                <div className='flex min-h-56 flex-col items-center justify-center text-center'>
-                  <div className='flex size-16 items-center justify-center rounded-full bg-blue-50 text-3xl text-blue-500'>
-                    ϟ
-                  </div>
-                  <h3 className='mt-4 text-base font-semibold'>
-                    {t('Auto size')}
-                  </h3>
-                  <p className='text-muted-foreground mt-2 max-w-xs text-sm'>
-                    {t('The model decides the output size.')}
-                  </p>
-                </div>
-              )}
-              {sizeMode === 'aspect' && (
-                <div className='grid min-h-56 grid-cols-3 place-content-center gap-3'>
-                  {['1:1', '4:3', '16:9', '3:4', '9:16', '2:3'].map((item) => (
-                    <button
-                      type='button'
-                      key={item}
-                      onClick={() => setSize(item)}
-                      className={`rounded-2xl border px-4 py-5 text-sm ${size === item ? 'border-blue-500 bg-blue-50 text-blue-600' : 'hover:bg-muted'}`}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {sizeMode === 'custom' && (
-                <div className='grid min-h-56 grid-cols-2 content-center gap-3'>
-                  <label className='text-sm'>
-                    {t('Width')}
-                    <Input
-                      value={customWidth}
-                      onChange={(event) => setCustomWidth(event.target.value)}
-                      className='mt-2 h-11 rounded-xl'
-                    />
-                  </label>
-                  <label className='text-sm'>
-                    {t('Height')}
-                    <Input
-                      value={customHeight}
-                      onChange={(event) => setCustomHeight(event.target.value)}
-                      className='mt-2 h-11 rounded-xl'
-                    />
-                  </label>
-                </div>
-              )}
-              <div className='mt-4 flex gap-3'>
-                <Button
-                  variant='outline'
-                  className='h-11 flex-1 rounded-xl'
-                  onClick={() => setShowSizePicker(false)}
-                >
-                  {t('Cancel')}
-                </Button>
-                <Button
-                  className='h-11 flex-1 rounded-xl bg-blue-500 text-white hover:bg-blue-600'
-                  onClick={applySize}
-                >
-                  {t('Confirm')}
-                </Button>
-              </div>
-            </div>
-          </div>
+          <SizePickerModal
+            currentSize={size}
+            mode={mode}
+            onSelect={setSize}
+            onClose={() => setShowSizePicker(false)}
+          />
         )}
         {lightboxItem && (
-          <div
-            className='fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-6 backdrop-blur-sm'
-            onClick={() => setLightboxItem(null)}
-          >
-            <div
-              className='relative max-h-full max-w-6xl'
-              onClick={(event) => event.stopPropagation()}
-            >
-              <img
-                src={lightboxItem.url}
-                alt={t('Generated result')}
-                className='max-h-[85vh] max-w-[90vw] rounded-2xl object-contain shadow-2xl'
-              />
-              <Button
-                variant='secondary'
-                size='icon'
-                className='absolute -top-3 -right-3 rounded-full'
-                onClick={() => setLightboxItem(null)}
-                aria-label={t('Close')}
-              >
-                <span className='text-xl leading-none'>×</span>
-              </Button>
-            </div>
-          </div>
+          <CreativeLightbox
+            src={lightboxItem.url}
+            onClose={() => setLightboxItem(null)}
+          />
         )}
       </div>
     </Main>
