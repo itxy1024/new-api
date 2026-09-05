@@ -201,6 +201,10 @@ func setCreativeGroup(c *gin.Context, requested string) error {
 			if group == requested {
 				common.SetContextKey(c, constant.ContextKeyUsingGroup, requested)
 				common.SetContextKey(c, constant.ContextKeyTokenGroup, requested)
+				// 分发器在 Token 配置了多个分组时会按 token_groups 自动匹配模型。
+				// 创作中心已经明确选择了分组，此处收窄本次请求的候选分组，
+				// 避免同名模型被错误路由到 default 或其他分组。
+				common.SetContextKey(c, constant.ContextKeyTokenGroups, []string{requested})
 				return nil
 			}
 		}

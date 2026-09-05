@@ -19,20 +19,20 @@ For commercial licensing, please contact support@quantumnous.com
 /* oxlint-disable promise/no-callback-in-promise */
 import { Link } from '@tanstack/react-router'
 import {
-  BookOpen,
+  ArrowUp,
   Check,
+  ChevronDown,
   Download,
-  FolderOpen,
-  Grid2X2,
-  ImagePlus,
+  HelpCircle,
   Loader2,
-  MoreHorizontal,
-  Plus,
+  Paperclip,
+  Pencil,
+  RotateCcw,
+  Search,
   Settings2,
   Sparkles,
+  Star,
   Trash2,
-  Upload,
-  Video as VideoIcon,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -63,6 +63,7 @@ type StoredMedia = {
   prompt?: string
   size?: string
   blob?: Blob
+  favorite?: boolean
 }
 
 const DB_NAME = 'newapi-creative'
@@ -111,26 +112,6 @@ async function saveMedia(item: StoredMedia): Promise<void> {
   })
 }
 
-async function clearMedia(kind: Mode): Promise<void> {
-  if (typeof indexedDB === 'undefined') return
-  const db = await openMediaDb()
-  await new Promise<void>((resolve, reject) => {
-    const store = db
-      .transaction(STORE_NAME, 'readwrite')
-      .objectStore(STORE_NAME)
-    const request = store.getAll()
-    request.addEventListener('success', () => {
-      for (const item of request.result as StoredMedia[]) {
-        if (item.kind === kind) {
-          store.delete(item.id)
-        }
-      }
-      resolve()
-    })
-    request.addEventListener('error', () => reject(request.error))
-  })
-}
-
 async function cacheMedia(item: StoredMedia): Promise<StoredMedia> {
   try {
     const response = await fetch(item.url, { credentials: 'include' })
@@ -175,25 +156,36 @@ export function CreativePage({ mode }: { mode: Mode }) {
   const [outputFormat, setOutputFormat] = useState('png')
   const [compression, setCompression] = useState('100')
   const [moderation, setModeration] = useState('auto')
+  const [transparentBackground, setTransparentBackground] = useState('false')
   const [quantity, setQuantity] = useState('1')
   const [retries, setRetries] = useState('0')
   const [interfaceMode, setInterfaceMode] = useState<'img' | 'resp'>('img')
   const [results, setResults] = useState<StoredMedia[]>([])
   const [busy, setBusy] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [showFavorites, setShowFavorites] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const selectedKey = useMemo(
     () => keys.find((item) => String(item.id) === keyId),
     [keys, keyId]
   )
   const selectedModelValue = modelGroup ? `${modelGroup}\x00${model}` : model
-  const title =
-    mode === 'image' ? t('AI Image Generation') : t('Video Generation')
   const helper =
     mode === 'image'
       ? t('Describe the image you want to create.')
       : t('Describe the scene, motion, and style you want to create.')
   const canSubmit = Boolean(keyId && model && prompt.trim() && !busy)
+  const filteredResults = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase()
+    return results.filter((item) => {
+      if (showFavorites && !item.favorite) return false
+      if (!query) return true
+      return `${item.prompt || ''} ${item.model || ''} ${item.size || ''}`
+        .toLowerCase()
+        .includes(query)
+    })
+  }, [results, searchTerm, showFavorites])
 
   useEffect(() => {
     api
@@ -296,6 +288,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
           size,
           quality,
           output_format: outputFormat,
+          background: transparentBackground === 'true' ? 'transparent' : 'auto',
           output_compression:
             outputFormat === 'png' ? undefined : Number(compression),
           moderation,
@@ -346,136 +339,147 @@ export function CreativePage({ mode }: { mode: Mode }) {
     }
   }
 
-  async function clearResults() {
-    await clearMedia(mode).catch(() => undefined)
-    setResults([])
+  async function toggleFavorite(item: StoredMedia) {
+    const next = { ...item, favorite: !item.favorite }
+    await saveMedia(next).catch(() => undefined)
+    setResults((current) =>
+      current.map((result) => (result.id === item.id ? next : result))
+    )
+  }
+
+  async function removeResult(item: StoredMedia) {
+    if (typeof indexedDB !== 'undefined') {
+      const db = await openMediaDb().catch(() => null)
+      if (db) {
+        await new Promise<void>((resolve) => {
+          const request = db
+            .transaction(STORE_NAME, 'readwrite')
+            .objectStore(STORE_NAME)
+            .delete(item.id)
+          request.addEventListener('complete', () => resolve())
+          request.addEventListener('error', () => resolve())
+        })
+      }
+    }
+    setResults((current) => current.filter((result) => result.id !== item.id))
   }
 
   return (
-    <Main className='bg-muted/20 min-h-full overflow-hidden p-0'>
-      <div className='relative min-h-[calc(100vh-4rem)] bg-[radial-gradient(circle_at_top,_hsl(var(--primary)/0.08),_transparent_35%)]'>
-        <header className='bg-background/80 sticky top-0 z-30 border-b backdrop-blur-xl'>
-          <div className='mx-auto flex h-16 max-w-[1600px] items-center justify-between gap-4 px-4 md:px-8'>
-            <div className='flex min-w-0 items-center gap-3'>
-              <div className='bg-foreground text-background flex size-9 items-center justify-center rounded-xl'>
-                {mode === 'image' ? (
-                  <Sparkles className='size-4' />
-                ) : (
-                  <VideoIcon className='size-4' />
-                )}
+    <Main className='min-h-full overflow-hidden bg-white p-0 dark:bg-slate-950'>
+      <div className='relative min-h-[calc(100vh-4rem)] bg-white dark:bg-slate-950'>
+        <header className='sticky top-0 z-30 border-b bg-white/95 backdrop-blur dark:bg-slate-950/95'>
+          <div className='flex h-[4.25rem] items-center justify-between px-5 md:px-10'>
+            <h1 className='text-xl font-semibold tracking-tight'>
+              {t('GPT Image Playground')}
+            </h1>
+            <div className='flex items-center gap-2'>
+              <div className='bg-muted/60 flex items-center rounded-2xl border p-1'>
+                <Link
+                  to='/creative/image'
+                  className={`rounded-xl px-5 py-2 text-sm ${mode === 'image' ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}
+                >
+                  {t('Gallery')}
+                </Link>
+                <button
+                  type='button'
+                  disabled
+                  className='text-muted-foreground rounded-xl px-5 py-2 text-sm opacity-70'
+                >
+                  {t('Agent')}
+                </button>
               </div>
-              <h1 className='truncate text-base font-semibold tracking-tight'>
-                {title}
-              </h1>
-            </div>
-            <nav className='bg-muted/60 hidden items-center gap-1 rounded-xl p-1 md:flex'>
-              <Link
-                to='/creative/image'
-                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition ${mode === 'image' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                <Grid2X2 className='size-3.5' /> {t('Image workspace')}
-              </Link>
-              <Link
-                to='/creative/video'
-                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition ${mode === 'video' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                <VideoIcon className='size-3.5' /> {t('Video workspace')}
-              </Link>
-              <button
-                type='button'
-                disabled
-                className='text-muted-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-xs opacity-60'
-              >
-                <BookOpen className='size-3.5' /> {t('Prompt library')}
-              </button>
-              <button
-                type='button'
-                disabled
-                className='text-muted-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-xs opacity-60'
-              >
-                <FolderOpen className='size-3.5' /> {t('My assets')}
-              </button>
-            </nav>
-            <div className='flex items-center gap-1'>
+              <Button variant='ghost' size='icon-sm' aria-label={t('Download')}>
+                <Download className='size-5' />
+              </Button>
+              <Button variant='ghost' size='icon-sm' aria-label={t('Help')}>
+                <HelpCircle className='size-5' />
+              </Button>
               <Button variant='ghost' size='icon-sm' aria-label={t('Settings')}>
-                <Settings2 className='size-4' />
+                <Settings2 className='size-5' />
               </Button>
             </div>
           </div>
         </header>
-        <section className='mx-auto max-w-[1900px] px-3 pt-5 pb-52 md:px-6'>
-          <div className='mb-4 flex items-center justify-between'>
-            <div>
-              <h2 className='text-sm font-semibold'>{t('Recent results')}</h2>
-              <p className='text-muted-foreground mt-1 text-xs'>
-                {t('Powered by your selected NewAPI API key')}
-              </p>
-            </div>
-            <div className='flex items-center gap-1'>
-              {results.length > 0 && (
-                <Button variant='ghost' size='sm' onClick={clearResults}>
-                  <Trash2 className='mr-2 size-3.5' />
-                  {t('Clear')}
-                </Button>
-              )}
-              <Button variant='ghost' size='icon-sm' aria-label={t('More')}>
-                <MoreHorizontal className='size-4' />
-              </Button>
+        <section className='px-5 pt-7 pb-56 md:px-10'>
+          <div className='mb-5 flex gap-3'>
+            <Button
+              variant={showFavorites ? 'secondary' : 'outline'}
+              size='icon'
+              className='size-12 rounded-2xl'
+              onClick={() => setShowFavorites((value) => !value)}
+              aria-label={t('Favorites')}
+            >
+              <Star
+                className={`size-5 ${showFavorites ? 'fill-current' : ''}`}
+              />
+            </Button>
+            <Button
+              variant='outline'
+              className='h-12 min-w-28 justify-between rounded-2xl px-4 text-sm'
+            >
+              {showFavorites ? t('Favorites') : t('All')}{' '}
+              <ChevronDown className='size-4' />
+            </Button>
+            <div className='relative min-w-0 flex-1'>
+              <Search className='text-muted-foreground absolute top-1/2 left-4 size-5 -translate-y-1/2' />
+              <Input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder={t('Search prompts, parameters...')}
+                className='h-12 rounded-2xl pl-12 text-sm'
+              />
             </div>
           </div>
-          {results.length === 0 ? (
-            <div className='border-border/70 bg-background/50 flex min-h-[62vh] flex-col items-center justify-center rounded-3xl border border-dashed p-8 text-center shadow-sm'>
-              <div className='bg-primary/10 text-primary mb-5 flex size-16 items-center justify-center rounded-2xl'>
-                <ImagePlus className='size-7' />
-              </div>
-              <h2 className='text-xl font-semibold'>{t('Create')}</h2>
-              <p className='text-muted-foreground mt-2 max-w-md text-sm'>
-                {helper}
-              </p>
-            </div>
-          ) : (
-            <div className='columns-1 gap-3 sm:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5'>
-              {results.map((item) => (
+          {filteredResults.length > 0 && (
+            <div className='grid grid-cols-[repeat(auto-fill,minmax(31rem,32rem))] gap-4'>
+              {filteredResults.map((item) => (
                 <article
                   key={item.id}
-                  className='group border-border/70 bg-background mb-3 break-inside-avoid overflow-hidden rounded-xl border shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg'
+                  className='group bg-background flex h-50 overflow-hidden rounded-2xl border shadow-sm transition hover:shadow-md'
                 >
-                  <div className='bg-muted relative overflow-hidden'>
+                  <div className='bg-muted relative h-50 w-50 min-w-50 overflow-hidden'>
                     {item.kind === 'image' ? (
                       <img
                         src={item.url}
                         alt={t('Generated result')}
                         loading='lazy'
-                        className='h-auto max-h-[70vh] w-full object-cover'
+                        className='size-full object-cover'
                       />
                     ) : (
                       <video
                         src={item.url}
                         controls
-                        className='aspect-video w-full bg-black'
+                        className='size-full bg-black object-cover'
                       />
                     )}
+                    <div className='absolute top-2 left-2 flex gap-1 text-[11px] font-semibold text-white'>
+                      <span className='rounded bg-black/55 px-1.5 py-0.5'>
+                        {item.size || size}
+                      </span>
+                      <span className='rounded bg-black/55 px-1.5 py-0.5'>
+                        {item.kind === 'image' ? t('Image') : t('Video')}
+                      </span>
+                    </div>
                     <a
                       href={item.url}
                       download
-                      className='bg-background/90 absolute top-3 right-3 rounded-lg p-2 opacity-0 shadow transition group-hover:opacity-100'
+                      className='absolute right-2 bottom-2 rounded-lg bg-black/55 p-1.5 text-white opacity-0 transition group-hover:opacity-100'
                       aria-label={t('Download')}
                     >
                       <Download className='size-4' />
                     </a>
                   </div>
-                  <div className='space-y-2 p-2.5'>
-                    <div className='flex items-start gap-2'>
-                      <p className='line-clamp-2 min-w-0 flex-1 text-xs leading-5'>
+                  <div className='flex min-w-0 flex-1 flex-col p-4'>
+                    <div className='flex min-h-0 flex-1 items-start gap-2'>
+                      <p className='line-clamp-3 min-w-0 flex-1 text-sm leading-6'>
                         {item.prompt || helper}
                       </p>
-                      <div className='flex shrink-0 items-center gap-0.5'>
+                      <div className='flex shrink-0 items-center gap-1'>
                         <Button
                           variant='ghost'
                           size='sm'
-                          className='h-7 px-2 text-[11px]'
-                          onClick={(event) => {
-                            event.stopPropagation()
+                          className='h-7 px-1.5 text-xs'
+                          onClick={() => {
                             void navigator.clipboard?.writeText(
                               item.prompt || ''
                             )
@@ -487,40 +491,60 @@ export function CreativePage({ mode }: { mode: Mode }) {
                         <Button
                           variant='ghost'
                           size='sm'
-                          className='h-7 px-2 text-[11px]'
+                          className='h-7 px-1.5 text-xs'
+                          onClick={() => setPrompt(item.prompt || '')}
                         >
                           {t('Expand')}
                         </Button>
                       </div>
                     </div>
-                    <div className='flex flex-wrap gap-1'>
+                    <div className='mt-2 flex flex-wrap gap-1'>
                       {chip(t('Uncategorized'))}
-                      {chip(new Date(item.createdAt).toLocaleString())}
+                      {chip(new Date(item.createdAt).toLocaleDateString())}
                       {chip(t('Channel'))}
                       {chip(item.model || model)}
-                      {chip(item.kind === 'image' ? t('Images') : t('Video'))}
-                      {chip(`${t('Quality')} ${quality}`)}
-                      {chip(item.size || size)}
+                      {chip(item.kind === 'image' ? t('Image') : t('Video'))}
                     </div>
-                    <div className='border-border/60 flex items-center justify-between border-t pt-2 text-xs'>
-                      <div className='flex items-center gap-1'>
-                        <Button
-                          variant='outline'
-                          size='sm'
-                          className='h-7 px-2 text-[11px]'
-                        >
-                          {t('Load')}
-                        </Button>
-                        <Button
-                          variant='ghost'
-                          size='icon-sm'
-                          className='size-7'
-                          aria-label={t('More')}
-                        >
-                          <MoreHorizontal className='size-3.5' />
-                        </Button>
-                      </div>
-                      <Check className='size-3.5 text-emerald-500' />
+                    <div className='mt-2 flex items-center justify-end gap-1 border-t pt-2'>
+                      <Button
+                        variant='ghost'
+                        size='icon-sm'
+                        className={`size-7 ${item.favorite ? 'text-amber-500' : 'text-muted-foreground'}`}
+                        onClick={() => void toggleFavorite(item)}
+                        aria-label={t('Favorites')}
+                      >
+                        <Star
+                          className={`size-4 ${item.favorite ? 'fill-current' : ''}`}
+                        />
+                      </Button>
+                      <Button
+                        variant='ghost'
+                        size='icon-sm'
+                        className='text-muted-foreground size-7'
+                        onClick={() => setPrompt(item.prompt || '')}
+                        aria-label={t('Reuse')}
+                      >
+                        <RotateCcw className='size-4' />
+                      </Button>
+                      <Button
+                        variant='ghost'
+                        size='icon-sm'
+                        className='text-muted-foreground size-7'
+                        onClick={() => setPrompt(item.prompt || '')}
+                        aria-label={t('Edit')}
+                      >
+                        <Pencil className='size-4' />
+                      </Button>
+                      <Button
+                        variant='ghost'
+                        size='icon-sm'
+                        className='text-muted-foreground size-7'
+                        onClick={() => void removeResult(item)}
+                        aria-label={t('Delete')}
+                      >
+                        <Trash2 className='size-4' />
+                      </Button>
+                      <Check className='ml-1 size-4 text-emerald-500' />
                     </div>
                   </div>
                 </article>
@@ -534,20 +558,16 @@ export function CreativePage({ mode }: { mode: Mode }) {
               <Textarea
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
-                placeholder={helper}
+                placeholder={
+                  mode === 'image'
+                    ? t(
+                        'Describe the image you want to create, or type @ to reference an image...'
+                      )
+                    : helper
+                }
                 rows={1}
                 className='min-h-10 flex-1 resize-none border-0 bg-transparent px-1 py-2 text-sm shadow-none focus-visible:ring-0'
               />
-              {mode === 'video' && (
-                <Button
-                  variant='ghost'
-                  size='icon-sm'
-                  onClick={() => fileRef.current?.click()}
-                  aria-label={t('Attach reference image')}
-                >
-                  <Plus className='size-4' />
-                </Button>
-              )}
               <Button
                 variant='ghost'
                 size='icon-sm'
@@ -556,9 +576,19 @@ export function CreativePage({ mode }: { mode: Mode }) {
               >
                 <Trash2 className='size-4' />
               </Button>
+              {mode === 'video' && (
+                <Button
+                  variant='ghost'
+                  size='icon-sm'
+                  onClick={() => fileRef.current?.click()}
+                  aria-label={t('Attach reference image')}
+                >
+                  <Paperclip className='size-4' />
+                </Button>
+              )}
               <Button
                 size='icon'
-                className='rounded-xl'
+                className='rounded-xl bg-sky-500 text-white hover:bg-sky-600'
                 onClick={submit}
                 disabled={!canSubmit}
                 aria-label={busy ? t('Generating...') : t('Generate')}
@@ -566,12 +596,12 @@ export function CreativePage({ mode }: { mode: Mode }) {
                 {busy ? (
                   <Loader2 className='size-4 animate-spin' />
                 ) : (
-                  <Upload className='size-4' />
+                  <ArrowUp className='size-4' />
                 )}
               </Button>
             </div>
             <div className='flex flex-wrap items-end gap-2 px-3 py-3 md:px-4'>
-              <label className='min-w-44 flex-1 text-xs'>
+              <label className='min-w-36 flex-1 text-xs'>
                 <span className='text-muted-foreground ml-1'>
                   {t('API Key')}
                 </span>
@@ -603,7 +633,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
                   </SelectContent>
                 </Select>
               </label>
-              <label className='min-w-44 flex-1 text-xs'>
+              <label className='min-w-36 flex-1 text-xs'>
                 <span className='text-muted-foreground ml-1'>{t('Model')}</span>
                 <Select
                   key={`model-${keyId}`}
@@ -716,6 +746,44 @@ export function CreativePage({ mode }: { mode: Mode }) {
                       </SelectContent>
                     </Select>
                   </label>
+                  <label className='w-28 text-xs'>
+                    <span className='text-muted-foreground ml-1'>
+                      {t('Transparent background')}
+                    </span>
+                    <Select
+                      value={transparentBackground}
+                      onValueChange={(value) =>
+                        value != null && setTransparentBackground(String(value))
+                      }
+                    >
+                      <SelectTrigger className='mt-1 h-9 rounded-xl'>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value='false'>false</SelectItem>
+                        <SelectItem value='true'>true</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </label>
+                  <label className='w-24 text-xs'>
+                    <span className='text-muted-foreground ml-1'>
+                      {t('Moderation')}
+                    </span>
+                    <Select
+                      value={moderation}
+                      onValueChange={(value) =>
+                        value != null && setModeration(String(value))
+                      }
+                    >
+                      <SelectTrigger className='mt-1 h-9 rounded-xl'>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value='auto'>auto</SelectItem>
+                        <SelectItem value='low'>low</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </label>
                   <label className='w-20 text-xs'>
                     <span className='text-muted-foreground ml-1'>
                       {t('Quantity')}
@@ -755,7 +823,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
                 <Settings2 className='size-4' />
               </Button>
               <Button
-                className='h-9 rounded-xl px-5'
+                className='h-9 rounded-xl bg-sky-500 px-5 text-white hover:bg-sky-600'
                 onClick={submit}
                 disabled={!canSubmit}
               >
@@ -771,43 +839,20 @@ export function CreativePage({ mode }: { mode: Mode }) {
               <div className='bg-muted/30 border-t px-3 py-3 md:px-4'>
                 <div className='grid gap-3 sm:grid-cols-3'>
                   {mode === 'image' && (
-                    <>
-                      <label className='text-xs'>
-                        <span className='text-muted-foreground'>
-                          {t('Compression')}
-                        </span>
-                        <Input
-                          type='number'
-                          min={0}
-                          max={100}
-                          value={compression}
-                          onChange={(event) =>
-                            setCompression(event.target.value)
-                          }
-                          disabled={outputFormat === 'png'}
-                          className='mt-1 h-9 rounded-xl'
-                        />
-                      </label>
-                      <label className='text-xs'>
-                        <span className='text-muted-foreground'>
-                          {t('Moderation')}
-                        </span>
-                        <Select
-                          value={moderation}
-                          onValueChange={(value) =>
-                            value != null && setModeration(String(value))
-                          }
-                        >
-                          <SelectTrigger className='mt-1 h-9 rounded-xl'>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value='auto'>auto</SelectItem>
-                            <SelectItem value='low'>low</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </label>
-                    </>
+                    <label className='text-xs'>
+                      <span className='text-muted-foreground'>
+                        {t('Compression')}
+                      </span>
+                      <Input
+                        type='number'
+                        min={0}
+                        max={100}
+                        value={compression}
+                        onChange={(event) => setCompression(event.target.value)}
+                        disabled={outputFormat === 'png'}
+                        className='mt-1 h-9 rounded-xl'
+                      />
+                    </label>
                   )}
                   {mode === 'video' && (
                     <label className='text-xs sm:col-span-2'>
