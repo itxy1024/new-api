@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -39,8 +40,38 @@ func CreativeModels(c *gin.Context) {
 		writeCreativeError(c, err, http.StatusBadRequest)
 		return
 	}
-	c.Request.URL.Path = "/v1/models"
-	ListModels(c, constant.ChannelTypeOpenAI)
+	groups := []string{}
+	if raw, ok := common.GetContextKey(c, constant.ContextKeyTokenGroups); ok {
+		groups, _ = raw.([]string)
+	}
+	if len(groups) == 0 {
+		groups = []string{common.GetContextKeyString(c, constant.ContextKeyUsingGroup)}
+	}
+	expandedGroups := make([]string, 0, len(groups))
+	for _, group := range groups {
+		if group == "auto" {
+			userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
+			expandedGroups = append(expandedGroups, service.GetRequestAutoGroups(c, userGroup)...)
+			continue
+		}
+		expandedGroups = append(expandedGroups, group)
+	}
+	seen := make(map[string]bool)
+	models := make([]gin.H, 0)
+	for _, group := range expandedGroups {
+		if strings.TrimSpace(group) == "" {
+			continue
+		}
+		for _, name := range model.GetGroupEnabledModels(group) {
+			key := group + "\x00" + name
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			models = append(models, gin.H{"id": name, "group": group})
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": models, "object": "list"})
 }
 
 // 使用登录态复用视频任务 relay，厂商适配由后台渠道决定。
@@ -103,6 +134,7 @@ func prepareCreativeContext(c *gin.Context) error {
 	c.Request.Body = io.NopCloser(bytes.NewReader(body))
 	var envelope struct {
 		KeyID int `json:"key_id"`
+		Group string `json:"group"`
 	}
 	if len(body) > 0 && common.Unmarshal(body, &envelope) != nil {
 		return errors.New("invalid creative request")
@@ -110,7 +142,13 @@ func prepareCreativeContext(c *gin.Context) error {
 	if envelope.KeyID <= 0 {
 		return errors.New("creative key_id is required")
 	}
-	return prepareCreativeKeyContext(c, strconv.Itoa(envelope.KeyID))
+	if err := prepareCreativeKeyContext(c, strconv.Itoa(envelope.KeyID)); err != nil {
+		return err
+	}
+	if strings.TrimSpace(envelope.Group) != "" {
+		return setCreativeGroup(c, envelope.Group)
+	}
+	return nil
 }
 
 func prepareCreativeKeyContext(c *gin.Context, requestedKeyID string) error {
@@ -133,6 +171,43 @@ func prepareCreativeKeyContext(c *gin.Context, requestedKeyID string) error {
 	// 临时上下文只承载用户选择的 Key，不向浏览器返回真实 Key。
 	if err := middleware.SetupContextForToken(c, token); err != nil {
 		return err
+	}
+	// 普通 TokenAuth 会在 SetupContextForToken 前设置 using_group；创作中心
+	// 直接从登录态进入，因此这里必须同步所选 Key 的分组，否则分发器会
+	// 回退到用户默认分组。
+	usingGroup := token.Group
+	if groups := token.GetGroups(); len(groups) > 0 {
+		usingGroup = groups[0]
+	}
+	if strings.TrimSpace(usingGroup) == "" {
+		usingGroup = user.Group
+	}
+	common.SetContextKey(c, constant.ContextKeyUsingGroup, usingGroup)
+	return nil
+}
+
+func setCreativeGroup(c *gin.Context, requested string) error {
+	requested = strings.TrimSpace(requested)
+	if requested == "" {
+		return nil
+	}
+	if requested == "auto" {
+		common.SetContextKey(c, constant.ContextKeyUsingGroup, requested)
+		return nil
+	}
+	raw, ok := common.GetContextKey(c, constant.ContextKeyTokenGroups)
+	if groups, valid := raw.([]string); ok && valid && len(groups) > 0 {
+		for _, group := range groups {
+			if group == requested {
+				common.SetContextKey(c, constant.ContextKeyUsingGroup, requested)
+				common.SetContextKey(c, constant.ContextKeyTokenGroup, requested)
+				return nil
+			}
+		}
+		return errors.New("creative group is not available for this key")
+	}
+	if requested != common.GetContextKeyString(c, constant.ContextKeyUsingGroup) {
+		return errors.New("creative group is not available for this key")
 	}
 	return nil
 }

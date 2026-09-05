@@ -53,6 +53,7 @@ import { api } from '@/lib/api'
 
 type Mode = 'image' | 'video'
 type ApiKeyOption = { id: number; name?: string; status: number }
+type CreativeModel = { id: string; group?: string }
 type StoredMedia = {
   id: string
   kind: Mode
@@ -163,8 +164,9 @@ export function CreativePage({ mode }: { mode: Mode }) {
   const { t } = useTranslation()
   const [keys, setKeys] = useState<ApiKeyOption[]>([])
   const [keyId, setKeyId] = useState('')
-  const [models, setModels] = useState<string[]>([])
+  const [models, setModels] = useState<CreativeModel[]>([])
   const [model, setModel] = useState('')
+  const [modelGroup, setModelGroup] = useState('')
   const [prompt, setPrompt] = useState('')
   const [size, setSize] = useState(mode === 'image' ? 'auto' : '16:9')
   const [seconds, setSeconds] = useState('5')
@@ -184,6 +186,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
     () => keys.find((item) => String(item.id) === keyId),
     [keys, keyId]
   )
+  const selectedModelValue = modelGroup ? `${modelGroup}\x00${model}` : model
   const title =
     mode === 'image' ? t('AI Image Generation') : t('Video Generation')
   const helper =
@@ -215,23 +218,29 @@ export function CreativePage({ mode }: { mode: Mode }) {
     if (!keyId) {
       setModels([])
       setModel('')
+      setModelGroup('')
       return
     }
     let active = true
     setModels([])
     setModel('')
+    setModelGroup('')
     api
       .get('/api/creative/models', { params: { key_id: keyId } })
       .then((response) => {
         if (!active) return
         const raw = response.data?.data?.data ?? response.data?.data ?? []
         const next = (Array.isArray(raw) ? raw : [])
-          .map((item: string | { id?: string; name?: string }) =>
-            typeof item === 'string' ? item : item.id || item.name || ''
+          .map(
+            (item: string | { id?: string; name?: string; group?: string }) =>
+              typeof item === 'string'
+                ? { id: item }
+                : { id: item.id || item.name || '', group: item.group }
           )
-          .filter(Boolean)
+          .filter((item: CreativeModel) => Boolean(item.id))
         setModels(next)
-        setModel(next[0] || '')
+        setModel(next[0]?.id || '')
+        setModelGroup(next[0]?.group || '')
       })
       .catch(() => active && toast.error(t('Failed to load creative models')))
     return () => {
@@ -282,6 +291,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
         const response = await api.post('/api/creative/images', {
           key_id: Number(keyId),
           model,
+          ...(modelGroup ? { group: modelGroup } : {}),
           prompt,
           size,
           quality,
@@ -312,6 +322,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
         const payload: Record<string, unknown> = {
           key_id: Number(keyId),
           model,
+          ...(modelGroup ? { group: modelGroup } : {}),
           prompt,
           size,
           seconds: Number(seconds),
@@ -571,6 +582,7 @@ export function CreativePage({ mode }: { mode: Mode }) {
                     setKeyId(String(value))
                     setModels([])
                     setModel('')
+                    setModelGroup('')
                   }}
                 >
                   <SelectTrigger className='mt-1 h-9 w-full rounded-xl'>
@@ -595,10 +607,18 @@ export function CreativePage({ mode }: { mode: Mode }) {
                 <span className='text-muted-foreground ml-1'>{t('Model')}</span>
                 <Select
                   key={`model-${keyId}`}
-                  value={model}
-                  onValueChange={(value) =>
-                    value != null && setModel(String(value))
-                  }
+                  value={selectedModelValue}
+                  onValueChange={(value) => {
+                    if (value == null) return
+                    const selected = models.find(
+                      (item) =>
+                        `${item.group || ''}\x00${item.id}` === String(value)
+                    )
+                    setModel(
+                      selected?.id || String(value).split('\x00').pop() || ''
+                    )
+                    setModelGroup(selected?.group || '')
+                  }}
                 >
                   <SelectTrigger
                     className='mt-1 h-9 w-full rounded-xl'
@@ -609,9 +629,13 @@ export function CreativePage({ mode }: { mode: Mode }) {
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {models.map((name) => (
-                      <SelectItem key={name} value={name}>
-                        {name}
+                    {models.map((item) => (
+                      <SelectItem
+                        key={`${item.group || 'default'}-${item.id}`}
+                        value={`${item.group || ''}\x00${item.id}`}
+                      >
+                        {item.id}
+                        {item.group ? ` · ${item.group}` : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
