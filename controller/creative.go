@@ -2,9 +2,13 @@ package controller
 
 import (
 	"bytes"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -14,6 +18,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -29,7 +34,16 @@ func PrepareCreativeImageContext(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	c.Request.URL.Path = "/v1/images/generations"
+	path := "/v1/images/generations"
+	if isCreativeImageEdit(c) {
+		if err := convertCreativeJSONEditToMultipart(c); err != nil {
+			writeCreativeError(c, err, http.StatusBadRequest)
+			c.Abort()
+			return
+		}
+		path = "/v1/images/edits"
+	}
+	c.Request.URL.Path = path
 	c.Request.RequestURI = c.Request.URL.Path
 	c.Next()
 }
@@ -58,11 +72,27 @@ func CreativeModels(c *gin.Context) {
 	}
 	seen := make(map[string]bool)
 	models := make([]gin.H, 0)
+	modelLimitEnabled := common.GetContextKeyBool(c, constant.ContextKeyTokenModelLimitEnabled)
+	var modelLimit map[string]bool
+	if modelLimitEnabled {
+		if raw, ok := common.GetContextKey(c, constant.ContextKeyTokenModelLimit); ok {
+			modelLimit, _ = raw.(map[string]bool)
+		}
+		if modelLimit == nil {
+			modelLimit = map[string]bool{}
+		}
+	}
 	for _, group := range expandedGroups {
 		if strings.TrimSpace(group) == "" {
 			continue
 		}
 		for _, name := range model.GetGroupEnabledModels(group) {
+			if modelLimitEnabled {
+				matchingName := ratio_setting.FormatMatchingModelName(name)
+				if !modelLimit[name] && !modelLimit[matchingName] {
+					continue
+				}
+			}
 			key := group + "\x00" + name
 			if seen[key] {
 				continue
@@ -93,14 +123,8 @@ func PrepareCreativeVideoContext(c *gin.Context) {
 
 // 返回 OpenAI 视频任务状态格式。
 func CreativeVideoFetch(c *gin.Context) {
-	keyID := ""
-	if task, exists, err := model.GetByTaskId(c.GetInt("id"), c.Param("task_id")); err == nil && exists && task != nil && task.PrivateData.TokenId > 0 {
-		keyID = strconv.Itoa(task.PrivateData.TokenId)
-	}
-	if err := prepareCreativeKeyContext(c, keyID); err != nil {
-		writeCreativeError(c, err, http.StatusBadRequest)
-		return
-	}
+	// 任务状态查询按当前登录用户校验任务归属，不要求生成时使用的 Key
+	// 仍处于启用、未过期且有余额状态；否则已提交的异步任务可能无法查看结果。
 	c.Request.URL.Path = "/v1/video/generations/" + c.Param("task_id")
 	c.Request.RequestURI = c.Request.URL.Path
 	RelayTaskFetch(c)
@@ -113,34 +137,67 @@ func CreativeVideoContent(c *gin.Context) {
 		writeCreativeError(c, errors.New("task not found"), http.StatusNotFound)
 		return
 	}
-	keyID := ""
-	if task.PrivateData.TokenId > 0 {
-		keyID = strconv.Itoa(task.PrivateData.TokenId)
-	}
-	if err := prepareCreativeKeyContext(c, keyID); err != nil {
-		writeCreativeError(c, err, http.StatusBadRequest)
-		return
-	}
+	// 内容读取同样由 VideoProxy 根据登录用户和任务 ID 做归属校验。
+	// 不重新校验原始 Key，避免 Key 后续禁用或过期导致已完成视频不可读。
 	c.Request.URL.Path = "/v1/videos/" + c.Param("task_id") + "/content"
 	c.Request.RequestURI = c.Request.URL.Path
 	VideoProxy(c)
 }
 
 func prepareCreativeContext(c *gin.Context) error {
-	body, err := io.ReadAll(c.Request.Body)
+	if strings.HasPrefix(strings.ToLower(c.Request.Header.Get("Content-Type")), "multipart/form-data") {
+		form, err := common.ParseMultipartFormReusable(c)
+		if err != nil {
+			return errors.New("invalid creative multipart request")
+		}
+		c.Request.MultipartForm = form
+		keyID := strings.TrimSpace(form.Value.Get("key_id"))
+		requestedGroup := strings.TrimSpace(form.Value.Get("group"))
+		if keyID == "" {
+			return errors.New("creative key_id is required")
+		}
+		// 这些字段只用于创作中心路由，不应随 multipart 请求转发到厂商。
+		for _, field := range []string{"key_id", "group", "interface_mode", "retry_count"} {
+			form.Value.Del(field)
+		}
+		c.Request.PostForm = url.Values(form.Value)
+		parsedKeyID, err := strconv.Atoi(keyID)
+		if err != nil || parsedKeyID <= 0 {
+			return errors.New("creative key_id is required")
+		}
+		if len(form.File["image"]) > 0 || len(form.File["image[]"]) > 0 || len(form.File["mask"]) > 0 {
+			c.Set("creative_image_edit", true)
+		}
+		if err := prepareCreativeKeyContext(c, strconv.Itoa(parsedKeyID)); err != nil {
+			return err
+		}
+		if requestedGroup != "" {
+			return setCreativeGroup(c, requestedGroup)
+		}
+		return nil
+	}
+
+	bodyStorage, err := common.GetBodyStorage(c)
 	if err != nil {
 		return errors.New("failed to read creative request")
 	}
-	c.Request.Body = io.NopCloser(bytes.NewReader(body))
-	var envelope struct {
-		KeyID int `json:"key_id"`
-		Group string `json:"group"`
+	body, err := bodyStorage.Bytes()
+	if err != nil {
+		return errors.New("failed to read creative request")
 	}
+	if _, err := bodyStorage.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	c.Request.Body = io.NopCloser(bodyStorage)
+	var envelope creativeRequestEnvelope
 	if len(body) > 0 && common.Unmarshal(body, &envelope) != nil {
 		return errors.New("invalid creative request")
 	}
 	if envelope.KeyID <= 0 {
 		return errors.New("creative key_id is required")
+	}
+	if len(envelope.Images) > 0 || strings.TrimSpace(envelope.Mask) != "" {
+		c.Set("creative_image_edit", true)
 	}
 	if err := prepareCreativeKeyContext(c, strconv.Itoa(envelope.KeyID)); err != nil {
 		return err
@@ -149,6 +206,209 @@ func prepareCreativeContext(c *gin.Context) error {
 		return setCreativeGroup(c, envelope.Group)
 	}
 	return nil
+}
+
+// creativeRequestEnvelope 是创作中心请求中由 NewAPI 自己消费的字段和
+// OpenAI 图片接口公共字段的最小集合。输入图片仍然只在服务端转换为
+// multipart 文件，厂商密钥不会进入浏览器或上游请求体。
+type creativeRequestEnvelope struct {
+	KeyID            int      `json:"key_id"`
+	Group            string   `json:"group"`
+	Model            string   `json:"model"`
+	Prompt           string   `json:"prompt"`
+	Size             string   `json:"size"`
+	Quality          string   `json:"quality"`
+	ResponseFormat   string   `json:"response_format"`
+	OutputFormat     string   `json:"output_format"`
+	OutputCompression *int    `json:"output_compression"`
+	Moderation       string   `json:"moderation"`
+	N                *int     `json:"n"`
+	Stream           *bool    `json:"stream"`
+	Background       string   `json:"background"`
+	InputFidelity    string   `json:"input_fidelity"`
+	Watermark        *bool    `json:"watermark"`
+	Images           []string `json:"images"`
+	Mask             string   `json:"mask"`
+}
+
+// convertCreativeJSONEditToMultipart 将参考项目使用的 data URL 数组转换为
+// NewAPI 标准图片编辑 relay 能识别的 image/image[] 与 mask 文件字段。
+func convertCreativeJSONEditToMultipart(c *gin.Context) error {
+	if !strings.HasPrefix(strings.ToLower(c.Request.Header.Get("Content-Type")), "application/json") {
+		return nil
+	}
+	body, err := common.GetBodyStorage(c)
+	if err != nil {
+		return err
+	}
+	data, err := body.Bytes()
+	if err != nil {
+		return err
+	}
+	var envelope creativeRequestEnvelope
+	if err := common.Unmarshal(data, &envelope); err != nil {
+		return errors.New("invalid creative image edit request")
+	}
+	if len(envelope.Images) == 0 {
+		return nil
+	}
+	if len(envelope.Images) > 16 {
+		return errors.New("too many input images")
+	}
+
+	var formBody bytes.Buffer
+	writer := multipart.NewWriter(&formBody)
+	writeField := func(name, value string) error {
+		if strings.TrimSpace(value) == "" {
+			return nil
+		}
+		return writer.WriteField(name, value)
+	}
+	if err := writeField("model", envelope.Model); err != nil {
+		return err
+	}
+	if err := writeField("prompt", envelope.Prompt); err != nil {
+		return err
+	}
+	if err := writeField("size", envelope.Size); err != nil {
+		return err
+	}
+	if err := writeField("quality", envelope.Quality); err != nil {
+		return err
+	}
+	if err := writeField("response_format", envelope.ResponseFormat); err != nil {
+		return err
+	}
+	if err := writeField("output_format", envelope.OutputFormat); err != nil {
+		return err
+	}
+	if envelope.OutputCompression != nil {
+		if err := writeField("output_compression", strconv.Itoa(*envelope.OutputCompression)); err != nil {
+			return err
+		}
+	}
+	if err := writeField("moderation", envelope.Moderation); err != nil {
+		return err
+	}
+	if envelope.N != nil {
+		if err := writeField("n", strconv.Itoa(*envelope.N)); err != nil {
+			return err
+		}
+	}
+	if envelope.Stream != nil {
+		if err := writeField("stream", strconv.FormatBool(*envelope.Stream)); err != nil {
+			return err
+		}
+	}
+	if err := writeField("background", envelope.Background); err != nil {
+		return err
+	}
+	if err := writeField("input_fidelity", envelope.InputFidelity); err != nil {
+		return err
+	}
+	if envelope.Watermark != nil {
+		if err := writeField("watermark", strconv.FormatBool(*envelope.Watermark)); err != nil {
+			return err
+		}
+	}
+
+	for index, value := range envelope.Images {
+		imageBytes, extension, err := decodeCreativeDataURL(value)
+		if err != nil {
+			return fmt.Errorf("invalid input image %d: %w", index+1, err)
+		}
+		fieldName := "image"
+		if len(envelope.Images) > 1 {
+			fieldName = "image[]"
+		}
+		part, err := writer.CreateFormFile(fieldName, fmt.Sprintf("image-%d%s", index+1, extension))
+		if err != nil {
+			return err
+		}
+		if _, err := part.Write(imageBytes); err != nil {
+			return err
+		}
+	}
+	if strings.TrimSpace(envelope.Mask) != "" {
+		maskBytes, maskExtension, err := decodeCreativeDataURL(envelope.Mask)
+		if err != nil {
+			return fmt.Errorf("invalid mask image: %w", err)
+		}
+		part, err := writer.CreateFormFile("mask", "mask"+maskExtension)
+		if err != nil {
+			return err
+		}
+		if _, err := part.Write(maskBytes); err != nil {
+			return err
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return err
+	}
+
+	// BodyStorage 可能已经由 prepareCreativeContext 创建，替换请求体时同步
+	// 更新缓存，确保 Relay 的重试和 multipart 解析读取的是同一份数据。
+	_ = body.Close()
+	newBody, err := common.CreateBodyStorage(formBody.Bytes())
+	if err != nil {
+		return err
+	}
+	c.Set(common.KeyBodyStorage, newBody)
+	c.Request.Body = io.NopCloser(newBody)
+	c.Request.ContentLength = int64(formBody.Len())
+	c.Request.Header.Set("Content-Type", writer.FormDataContentType())
+	c.Set("_original_multipart_ct", writer.FormDataContentType())
+	return nil
+}
+
+func decodeCreativeDataURL(value string) ([]byte, string, error) {
+	value = strings.TrimSpace(value)
+	if !strings.HasPrefix(strings.ToLower(value), "data:") {
+		return nil, "", errors.New("image must be a data URL")
+	}
+	header, payload, found := strings.Cut(value, ",")
+	if !found || strings.TrimSpace(payload) == "" {
+		return nil, "", errors.New("image data URL is malformed")
+	}
+	meta := strings.TrimPrefix(header, "data:")
+	mimeType := strings.TrimSpace(strings.SplitN(meta, ";", 2)[0])
+	if mimeType == "" {
+		mimeType = "image/png"
+	}
+	var data []byte
+	var err error
+	if strings.Contains(strings.ToLower(meta), ";base64") {
+		encoded := strings.TrimSpace(payload)
+		data, err = base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			// 某些前端会省略 Base64 尾部填充，兼容无填充编码。
+			data, err = base64.RawStdEncoding.DecodeString(encoded)
+		}
+	} else {
+		var decoded string
+		decoded, err = url.PathUnescape(payload)
+		data = []byte(decoded)
+	}
+	if err != nil || len(data) == 0 {
+		if err == nil {
+			err = errors.New("image data is empty")
+		}
+		return nil, "", err
+	}
+	extension := ".png"
+	switch strings.ToLower(mimeType) {
+	case "image/jpeg", "image/jpg":
+		extension = ".jpg"
+	case "image/webp":
+		extension = ".webp"
+	}
+	return data, extension, nil
+}
+
+func isCreativeImageEdit(c *gin.Context) bool {
+	value, exists := c.Get("creative_image_edit")
+	edit, ok := value.(bool)
+	return exists && ok && edit
 }
 
 func prepareCreativeKeyContext(c *gin.Context, requestedKeyID string) error {
@@ -166,6 +426,24 @@ func prepareCreativeKeyContext(c *gin.Context, requestedKeyID string) error {
 	}
 	if token.Status != common.TokenStatusEnabled {
 		return errors.New("creative key is disabled")
+	}
+	if !token.UnlimitedQuota && token.RemainQuota <= 0 {
+		return errors.New("creative key quota is exhausted")
+	}
+	if token.ExpiredTime != -1 && token.ExpiredTime <= common.GetTimestamp() {
+		return errors.New("creative key is expired")
+	}
+	tokenGroups := token.GetGroups()
+	userGroups := service.GetUserUsableGroups(user.Group)
+	for _, group := range tokenGroups {
+		if group != "auto" {
+			if _, ok := userGroups[group]; !ok {
+				return errors.New("creative key group is not available for this user")
+			}
+			if !ratio_setting.ContainsGroupRatio(group) {
+				return errors.New("creative key group is no longer available")
+			}
+		}
 	}
 	user.WriteContext(c)
 	// 临时上下文只承载用户选择的 Key，不向浏览器返回真实 Key。
@@ -192,20 +470,34 @@ func setCreativeGroup(c *gin.Context, requested string) error {
 		return nil
 	}
 	if requested == "auto" {
-		common.SetContextKey(c, constant.ContextKeyUsingGroup, requested)
-		return nil
+		raw, ok := common.GetContextKey(c, constant.ContextKeyTokenGroups)
+		groups, valid := raw.([]string)
+		if !valid || len(groups) == 0 {
+			return errors.New("creative group is not available for this key")
+		}
+		for _, group := range groups {
+			if group == "auto" {
+				return bindCreativeGroup(c, requested)
+			}
+		}
+		return errors.New("creative group is not available for this key")
 	}
 	raw, ok := common.GetContextKey(c, constant.ContextKeyTokenGroups)
 	if groups, valid := raw.([]string); ok && valid && len(groups) > 0 {
 		for _, group := range groups {
 			if group == requested {
-				common.SetContextKey(c, constant.ContextKeyUsingGroup, requested)
-				common.SetContextKey(c, constant.ContextKeyTokenGroup, requested)
-				// 分发器在 Token 配置了多个分组时会按 token_groups 自动匹配模型。
-				// 创作中心已经明确选择了分组，此处收窄本次请求的候选分组，
-				// 避免同名模型被错误路由到 default 或其他分组。
-				common.SetContextKey(c, constant.ContextKeyTokenGroups, []string{requested})
-				return nil
+				return bindCreativeGroup(c, requested)
+			}
+			// auto 是一个分组别名，模型列表会展开为实际可用分组。
+			// 选择展开后的分组时也要允许通过，不能因为 token_groups
+			// 只保存了 auto 而回退到用户默认分组。
+			if group == "auto" {
+				userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
+				for _, expanded := range service.GetRequestAutoGroups(c, userGroup) {
+					if expanded == requested {
+						return bindCreativeGroup(c, requested)
+					}
+				}
 			}
 		}
 		return errors.New("creative group is not available for this key")
@@ -213,6 +505,16 @@ func setCreativeGroup(c *gin.Context, requested string) error {
 	if requested != common.GetContextKeyString(c, constant.ContextKeyUsingGroup) {
 		return errors.New("creative group is not available for this key")
 	}
+	return nil
+}
+
+func bindCreativeGroup(c *gin.Context, group string) error {
+	common.SetContextKey(c, constant.ContextKeyUsingGroup, group)
+	common.SetContextKey(c, constant.ContextKeyTokenGroup, group)
+	// 分发器在 Token 配置了多个分组时会按 token_groups 自动匹配模型。
+	// 创作中心已经明确选择了分组，此处收窄本次请求的候选分组，
+	// 避免同名模型被错误路由到 default 或其他分组。
+	common.SetContextKey(c, constant.ContextKeyTokenGroups, []string{group})
 	return nil
 }
 

@@ -1,21 +1,3 @@
-/*
-Copyright (C) 2023-2026 QuantumNous
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-at your option any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-For commercial licensing, please contact support@quantumnous.com
-*/
 /* oxlint-disable promise/no-callback-in-promise */
 import { Link } from '@tanstack/react-router'
 import {
@@ -52,6 +34,7 @@ import { api } from '@/lib/api'
 
 import { CreativeDetailModal } from './CreativeDetailModal'
 import { CreativeLightbox } from './CreativeLightbox'
+import ReferenceCreativeApp from './reference/App'
 import { SizePickerModal } from './SizePickerModal'
 
 type Mode = 'image' | 'video'
@@ -144,7 +127,11 @@ function chip(text: string) {
   )
 }
 
-export function CreativePage({ mode }: { mode: Mode }) {
+/**
+ * 兼容旧版视频页面。图片页面使用参考项目的完整画廊实现，视频暂时保留
+ * NewAPI 原有任务页面，避免将图片专用的 IndexedDB 状态误用于视频任务。
+ */
+function LegacyCreativePage({ mode }: { mode: Mode }) {
   const { t } = useTranslation()
   const [keys, setKeys] = useState<ApiKeyOption[]>([])
   const [keyId, setKeyId] = useState('')
@@ -258,9 +245,16 @@ export function CreativePage({ mode }: { mode: Mode }) {
         `/api/creative/videos/${encodeURIComponent(taskId)}`,
         { disableDuplicate: true }
       )
-      const task = response.data?.data || response.data
+      const responseBody = response.data?.data ?? response.data
+      const task =
+        responseBody?.data && typeof responseBody.data === 'object'
+          ? responseBody.data
+          : responseBody
       const status = String(task?.status || '').toLowerCase()
-      if (['succeeded', 'success', 'completed'].includes(status)) {
+      if (
+        ['succeeded', 'success', 'completed', 'succeed'].includes(status) ||
+        task?.completed === true
+      ) {
         const item = await cacheMedia({
           id: taskId,
           kind: 'video',
@@ -326,13 +320,14 @@ export function CreativePage({ mode }: { mode: Mode }) {
           ...(modelGroup ? { group: modelGroup } : {}),
           prompt,
           size,
-          seconds: Number(seconds),
+          seconds,
           retry_count: Number(retries),
         }
         if (inputImage.trim()) payload.images = [inputImage.trim()]
         const response = await api.post('/api/creative/videos', payload)
+        const responseBody = response.data?.data ?? response.data
         const taskId =
-          response.data?.id || response.data?.task_id || response.data?.data?.id
+          responseBody?.id || responseBody?.task_id || responseBody?.data?.id
         if (!taskId) throw new Error(t('The video task did not return an id'))
         await pollVideo(String(taskId))
       }
@@ -732,7 +727,6 @@ export function CreativePage({ mode }: { mode: Mode }) {
                           value={`${item.group || ''}\x00${item.id}`}
                         >
                           {item.id}
-                          {item.group ? ` · ${item.group}` : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1002,4 +996,9 @@ export function CreativePage({ mode }: { mode: Mode }) {
       </div>
     </Main>
   )
+}
+
+export function CreativePage({ mode }: { mode: Mode }) {
+  if (mode === 'image') return <ReferenceCreativeApp />
+  return <LegacyCreativePage mode={mode} />
 }
