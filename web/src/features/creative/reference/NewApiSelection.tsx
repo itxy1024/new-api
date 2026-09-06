@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { ModelGroupSelector } from '@/components/model-group-selector'
 import { api } from '@/lib/api'
 
 import Select from './components/Select'
@@ -48,6 +49,24 @@ export default function NewApiSelection({
     [keyId, keys]
   )
   const selectedModelValue = group ? `${group}\x00${model}` : model
+  const modelGroups = useMemo(
+    () =>
+      [...new Set(models.map((item) => item.group ?? ''))].map((value) => ({
+        value,
+        label: value || t('Default'),
+      })),
+    [models, t]
+  )
+  const modelsInSelectedGroup = useMemo(
+    () =>
+      models
+        .filter((item) => (item.group ?? '') === group)
+        .map((item) => ({
+          value: getModelValue(item),
+          label: getModelLabel(item),
+        })),
+    [group, models]
+  )
 
   useEffect(() => {
     let active = true
@@ -79,9 +98,6 @@ export default function NewApiSelection({
 
   useEffect(() => {
     if (!keyId) {
-      setModels([])
-      setModel('')
-      setGroup('')
       setNewApiSelection(null)
       return
     }
@@ -121,6 +137,8 @@ export default function NewApiSelection({
       apiMode: 'images',
     })
     let active = true
+    // Key 变化时先清空旧选项，防止模型接口返回前继续提交上一把 Key 的模型。
+    // oxlint-disable-next-line react/set-state-in-effect
     setModels([])
     setModel('')
     setGroup('')
@@ -272,23 +290,26 @@ export default function NewApiSelection({
         <span className='ml-1 text-gray-400 dark:text-gray-500'>
           {t('Model')}
         </span>
-        <Select
-          value={selectedModelValue}
-          onChange={(value) => {
-            const next = String(value)
-            const selected = models.find((item) => getModelValue(item) === next)
-            setModel(selected?.id ?? next.split('\x00').pop() ?? '')
-            setGroup(selected?.group ?? '')
+        <ModelGroupSelector
+          selectedModel={selectedModelValue}
+          models={modelsInSelectedGroup}
+          onModelChange={(value) => {
+            const selected = models.find(
+              (item) => getModelValue(item) === value
+            )
+            if (!selected) return
+            setModel(selected.id)
+            setGroup(selected.group ?? '')
           }}
-          options={models.map((item) => ({
-            value: getModelValue(item),
-            label: getModelLabel(item),
-          }))}
+          selectedGroup={group}
+          groups={modelGroups}
+          onGroupChange={(value) => {
+            const selected = models.find((item) => (item.group ?? '') === value)
+            setGroup(value)
+            setModel(selected?.id ?? '')
+          }}
           disabled={!models.length || !keyId}
-          showValueTooltips={false}
-          placeholder={t('Select Model')}
-          ariaLabel={t('Select Model')}
-          className={selectClass}
+          className='h-[30px] w-full max-w-none justify-start rounded-xl border-gray-200/60 bg-white/50 px-3 text-xs dark:border-white/[0.08] dark:bg-white/[0.03]'
         />
       </label>
       {!selectedKey && <span className='sr-only'>{t('No API key yet')}</span>}

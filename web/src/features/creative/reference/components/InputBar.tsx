@@ -62,7 +62,6 @@ import {
   stripImageMentionMarkers,
 } from '../lib/promptImageMentions'
 import { normalizeCodexCliImageSize, normalizeImageSize } from '../lib/size'
-import NewApiSelection from '../NewApiSelection'
 import {
   deleteFavoriteCollection,
   useStore,
