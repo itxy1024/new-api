@@ -255,7 +255,7 @@ export default function NewApiSelection() {
       className='contents'
       aria-label={t('Select an API key')}
     >
-      <label className='flex min-w-0 flex-col gap-0.5'>
+      <label className='col-span-2 flex min-w-0 flex-col gap-0.5'>
         <span className='ml-1 text-gray-400 dark:text-gray-500'>
           {t('Model')}
         </span>
