@@ -71,7 +71,7 @@ export default function InputParamsPanel({
 }) {
   return (
     <div className={`grid ${cols} flex-1 gap-2 text-xs`}>
-      <NewApiSelection selectClass={selectClass} />
+      <NewApiSelection />
       <label
         className='relative flex flex-col gap-0.5'
         onMouseEnter={sizeHint.show}

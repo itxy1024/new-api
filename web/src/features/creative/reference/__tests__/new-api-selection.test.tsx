@@ -62,29 +62,6 @@ vi.mock('../store', () => {
   return { useStore }
 })
 
-vi.mock('../components/Select', () => ({
-  default: (props: {
-    ariaLabel?: string
-    disabled?: boolean
-    onChange: (value: string) => void
-    options: Array<{ label: string; value: string }>
-    value: string
-  }) => (
-    <select
-      aria-label={props.ariaLabel}
-      disabled={props.disabled}
-      onChange={(event) => props.onChange(event.target.value)}
-      value={props.value}
-    >
-      {props.options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  ),
-}))
-
 vi.mock('@/components/model-group-selector', () => ({
   ModelGroupSelector: (props: ComponentProps<typeof ModelGroupSelector>) => (
     <div>
@@ -113,27 +90,37 @@ describe('图片生成页的模型分组选择', () => {
     mocks.apiGet.mockReset()
     mocks.setNewApiSelection.mockReset()
     mocks.setSettings.mockReset()
-    mocks.apiGet.mockImplementation((url: string) => {
-      if (url === '/api/token/') {
+    mocks.apiGet.mockImplementation(
+      (url: string, config?: { params?: { key_id?: string } }) => {
+        if (url === '/api/token/') {
+          return Promise.resolve({
+            data: {
+              data: {
+                items: [
+                  { id: 7, name: '绘图 Key', status: 1 },
+                  { id: 8, name: '备用 Key', status: 1 },
+                ],
+              },
+            },
+          })
+        }
+        const keyId = String(config?.params?.key_id)
         return Promise.resolve({
-          data: { data: { items: [{ id: 7, name: '绘图 Key', status: 1 }] } },
+          data: {
+            data:
+              keyId === '8'
+                ? [{ id: 'image-backup', group: 'backup' }]
+                : [{ id: 'image-default', group: 'default' }],
+          },
         })
       }
-      return Promise.resolve({
-        data: {
-          data: [
-            { id: 'image-default', group: 'default' },
-            { id: 'image-vip', group: 'vip' },
-          ],
-        },
-      })
-    })
+    )
   })
 
   afterEach(cleanup)
 
   test('切换分组时展示该组模型并自动选择首个模型', async () => {
-    render(<NewApiSelection selectClass='' />)
+    render(<NewApiSelection />)
 
     await waitFor(() => {
       expect(screen.getByTestId('selected-model')).toHaveTextContent(
@@ -144,14 +131,15 @@ describe('图片生成页的模型分组选择', () => {
       'image-default'
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'vip' }))
+    fireEvent.click(screen.getByRole('button', { name: '备用 Key' }))
 
-    expect(screen.getByTestId('selected-model')).toHaveTextContent(
-      'vip\x00image-vip'
-    )
-    expect(screen.getByTestId('visible-models')).toHaveTextContent('image-vip')
-    expect(screen.getByTestId('visible-models')).not.toHaveTextContent(
-      'image-default'
+    await waitFor(() => {
+      expect(screen.getByTestId('selected-model')).toHaveTextContent(
+        'backup\x00image-backup'
+      )
+    })
+    expect(screen.getByTestId('visible-models')).toHaveTextContent(
+      'image-backup'
     )
   })
 })

@@ -10,7 +10,6 @@ import { useTranslation } from 'react-i18next'
 import { ModelGroupSelector } from '@/components/model-group-selector'
 import { api } from '@/lib/api'
 
-import Select from './components/Select'
 import { setNewApiSelection } from './lib/newApiSelection'
 import { useStore } from './store'
 
@@ -29,11 +28,7 @@ function getModelLabel(item: ModelOption): string {
   return item.id
 }
 
-export default function NewApiSelection({
-  selectClass,
-}: {
-  selectClass: string
-}) {
+export default function NewApiSelection() {
   const setSettings = useStore((state) => state.setSettings)
   const { t } = useTranslation()
   const [keys, setKeys] = useState<KeyOption[]>([])
@@ -44,28 +39,22 @@ export default function NewApiSelection({
   const lastProfileSignature = useRef('')
   const modelLoadingKeyId = useRef<string | null>(null)
 
-  const selectedKey = useMemo(
-    () => keys.find((item) => String(item.id) === keyId),
-    [keyId, keys]
-  )
   const selectedModelValue = group ? `${group}\x00${model}` : model
-  const modelGroups = useMemo(
+  const keyGroups = useMemo(
     () =>
-      [...new Set(models.map((item) => item.group ?? ''))].map((value) => ({
-        value,
-        label: value || t('Default'),
+      keys.map((item) => ({
+        value: String(item.id),
+        label: getKeyLabel(item),
       })),
-    [models, t]
+    [keys]
   )
-  const modelsInSelectedGroup = useMemo(
+  const modelOptions = useMemo(
     () =>
-      models
-        .filter((item) => (item.group ?? '') === group)
-        .map((item) => ({
-          value: getModelValue(item),
-          label: getModelLabel(item),
-        })),
-    [group, models]
+      models.map((item) => ({
+        value: getModelValue(item),
+        label: getModelLabel(item),
+      })),
+    [models]
   )
 
   useEffect(() => {
@@ -267,32 +256,12 @@ export default function NewApiSelection({
       aria-label={t('Select an API key')}
     >
       <label className='flex min-w-0 flex-col gap-0.5'>
-        <span className='ml-1 text-gray-400 dark:text-gray-500'>API Key</span>
-        <Select
-          value={keyId}
-          onChange={(value) => {
-            setKeyId(String(value))
-            setModel('')
-            setGroup('')
-          }}
-          options={keys.map((item) => ({
-            value: String(item.id),
-            label: getKeyLabel(item),
-          }))}
-          disabled={!keys.length}
-          showValueTooltips={false}
-          placeholder={t('Select an API key')}
-          ariaLabel={t('Select an API key')}
-          className={selectClass}
-        />
-      </label>
-      <label className='flex min-w-0 flex-col gap-0.5'>
         <span className='ml-1 text-gray-400 dark:text-gray-500'>
           {t('Model')}
         </span>
         <ModelGroupSelector
           selectedModel={selectedModelValue}
-          models={modelsInSelectedGroup}
+          models={modelOptions}
           onModelChange={(value) => {
             const selected = models.find(
               (item) => getModelValue(item) === value
@@ -301,18 +270,19 @@ export default function NewApiSelection({
             setModel(selected.id)
             setGroup(selected.group ?? '')
           }}
-          selectedGroup={group}
-          groups={modelGroups}
+          selectedGroup={keyId}
+          groups={keyGroups}
           onGroupChange={(value) => {
-            const selected = models.find((item) => (item.group ?? '') === value)
-            setGroup(value)
-            setModel(selected?.id ?? '')
+            if (value !== keyId) {
+              setKeyId(value)
+              setModel('')
+              setGroup('')
+            }
           }}
-          disabled={!models.length || !keyId}
+          disabled={!keys.length || !keyId}
           className='h-[30px] w-full max-w-none justify-start rounded-xl border-gray-200/60 bg-white/50 px-3 text-xs dark:border-white/[0.08] dark:bg-white/[0.03]'
         />
       </label>
-      {!selectedKey && <span className='sr-only'>{t('No API key yet')}</span>}
     </div>
   )
 }
