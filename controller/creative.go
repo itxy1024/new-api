@@ -151,14 +151,15 @@ func prepareCreativeContext(c *gin.Context) error {
 			return errors.New("invalid creative multipart request")
 		}
 		c.Request.MultipartForm = form
-		keyID := strings.TrimSpace(form.Value.Get("key_id"))
-		requestedGroup := strings.TrimSpace(form.Value.Get("group"))
+		values := url.Values(form.Value)
+		keyID := strings.TrimSpace(values.Get("key_id"))
+		requestedGroup := strings.TrimSpace(values.Get("group"))
 		if keyID == "" {
 			return errors.New("creative key_id is required")
 		}
 		// 这些字段只用于创作中心路由，不应随 multipart 请求转发到厂商。
 		for _, field := range []string{"key_id", "group", "interface_mode", "retry_count"} {
-			form.Value.Del(field)
+			delete(form.Value, field)
 		}
 		c.Request.PostForm = url.Values(form.Value)
 		parsedKeyID, err := strconv.Atoi(keyID)
@@ -470,7 +471,7 @@ func setCreativeGroup(c *gin.Context, requested string) error {
 		return nil
 	}
 	if requested == "auto" {
-		raw, ok := common.GetContextKey(c, constant.ContextKeyTokenGroups)
+		raw, _ := common.GetContextKey(c, constant.ContextKeyTokenGroups)
 		groups, valid := raw.([]string)
 		if !valid || len(groups) == 0 {
 			return errors.New("creative group is not available for this key")
