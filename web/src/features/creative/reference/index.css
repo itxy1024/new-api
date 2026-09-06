@@ -1,10 +1,7 @@
 @import url('https://fontsapi.zeoseven.com/442/main/result.css');
 @import url('https://cdn.jsdelivr.net/npm/@lobehub/webfont-harmony-sans-sc@1.0.0/css/index.css');
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
+/* Tailwind 已由全局入口加载，避免异步块覆盖主布局的响应式规则。 */
 [data-creative-reference] {
   /* 参考项目原本使用 HSL token；NewAPI 的 Tailwind v4 直接读取颜色值，
      因此这里使用等价的十六进制颜色，避免嵌入后背景类失效。 */
