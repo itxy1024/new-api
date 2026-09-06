@@ -601,9 +601,6 @@ export default function InputBar() {
     }
   }, [promptExpanded])
   const imageHintTimerRef = useRef<number | null>(null)
-  const [outputCompressionInput, setOutputCompressionInput] = useState(
-    params.output_compression == null ? '' : String(params.output_compression)
-  )
   const [nInput, setNInput] = useState(String(params.n))
   const [nInputFocused, setNInputFocused] = useState(false)
   const dragCounter = useRef(0)
@@ -695,7 +692,6 @@ export default function InputBar() {
   const isFalProvider = activeProvider === 'fal'
   const agentAutoImageCount = appMode === 'agent'
   const moderationDisabled = isFalProvider
-  const compressionDisabled = params.output_format === 'png' || isFalProvider
   const outputImageLimit = getOutputImageLimitForSettings(effectiveSettings)
   const isFalTextToImage = isFalProvider && inputImages.length === 0
   const nDraftValue = Number(nInput)
@@ -733,7 +729,6 @@ export default function InputBar() {
   const uploadImageTooltipText = atImageLimit
     ? `参考图数量已达上限（${API_MAX_IMAGES} 张），无法继续添加`
     : '上传图片'
-  const compressionHint = useHintTooltip({ enabled: () => compressionDisabled })
   const moderationHint = useHintTooltip({ enabled: () => moderationDisabled })
   const sizeHint = useHintTooltip({
     enabled: () => isFalTextToImage || activeProfile.codexCli,
@@ -904,12 +899,6 @@ export default function InputBar() {
   }, [setPrompt])
 
   useEffect(() => {
-    setOutputCompressionInput(
-      params.output_compression == null ? '' : String(params.output_compression)
-    )
-  }, [params.output_compression])
-
-  useEffect(() => {
     setNInput(agentAutoImageCount ? 'auto' : String(params.n))
   }, [agentAutoImageCount, params.n])
 
@@ -954,27 +943,6 @@ export default function InputBar() {
       cancelled = true
     }
   }, [maskDraft, maskTargetImage?.id, maskTargetImage?.dataUrl])
-
-  const commitOutputCompression = useCallback(() => {
-    if (outputCompressionInput.trim() === '') {
-      setOutputCompressionInput('')
-      setParams({ output_compression: null })
-      return
-    }
-
-    const nextValue = Number(outputCompressionInput)
-    if (Number.isNaN(nextValue)) {
-      setOutputCompressionInput(
-        params.output_compression == null
-          ? ''
-          : String(params.output_compression)
-      )
-      return
-    }
-
-    setOutputCompressionInput(String(nextValue))
-    setParams({ output_compression: nextValue })
-  }, [outputCompressionInput, params.output_compression, setParams])
 
   const commitN = useCallback(() => {
     nLimitHint.hide()
@@ -2000,11 +1968,6 @@ export default function InputBar() {
       displaySize={displaySize}
       qualityOptions={qualityOptions}
       selectClass={selectClass}
-      compressionHint={compressionHint}
-      compressionDisabled={compressionDisabled}
-      outputCompressionInput={outputCompressionInput}
-      setOutputCompressionInput={setOutputCompressionInput}
-      commitOutputCompression={commitOutputCompression}
       moderationHint={moderationHint}
       moderationDisabled={moderationDisabled}
       agentAutoImageCount={agentAutoImageCount}
