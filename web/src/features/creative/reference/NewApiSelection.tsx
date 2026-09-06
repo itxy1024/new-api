@@ -5,15 +5,11 @@
  * 这里只保留 NewAPI 的 Key 和模型选择，不在浏览器保存或展示真实厂商密钥。
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useTranslation } from 'react-i18next'
 
 import { api } from '@/lib/api'
-import { getBuildRevision } from '@/lib/build-metadata'
 
-import { CloseIcon } from './components/icons'
 import Select from './components/Select'
-import { useCloseOnEscape } from './hooks/useCloseOnEscape'
-import { usePreventBackgroundScroll } from './hooks/usePreventBackgroundScroll'
 import { setNewApiSelection } from './lib/newApiSelection'
 import { useStore } from './store'
 
@@ -33,9 +29,8 @@ function getModelLabel(item: ModelOption): string {
 }
 
 export default function NewApiSelection() {
-  const showSettings = useStore((state) => state.showSettings)
-  const setShowSettings = useStore((state) => state.setShowSettings)
   const setSettings = useStore((state) => state.setSettings)
+  const { t } = useTranslation()
   const [keys, setKeys] = useState<KeyOption[]>([])
   const [models, setModels] = useState<ModelOption[]>([])
   const [keyId, setKeyId] = useState('')
@@ -43,16 +38,12 @@ export default function NewApiSelection() {
   const [group, setGroup] = useState('')
   const lastProfileSignature = useRef('')
   const modelLoadingKeyId = useRef<string | null>(null)
-  const appVersion = getBuildRevision().replace(/^rv\./, '')
 
   const selectedKey = useMemo(
     () => keys.find((item) => String(item.id) === keyId),
     [keyId, keys]
   )
   const selectedModelValue = group ? `${group}\x00${model}` : model
-
-  useCloseOnEscape(showSettings, () => setShowSettings(false))
-  usePreventBackgroundScroll(showSettings)
 
   useEffect(() => {
     let active = true
@@ -247,164 +238,52 @@ export default function NewApiSelection() {
     })
   }, [group, keyId, model, setSettings])
 
-  if (!showSettings) return null
-
-  return createPortal(
+  return (
     <div
-      data-no-drag-select
-      className='fixed inset-0 z-[100] flex items-center justify-center p-4'
-      onClick={() => setShowSettings(false)}
+      data-newapi-selection
+      className='flex min-w-0 items-center gap-1.5'
+      aria-label={t('Select an API key')}
     >
-      <div className='animate-overlay-in absolute inset-0 bg-black/30 backdrop-blur-sm' />
-      <div
-        className='animate-modal-in relative z-10 flex h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-white/50 bg-white/95 shadow-2xl ring-1 ring-black/5 sm:h-[600px] dark:border-white/[0.08] dark:bg-gray-900/95 dark:ring-white/10'
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className='flex shrink-0 items-center justify-between border-b border-gray-100 p-5 dark:border-white/[0.08]'>
-          <h3 className='flex items-center gap-2 text-lg font-bold text-gray-800 dark:text-gray-100'>
-            <svg
-              className='h-5 w-5 text-blue-500'
-              fill='none'
-              stroke='currentColor'
-              viewBox='0 0 24 24'
-              aria-hidden='true'
-            >
-              <path
-                strokeLinecap='round'
-                strokeLinejoin='round'
-                strokeWidth={2}
-                d='M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.608-2.296.07-2.572-1.065a1.724 1.724 0 000-3.35c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z'
-              />
-              <path
-                strokeLinecap='round'
-                strokeLinejoin='round'
-                strokeWidth={2}
-                d='M15 12a3 3 0 11-6 0 3 3 0 016 0z'
-              />
-            </svg>
-            设置
-          </h3>
-          <div className='flex items-center gap-3'>
-            <span className='font-mono text-sm text-gray-400 select-none dark:text-gray-500'>
-              v{appVersion}
-            </span>
-            <button
-              type='button'
-              onClick={() => setShowSettings(false)}
-              className='rounded-full p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/[0.06] dark:hover:text-gray-200'
-              aria-label='关闭'
-            >
-              <CloseIcon className='h-5 w-5' />
-            </button>
-          </div>
-        </div>
-
-        <div className='flex min-h-0 flex-1 flex-col sm:flex-row'>
-          <div className='w-full shrink-0 border-b border-gray-100 bg-gray-50/50 sm:w-48 sm:border-r sm:border-b-0 dark:border-white/[0.08] dark:bg-white/[0.02]'>
-            <nav className='p-3'>
-              <div className='flex items-center gap-2.5 rounded-xl bg-white px-3 py-2.5 text-sm font-medium text-blue-600 shadow-sm dark:bg-white/[0.08] dark:text-blue-400'>
-                <svg
-                  className='h-4 w-4'
-                  fill='none'
-                  stroke='currentColor'
-                  viewBox='0 0 24 24'
-                  aria-hidden='true'
-                >
-                  <path
-                    strokeLinecap='round'
-                    strokeLinejoin='round'
-                    strokeWidth={2}
-                    d='M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z'
-                  />
-                </svg>
-                API 配置
-              </div>
-            </nav>
-          </div>
-
-          <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
-            <div className='flex-1 overflow-y-auto p-5 sm:p-6'>
-              <div className='max-w-2xl space-y-5'>
-                <div>
-                  <h4 className='text-base font-semibold text-gray-800 dark:text-gray-100'>
-                    NewAPI 创作配置
-                  </h4>
-                  <p className='mt-1 text-sm text-gray-500 dark:text-gray-400'>
-                    选择当前账户的 Key 和可用模型
-                  </p>
-                </div>
-
-                <label className='block text-sm'>
-                  <span className='mb-2 block text-gray-600 dark:text-gray-300'>
-                    API Key
-                  </span>
-                  <Select
-                    value={keyId}
-                    onChange={(value) => {
-                      setKeyId(String(value))
-                      setModel('')
-                      setGroup('')
-                    }}
-                    options={keys.map((item) => ({
-                      value: String(item.id),
-                      label: getKeyLabel(item),
-                    }))}
-                    disabled={!keys.length}
-                    showValueTooltips={false}
-                    className='w-full rounded-xl border border-gray-200/60 bg-white/50 px-3 py-3 text-sm shadow-sm dark:border-white/[0.08] dark:bg-white/[0.03]'
-                  />
-                  {!selectedKey && (
-                    <span className='mt-1.5 block text-xs text-amber-600 dark:text-amber-400'>
-                      当前账户没有可用的 Key
-                    </span>
-                  )}
-                </label>
-
-                <label className='block text-sm'>
-                  <span className='mb-2 block text-gray-600 dark:text-gray-300'>
-                    模型
-                  </span>
-                  <Select
-                    value={selectedModelValue}
-                    onChange={(value) => {
-                      const next = String(value)
-                      const selected = models.find(
-                        (item) => getModelValue(item) === next
-                      )
-                      setModel(selected?.id ?? next.split('\x00').pop() ?? '')
-                      setGroup(selected?.group ?? '')
-                    }}
-                    options={models.map((item) => ({
-                      value: getModelValue(item),
-                      label: getModelLabel(item),
-                    }))}
-                    disabled={!models.length}
-                    showValueTooltips={false}
-                    className='w-full rounded-xl border border-gray-200/60 bg-white/50 px-3 py-3 text-sm shadow-sm dark:border-white/[0.08] dark:bg-white/[0.03]'
-                  />
-                  {!models.length && keyId && (
-                    <span className='mt-1.5 block text-xs text-gray-500 dark:text-gray-400'>
-                      此 Key 暂无可用模型
-                    </span>
-                  )}
-                </label>
-              </div>
-            </div>
-
-            <div className='flex shrink-0 justify-end border-t border-gray-100 p-4 sm:p-5 dark:border-white/[0.08]'>
-              <button
-                type='button'
-                onClick={() => setShowSettings(false)}
-                className='rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-700 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200'
-                disabled={!keyId || !model}
-              >
-                完成
-              </button>
-            </div>
-          </div>
-        </div>
+      <div className='w-24 sm:w-36'>
+        <Select
+          value={keyId}
+          onChange={(value) => {
+            setKeyId(String(value))
+            setModel('')
+            setGroup('')
+          }}
+          options={keys.map((item) => ({
+            value: String(item.id),
+            label: getKeyLabel(item),
+          }))}
+          disabled={!keys.length}
+          showValueTooltips={false}
+          placeholder={t('Select an API key')}
+          ariaLabel={t('Select an API key')}
+          className='h-8 rounded-lg border border-gray-200/70 bg-white/70 px-2 text-xs shadow-sm dark:border-white/[0.08] dark:bg-white/[0.04]'
+        />
       </div>
-    </div>,
-    document.body
+      <div className='w-28 sm:w-44'>
+        <Select
+          value={selectedModelValue}
+          onChange={(value) => {
+            const next = String(value)
+            const selected = models.find((item) => getModelValue(item) === next)
+            setModel(selected?.id ?? next.split('\x00').pop() ?? '')
+            setGroup(selected?.group ?? '')
+          }}
+          options={models.map((item) => ({
+            value: getModelValue(item),
+            label: getModelLabel(item),
+          }))}
+          disabled={!models.length || !keyId}
+          showValueTooltips={false}
+          placeholder={t('Select Model')}
+          ariaLabel={t('Select Model')}
+          className='h-8 rounded-lg border border-gray-200/70 bg-white/70 px-2 text-xs shadow-sm dark:border-white/[0.08] dark:bg-white/[0.04]'
+        />
+      </div>
+      {!selectedKey && <span className='sr-only'>{t('No API key yet')}</span>}
+    </div>
   )
 }

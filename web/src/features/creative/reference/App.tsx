@@ -25,7 +25,6 @@ import SupportPromptModal from './components/SupportPromptModal'
 import TaskGrid from './components/TaskGrid'
 import Toast from './components/Toast'
 import { useGlobalClickSuppression } from './lib/clickSuppression'
-import NewApiSelection from './NewApiSelection'
 import { initStore, useStore } from './store'
 
 import './index.css'
@@ -56,7 +55,6 @@ export default function ReferenceCreativeApp() {
         className='bg-background text-foreground min-h-full'
       >
         <Header />
-        <NewApiSelection />
         {appMode === 'gallery' ? (
           <main data-home-main data-drag-select-surface className='pb-48'>
             <div className='safe-area-x mx-auto max-w-7xl'>

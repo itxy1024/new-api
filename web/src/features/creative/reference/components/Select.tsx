@@ -37,6 +37,8 @@ interface SelectProps {
   className?: string
   onOpenChange?: (isOpen: boolean) => void
   showValueTooltips?: boolean
+  placeholder?: string
+  ariaLabel?: string
 }
 
 export default function Select({
@@ -48,6 +50,8 @@ export default function Select({
   className,
   onOpenChange,
   showValueTooltips = false,
+  placeholder,
+  ariaLabel,
 }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [menuMaxHeight, setMenuMaxHeight] = useState(
@@ -242,11 +246,20 @@ export default function Select({
     <div ref={containerRef} className='relative w-full'>
       <div
         ref={triggerRef}
+        role='button'
+        aria-label={ariaLabel}
+        aria-expanded={isOpen}
+        tabIndex={disabled ? -1 : 0}
         {...(showValueTooltips ? triggerTooltip.handlers : {})}
         onClick={(e) => {
           if (showValueTooltips) triggerTooltip.handlers.onClick?.()
           handleToggle(e)
           triggerTooltip.dismiss()
+        }}
+        onKeyDown={(event) => {
+          if (disabled || (event.key !== 'Enter' && event.key !== ' ')) return
+          event.preventDefault()
+          setIsOpen((open) => !open)
         }}
         className={`flex w-full cursor-pointer items-center justify-between gap-1 select-none ${className ?? ''} ${
           disabled
@@ -254,7 +267,9 @@ export default function Select({
             : ''
         }`}
       >
-        <span className='truncate'>{selectedOption?.label ?? value}</span>
+        <span className='truncate'>
+          {selectedOption?.label ?? placeholder ?? value}
+        </span>
         <ChevronDownIcon
           className={`h-3.5 w-3.5 flex-shrink-0 text-gray-400 transition-transform duration-200 dark:text-gray-500 ${isOpen ? 'rotate-180' : ''}`}
         />
@@ -263,7 +278,7 @@ export default function Select({
             visible={triggerTooltip.visible}
             className='max-w-[300px] break-words whitespace-pre-wrap'
           >
-            {selectedOption?.label ?? value}
+            {selectedOption?.label ?? placeholder ?? value}
           </ViewportTooltip>
         )}
       </div>

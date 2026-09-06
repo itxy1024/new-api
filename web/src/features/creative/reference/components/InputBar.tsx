@@ -695,14 +695,6 @@ export default function InputBar() {
   const isFalProvider = activeProvider === 'fal'
   const agentAutoImageCount = appMode === 'agent'
   const moderationDisabled = isFalProvider
-  const transparentOutputAvailable = appMode === 'gallery'
-  const showTransparentOutputControl =
-    transparentOutputAvailable &&
-    (params.output_format === 'png' || params.output_format === 'webp')
-  const transparentOutputEnabled =
-    transparentOutputAvailable &&
-    showTransparentOutputControl &&
-    params.transparent_output
   const compressionDisabled = params.output_format === 'png' || isFalProvider
   const outputImageLimit = getOutputImageLimitForSettings(effectiveSettings)
   const isFalTextToImage = isFalProvider && inputImages.length === 0
@@ -741,13 +733,6 @@ export default function InputBar() {
   const uploadImageTooltipText = atImageLimit
     ? `参考图数量已达上限（${API_MAX_IMAGES} 张），无法继续添加`
     : '上传图片'
-  const transparentOutputHint = useHintTooltip()
-  const handleTransparentOutputMenuOpenChange = useCallback(
-    (open: boolean) => {
-      if (open) transparentOutputHint.hide()
-    },
-    [transparentOutputHint.hide]
-  )
   const compressionHint = useHintTooltip({ enabled: () => compressionDisabled })
   const moderationHint = useHintTooltip({ enabled: () => moderationDisabled })
   const sizeHint = useHintTooltip({
@@ -760,6 +745,7 @@ export default function InputBar() {
   const streamConcurrentHint = useHintTooltip({
     enabled: () => streamConcurrentByN,
   })
+
   const maskTargetImage = maskDraft
     ? (inputImages.find((img) => img.id === maskDraft.targetImageId) ?? null)
     : null
@@ -2014,11 +2000,6 @@ export default function InputBar() {
       displaySize={displaySize}
       qualityOptions={qualityOptions}
       selectClass={selectClass}
-      transparentOutputAvailable={transparentOutputAvailable}
-      showTransparentOutputControl={showTransparentOutputControl}
-      transparentOutputEnabled={transparentOutputEnabled}
-      transparentOutputHint={transparentOutputHint}
-      onTransparentOutputMenuOpenChange={handleTransparentOutputMenuOpenChange}
       compressionHint={compressionHint}
       compressionDisabled={compressionDisabled}
       outputCompressionInput={outputCompressionInput}
