@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -125,6 +126,9 @@ func PrepareCreativeVideoContext(c *gin.Context) {
 func CreativeVideoFetch(c *gin.Context) {
 	// 任务状态查询按当前登录用户校验任务归属，不要求生成时使用的 Key
 	// 仍处于启用、未过期且有余额状态；否则已提交的异步任务可能无法查看结果。
+	// 创作中心 GET 路由没有经过 Distribute，中间件不会自动设置 relay_mode。
+	// 显式设置后，GenRelayInfo 才能选择视频任务查询响应构造器。
+	c.Set("relay_mode", relayconstant.RelayModeVideoFetchByID)
 	c.Request.URL.Path = "/v1/video/generations/" + c.Param("task_id")
 	c.Request.RequestURI = c.Request.URL.Path
 	RelayTaskFetch(c)
