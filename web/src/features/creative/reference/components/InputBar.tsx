@@ -62,6 +62,7 @@ import {
   stripImageMentionMarkers,
 } from '../lib/promptImageMentions'
 import { normalizeCodexCliImageSize, normalizeImageSize } from '../lib/size'
+import NewApiSelection from '../NewApiSelection'
 import {
   deleteFavoriteCollection,
   useStore,
@@ -691,7 +692,6 @@ export default function InputBar() {
   const activeProvider = activeProfile.provider
   const isFalProvider = activeProvider === 'fal'
   const agentAutoImageCount = appMode === 'agent'
-  const moderationDisabled = isFalProvider
   const outputImageLimit = getOutputImageLimitForSettings(effectiveSettings)
   const isFalTextToImage = isFalProvider && inputImages.length === 0
   const nDraftValue = Number(nInput)
@@ -729,7 +729,6 @@ export default function InputBar() {
   const uploadImageTooltipText = atImageLimit
     ? `参考图数量已达上限（${API_MAX_IMAGES} 张），无法继续添加`
     : '上传图片'
-  const moderationHint = useHintTooltip({ enabled: () => moderationDisabled })
   const sizeHint = useHintTooltip({
     enabled: () => isFalTextToImage || activeProfile.codexCli,
   })
@@ -1968,8 +1967,6 @@ export default function InputBar() {
       displaySize={displaySize}
       qualityOptions={qualityOptions}
       selectClass={selectClass}
-      moderationHint={moderationHint}
-      moderationDisabled={moderationDisabled}
       agentAutoImageCount={agentAutoImageCount}
       outputImageLimit={outputImageLimit}
       nInput={nInput}

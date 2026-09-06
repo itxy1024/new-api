@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useVersionCheck } from '../hooks/useVersionCheck'
-import NewApiSelection from '../NewApiSelection'
 import { useStore } from '../store'
 import { useFavoriteCollectionTitle } from './FavoriteCollections'
 import HistoryModal from './HistoryModal'
@@ -177,7 +176,6 @@ export default function Header() {
               </button>
             </div>
           )}
-          <NewApiSelection />
         </div>
         {agentEnabled && (
           <div

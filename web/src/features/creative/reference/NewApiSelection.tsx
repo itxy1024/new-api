@@ -28,7 +28,11 @@ function getModelLabel(item: ModelOption): string {
   return item.id
 }
 
-export default function NewApiSelection() {
+export default function NewApiSelection({
+  selectClass,
+}: {
+  selectClass: string
+}) {
   const setSettings = useStore((state) => state.setSettings)
   const { t } = useTranslation()
   const [keys, setKeys] = useState<KeyOption[]>([])
@@ -241,10 +245,11 @@ export default function NewApiSelection() {
   return (
     <div
       data-newapi-selection
-      className='flex min-w-0 items-center gap-1.5'
+      className='contents'
       aria-label={t('Select an API key')}
     >
-      <div className='w-24 sm:w-36'>
+      <label className='flex min-w-0 flex-col gap-0.5'>
+        <span className='ml-1 text-gray-400 dark:text-gray-500'>API Key</span>
         <Select
           value={keyId}
           onChange={(value) => {
@@ -260,10 +265,13 @@ export default function NewApiSelection() {
           showValueTooltips={false}
           placeholder={t('Select an API key')}
           ariaLabel={t('Select an API key')}
-          className='h-8 rounded-lg border border-gray-200/70 bg-white/70 px-2 text-xs shadow-sm dark:border-white/[0.08] dark:bg-white/[0.04]'
+          className={selectClass}
         />
-      </div>
-      <div className='w-28 sm:w-44'>
+      </label>
+      <label className='flex min-w-0 flex-col gap-0.5'>
+        <span className='ml-1 text-gray-400 dark:text-gray-500'>
+          {t('Model')}
+        </span>
         <Select
           value={selectedModelValue}
           onChange={(value) => {
@@ -280,9 +288,9 @@ export default function NewApiSelection() {
           showValueTooltips={false}
           placeholder={t('Select Model')}
           ariaLabel={t('Select Model')}
-          className='h-8 rounded-lg border border-gray-200/70 bg-white/70 px-2 text-xs shadow-sm dark:border-white/[0.08] dark:bg-white/[0.04]'
+          className={selectClass}
         />
-      </div>
+      </label>
       {!selectedKey && <span className='sr-only'>{t('No API key yet')}</span>}
     </div>
   )

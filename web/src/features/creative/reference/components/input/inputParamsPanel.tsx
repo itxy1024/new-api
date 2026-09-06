@@ -1,4 +1,5 @@
 import { dismissAllTooltips } from '../../lib/tooltipDismiss'
+import NewApiSelection from '../../NewApiSelection'
 import type { ApiProfile, TaskParams } from '../../types'
 import Select from '../Select'
 import ButtonTooltip from './buttonTooltip'
@@ -21,8 +22,6 @@ export default function InputParamsPanel({
   displaySize,
   qualityOptions,
   selectClass,
-  moderationHint,
-  moderationDisabled,
   agentAutoImageCount,
   outputImageLimit,
   nInput,
@@ -51,8 +50,6 @@ export default function InputParamsPanel({
   displaySize: string
   qualityOptions: Array<{ label: string; value: string }>
   selectClass: string
-  moderationHint: HintTooltipState
-  moderationDisabled: boolean
   agentAutoImageCount: boolean
   outputImageLimit: number
   nInput: string
@@ -74,6 +71,7 @@ export default function InputParamsPanel({
 }) {
   return (
     <div className={`grid ${cols} flex-1 gap-2 text-xs`}>
+      <NewApiSelection selectClass={selectClass} />
       <label
         className='relative flex flex-col gap-0.5'
         onMouseEnter={sizeHint.show}
@@ -181,39 +179,6 @@ export default function InputParamsPanel({
           ]}
           showValueTooltips={false}
           className={selectClass}
-        />
-      </label>
-      <label
-        className='relative flex flex-col gap-0.5'
-        onMouseEnter={moderationHint.show}
-        onMouseLeave={moderationHint.hide}
-        onTouchStart={moderationHint.startTouch}
-        onTouchEnd={moderationHint.clearTimer}
-        onTouchCancel={moderationHint.hide}
-        onClick={moderationHint.show}
-      >
-        <span className='ml-1 text-gray-400 dark:text-gray-500'>审核</span>
-        <Select
-          value={moderationDisabled ? 'auto' : params.moderation}
-          onChange={(val) => {
-            if (!moderationDisabled)
-              setParams({ moderation: val as TaskParams['moderation'] })
-          }}
-          options={[
-            { label: 'auto', value: 'auto' },
-            { label: 'low', value: 'low' },
-          ]}
-          disabled={moderationDisabled}
-          showValueTooltips={false}
-          className={
-            moderationDisabled
-              ? 'cursor-not-allowed rounded-xl border border-gray-200/60 bg-gray-100/50 px-3 py-1.5 text-xs opacity-50 shadow-sm transition-all duration-200 dark:border-white/[0.08] dark:bg-white/[0.05]'
-              : selectClass
-          }
-        />
-        <ButtonTooltip
-          visible={moderationDisabled && moderationHint.visible}
-          text='fal.ai 不支持审核参数'
         />
       </label>
       <label
