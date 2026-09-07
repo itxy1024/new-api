@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+import { getSystemName } from '@/stores/system-config-store'
+
 import {
   callAgentConversationTitleApi,
   callAgentResponsesApi,
@@ -1737,7 +1739,7 @@ function applyNewApiSelection(
   const profile: ApiProfile = {
     ...(existing ?? getActiveApiProfile(normalized)),
     id: 'newapi',
-    name: 'NewAPI',
+    name: getSystemName().trim() || 'New API',
     provider: 'openai',
     baseUrl: '/api/creative',
     apiKey: String(selection.keyId),

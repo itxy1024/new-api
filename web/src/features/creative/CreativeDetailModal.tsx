@@ -2,6 +2,8 @@ import { Copy, Download, Edit3, Star, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { getSystemName } from '@/stores/system-config-store'
+
 type CreativeDetailItem = {
   id: string
   kind: 'image' | 'video'
@@ -105,7 +107,7 @@ export function CreativeDetailModal(props: CreativeDetailModalProps) {
             </h3>
             <div className='grid grid-cols-2 gap-2 text-xs'>
               {[
-                [t('Source'), 'NewAPI'],
+                [t('Source'), getSystemName().trim() || 'New API'],
                 [t('Model'), props.item.model || '-'],
                 [t('Size'), props.item.size || 'auto'],
                 [t('Quality'), 'auto'],

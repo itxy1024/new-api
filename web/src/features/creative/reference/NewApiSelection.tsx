@@ -9,6 +9,10 @@ import { useTranslation } from 'react-i18next'
 
 import { ModelGroupSelector } from '@/components/model-group-selector'
 import { api } from '@/lib/api'
+import {
+  getSystemName,
+  useSystemConfigStore,
+} from '@/stores/system-config-store'
 
 import { setNewApiSelection } from './lib/newApiSelection'
 import { useStore } from './store'
@@ -30,6 +34,10 @@ function getModelLabel(item: ModelOption): string {
 
 export default function NewApiSelection() {
   const setSettings = useStore((state) => state.setSettings)
+  const configuredSystemName = useSystemConfigStore(
+    (state) => state.config.systemName
+  )
+  const relayName = configuredSystemName.trim() || 'New API'
   const { t } = useTranslation()
   const [keys, setKeys] = useState<KeyOption[]>([])
   const [models, setModels] = useState<ModelOption[]>([])
@@ -103,7 +111,7 @@ export default function NewApiSelection() {
     const pendingProfile = {
       ...baseProfile,
       id: 'newapi',
-      name: 'NewAPI',
+      name: getSystemName().trim() || 'New API',
       provider: 'openai' as const,
       baseUrl: '/api/creative',
       apiKey: keyId,
@@ -207,7 +215,7 @@ export default function NewApiSelection() {
 
     const profile = currentProfile ?? {
       id: 'newapi',
-      name: 'NewAPI',
+      name: relayName,
       provider: 'openai' as const,
       baseUrl: '',
       apiKey: '',
@@ -247,7 +255,7 @@ export default function NewApiSelection() {
       baseUrl: '/api/creative',
       apiMode: 'images',
     })
-  }, [group, keyId, model, setSettings])
+  }, [group, keyId, model, relayName, setSettings])
 
   return (
     <div
