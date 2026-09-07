@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/base64"
+	"errors"
 	"net/http/httptest"
 	"testing"
 
@@ -73,6 +74,17 @@ func TestGetCreativeUsableTokenGroupsRejectsRemovedGroupRatio(t *testing.T) {
 	})
 
 	require.Empty(t, getCreativeUsableTokenGroups("default", []string{"removed"}))
+}
+
+func TestCreativeModelsReturnsEmptyListForUnavailableKeyGroup(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(recorder)
+
+	require.True(t, writeCreativeModelsUnavailableGroup(ctx, errCreativeKeyGroupUnavailable))
+	require.Equal(t, 200, recorder.Code)
+	require.JSONEq(t, `{"success":true,"data":[],"object":"list"}`, recorder.Body.String())
+	require.False(t, writeCreativeModelsUnavailableGroup(ctx, errors.New("other error")))
 }
 
 func TestGetCreativeUsableTokenGroupsSupportsLegacyDefaultGroupFallback(t *testing.T) {

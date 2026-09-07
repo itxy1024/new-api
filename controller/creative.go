@@ -25,6 +25,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var errCreativeKeyGroupUnavailable = errors.New("creative key group is not available for this user")
+
 // 使用登录态复用生图 relay，浏览器不需要接触任何 API Key。
 func CreativeImage(c *gin.Context) {
 	if !service.GetTaskArtifactStore().Enabled() {
@@ -79,6 +81,9 @@ func PrepareCreativeImageContext(c *gin.Context) {
 // CreativeModels 返回当前用户指定 API Key 可用的模型列表。
 func CreativeModels(c *gin.Context) {
 	if err := prepareCreativeKeyContext(c, c.Query("key_id")); err != nil {
+		if writeCreativeModelsUnavailableGroup(c, err) {
+			return
+		}
 		writeCreativeError(c, err, http.StatusBadRequest)
 		return
 	}
@@ -130,6 +135,14 @@ func CreativeModels(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": models, "object": "list"})
+}
+
+func writeCreativeModelsUnavailableGroup(c *gin.Context, err error) bool {
+	if !errors.Is(err, errCreativeKeyGroupUnavailable) {
+		return false
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": []gin.H{}, "object": "list"})
+	return true
 }
 
 // 使用登录态复用视频任务 relay，厂商适配由后台渠道决定。
@@ -507,7 +520,7 @@ func prepareCreativeKeyContext(c *gin.Context, requestedKeyID string) error {
 	}
 	tokenGroups := getCreativeUsableTokenGroups(user.Group, token.GetGroups())
 	if len(tokenGroups) == 0 {
-		return errors.New("creative key group is not available for this user")
+		return errCreativeKeyGroupUnavailable
 	}
 	user.WriteContext(c)
 	// 临时上下文只承载用户选择的 Key，不向浏览器返回真实 Key。

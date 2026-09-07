@@ -839,6 +839,7 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
         align='end'
         className={cn(
           'bg-popover z-50 w-[34rem] max-w-[calc(100vw-2rem)] rounded-xl border p-0 shadow-lg',
+          'data-open:!animate-none data-closed:!animate-none !duration-0',
           modelGroupSelectorLayoutClasses.desktopPanel
         )}
         collisionPadding={8}

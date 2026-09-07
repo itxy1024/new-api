@@ -113,6 +113,11 @@ describe('图片生成页的模型分组选择', () => {
     mocks.setSettings.mockReset()
     mocks.apiGet.mockImplementation(
       (url: string, config?: { params?: { key_id?: string } }) => {
+        if (url === '/api/user/self/groups') {
+          return Promise.resolve({
+            data: { data: { default: { desc: '默认分组', ratio: 1 } } },
+          })
+        }
         if (url === '/api/token/') {
           return Promise.resolve({
             data: {
@@ -407,7 +412,9 @@ describe('图片生成页的模型分组选择', () => {
             },
           })
         }
-        return Promise.resolve({ data: { data: [] } })
+        return Promise.resolve({
+          data: { data: [{ id: 'image-default', group: 'default' }] },
+        })
       }
     )
 
@@ -419,6 +426,57 @@ describe('图片生成页的模型分组选择', () => {
       ).not.toBeInTheDocument()
     })
     expect(screen.getByRole('button', { name: '可用 Key' })).toBeEnabled()
+  })
+
+  test('不展示也不请求当前账号不可用分组对应的 Key', async () => {
+    mocks.apiGet.mockImplementation((url: string) => {
+      if (url === '/api/user/self/groups') {
+        return Promise.resolve({
+          data: { data: { default: { desc: '默认分组', ratio: 1 } } },
+        })
+      }
+      if (url === '/api/token/') {
+        return Promise.resolve({
+          data: {
+            data: {
+              items: [
+                {
+                  group: 'retired',
+                  groups: ['retired'],
+                  id: 7,
+                  name: '失效分组 Key',
+                  status: 1,
+                },
+                {
+                  group: 'default',
+                  groups: ['default'],
+                  id: 8,
+                  name: '可用 Key',
+                  status: 1,
+                },
+              ],
+              total: 2,
+            },
+          },
+        })
+      }
+      return Promise.resolve({
+        data: { data: [{ id: 'image-default', group: 'default' }] },
+      })
+    })
+
+    render(<NewApiSelection />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '可用 Key' })).toBeEnabled()
+    })
+    expect(
+      screen.queryByRole('button', { name: '失效分组 Key' })
+    ).not.toBeInTheDocument()
+    expect(mocks.apiGet).not.toHaveBeenCalledWith(
+      '/api/creative/models',
+      expect.objectContaining({ params: { key_id: '7' } })
+    )
   })
 })
 

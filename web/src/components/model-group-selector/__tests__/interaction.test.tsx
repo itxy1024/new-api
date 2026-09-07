@@ -78,4 +78,30 @@ describe('model group selector interaction', () => {
       frameCountAfterOpen
     )
   })
+
+  test('再次点击选择框关闭弹窗时禁用进出场动画', async () => {
+    render(
+      <ModelGroupSelector
+        groups={[{ label: 'Key 1', value: '1' }]}
+        models={[{ label: 'image-model', value: 'image-model' }]}
+        onGroupChange={vi.fn()}
+        onModelChange={vi.fn()}
+        selectedGroup='1'
+        selectedModel='image-model'
+      />
+    )
+
+    const trigger = screen.getByRole('combobox')
+    fireEvent.click(trigger)
+    const popup = await waitFor(() =>
+      document.querySelector<HTMLElement>('[data-slot="popover-content"]')
+    )
+    expect(popup).toHaveClass('data-open:!animate-none')
+    expect(popup).toHaveClass('data-closed:!animate-none')
+
+    fireEvent.click(trigger)
+    await waitFor(() =>
+      expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    )
+  })
 })

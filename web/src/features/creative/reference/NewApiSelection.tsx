@@ -14,7 +14,13 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 import { setNewApiSelection } from './lib/newApiSelection'
 import { useStore } from './store'
 
-type KeyOption = { id: number; name?: string; status?: number }
+type KeyOption = {
+  group?: string
+  groups?: string[]
+  id: number
+  name?: string
+  status?: number
+}
 type ModelOption = { id: string; group?: string }
 
 const KEY_PAGE_SIZE = 100
@@ -32,6 +38,22 @@ const UNAVAILABLE_KEY_ERRORS = new Set([
 
 function getKeyLabel(item: KeyOption): string {
   return item.name?.trim() || '未命名 Key'
+}
+
+function isKeyGroupUsable(
+  item: KeyOption,
+  usableGroups: Set<string> | null
+): boolean {
+  if (!usableGroups) return true
+
+  let groups: string[] = []
+  if (Array.isArray(item.groups)) {
+    groups = item.groups
+  } else if (item.group) {
+    groups = [item.group]
+  }
+  if (groups.length === 0) return true
+  return groups.some((group) => usableGroups.has(group.trim()))
 }
 
 function getModelValue(item: ModelOption): string {
@@ -92,6 +114,7 @@ export default function NewApiSelection() {
     const request = api
       .get('/api/creative/models', {
         params: { key_id: requestedKeyId },
+        skipErrorHandler: true,
       })
       .then((response) => {
         const next = normalizeModelOptions(response.data?.data)
@@ -173,8 +196,27 @@ export default function NewApiSelection() {
           return Array.isArray(data.items) ? data.items : []
         })
         if (!active) return
-        const next = [...firstItems, ...remainingItems].filter(
-          (item: KeyOption) => Number(item.status) === 1
+        const allKeys = [...firstItems, ...remainingItems]
+        const hasExplicitGroups = allKeys.some(
+          (item) =>
+            Boolean(item.group?.trim()) ||
+            (Array.isArray(item.groups) && item.groups.length > 0)
+        )
+        const usableGroupsResponse = hasExplicitGroups
+          ? await api
+              .get('/api/user/self/groups', { skipErrorHandler: true })
+              .catch(() => null)
+          : null
+        const usableGroupsData = usableGroupsResponse?.data?.data
+        const usableGroups =
+          usableGroupsData &&
+          typeof usableGroupsData === 'object' &&
+          !Array.isArray(usableGroupsData)
+            ? new Set(Object.keys(usableGroupsData))
+            : null
+        const next = allKeys.filter(
+          (item: KeyOption) =>
+            Number(item.status) === 1 && isKeyGroupUsable(item, usableGroups)
         )
         setKeys(next)
 
@@ -217,6 +259,9 @@ export default function NewApiSelection() {
             const currentKeyId = String(next[currentIndex].id)
             try {
               modelResults[currentIndex] = await loadModelsForKey(currentKeyId)
+              if (modelResults[currentIndex]?.length === 0) {
+                removeUnavailableKey(currentKeyId)
+              }
             } catch (error) {
               modelResults[currentIndex] = []
               if (active && isUnavailableCreativeKeyError(error)) {
