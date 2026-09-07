@@ -3,6 +3,7 @@ package system_setting
 import (
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -54,7 +55,16 @@ func TestValidateTaskArtifactStoreConfig(t *testing.T) {
 	}
 }
 
-func TestLoadTaskArtifactStoreConfigFallsBackToUpstream(t *testing.T) {
+func TestLoadTaskArtifactStoreConfigLoadsValidatedEnvironment(t *testing.T) {
+	common.OptionMapRWMutex.Lock()
+	originalOptions := common.OptionMap
+	common.OptionMap = map[string]string{}
+	common.OptionMapRWMutex.Unlock()
+	t.Cleanup(func() {
+		common.OptionMapRWMutex.Lock()
+		common.OptionMap = originalOptions
+		common.OptionMapRWMutex.Unlock()
+	})
 	t.Setenv(TaskArtifactStoreModeEnv, "filesystem")
 	t.Setenv(TaskArtifactStoreS3PresignTTLEnv, "900")
 	config := LoadTaskArtifactStoreConfig()
@@ -67,10 +77,12 @@ func TestLoadTaskArtifactStoreConfigFallsBackToUpstream(t *testing.T) {
 	t.Setenv(TaskArtifactStoreS3AccessKeyEnv, "access-key")
 	t.Setenv(TaskArtifactStoreS3SecretKeyEnv, "secret-key")
 	t.Setenv(TaskArtifactStoreS3PrefixEnv, "tasks/v1")
+	t.Setenv(TaskArtifactStoreS3PathStyleEnv, "true")
 	t.Setenv(TaskArtifactStoreS3PresignTTLEnv, "600")
 	config = LoadTaskArtifactStoreConfig()
 
-	assert.Equal(t, TaskArtifactStoreModeUpstream, config.Mode)
+	assert.Equal(t, TaskArtifactStoreModeS3, config.Mode)
 	assert.Equal(t, "https://objects.example.com", config.S3Endpoint)
+	assert.True(t, config.S3PathStyle)
 	assert.Equal(t, 600, config.S3PresignTTLSeconds)
 }

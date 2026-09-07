@@ -345,6 +345,8 @@ func migrateDB() error {
 		&TopUp{},
 		&QuotaData{},
 		&Task{},
+		&CreativeGeneration{},
+		&CreativeAsset{},
 		&TaskPlugin{},
 		&Model{},
 		&Vendor{},

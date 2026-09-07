@@ -29,6 +29,13 @@ func SetApiRouter(router *gin.Engine) {
 		creativeRoute.Use(middleware.UserAuth())
 		{
 			creativeRoute.GET("/models", controller.CreativeModels)
+			creativeRoute.GET("/generations", controller.ListCreativeGenerations)
+			creativeRoute.GET("/generations/:generation_id/assets/:asset_id/content", controller.CreativeGenerationAssetContent)
+			creativeRoute.DELETE("/generations/:generation_id", controller.DeleteCreativeGeneration)
+			creativeRoute.DELETE("/generations/client/:client_task_id", controller.DeleteCreativeGenerationByClientTaskID)
+			creativeRoute.GET("/storage", middleware.AdminAuth(), controller.GetCreativeStorageConfig)
+			creativeRoute.PUT("/storage", middleware.AdminAuth(), controller.UpdateCreativeStorageConfig)
+			creativeRoute.POST("/storage/test", middleware.AdminAuth(), controller.TestCreativeStorageConfig)
 			creativeRoute.POST("/images",
 				controller.PrepareCreativeImageContext,
 				middleware.ModelRequestRateLimit(),

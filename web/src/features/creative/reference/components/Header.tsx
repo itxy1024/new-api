@@ -1,11 +1,17 @@
+import { Settings02Icon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { Button } from '@/components/ui/button'
+import { useIsAdmin } from '@/hooks/use-admin'
 
 import { useVersionCheck } from '../hooks/useVersionCheck'
 import { useStore } from '../store'
 import { useFavoriteCollectionTitle } from './FavoriteCollections'
 import HistoryModal from './HistoryModal'
 import { EditIcon, HistoryIcon } from './icons'
+import OssSettingsDialog from './OssSettingsDialog'
 
 export default function Header() {
   const { t } = useTranslation()
@@ -24,20 +30,17 @@ export default function Header() {
   const showFavoriteCollectionTitle =
     appMode === 'gallery' && Boolean(activeFavoriteCollectionId)
   const { hasUpdate, latestRelease, dismiss } = useVersionCheck()
-  const [hintVisible, setHintVisible] = useState(false)
+  const hintVisible = false
   const [scrollDirection, setScrollDirection] = useState<'up' | 'down'>('up')
   const [showHistoryModal, setShowHistoryModal] = useState(false)
+  const [showOssSettings, setShowOssSettings] = useState(false)
+  const isAdmin = useIsAdmin()
   const historyButtonRef = useRef<HTMLButtonElement>(null)
   const createConversation = useStore((s) => s.createAgentConversation)
   // NewAPI 创作中心只提供画廊模式，避免将 Key ID 当作 Agent 的 Bearer 密钥。
   const agentEnabled = false
 
   useEffect(() => {
-    if (agentEnabled && appMode === 'agent') {
-      setScrollDirection('up')
-      return
-    }
-
     let lastScrollY = window.scrollY
     let ticking = false
 
@@ -61,17 +64,7 @@ export default function Header() {
 
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
-  }, [appMode])
-
-  useEffect(() => {
-    if (agentEnabled && appMode === 'agent' && !agentMobileHeaderVisible) {
-      setHintVisible(true)
-      const timer = setTimeout(() => {
-        setHintVisible(false)
-      }, 1500)
-      return () => clearTimeout(timer)
-    }
-  }, [appMode, agentMobileHeaderVisible])
+  }, [])
 
   return (
     <>
@@ -129,6 +122,18 @@ export default function Header() {
               </div>
             )}
           </div>
+          {isAdmin && (
+            <Button
+              type='button'
+              variant='ghost'
+              size='icon'
+              aria-label={t('Creative result storage')}
+              title={t('Creative result storage')}
+              onClick={() => setShowOssSettings(true)}
+            >
+              <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} />
+            </Button>
+          )}
           {agentEnabled && appMode === 'agent' && activeConversation && (
             <div className='absolute top-1/2 left-1/2 hidden max-w-[30%] -translate-x-1/2 -translate-y-1/2 sm:flex'>
               <button
@@ -200,6 +205,10 @@ export default function Header() {
           </div>
         )}
       </header>
+      <OssSettingsDialog
+        open={showOssSettings}
+        onOpenChange={setShowOssSettings}
+      />
 
       {/* Hint for sliding down */}
       <div

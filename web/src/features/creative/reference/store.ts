@@ -55,6 +55,13 @@ import {
 } from './lib/apiProfiles'
 import { showBrowserNotification } from './lib/browserNotification'
 import { validateMaskMatchesImage } from './lib/canvasImage'
+import {
+  creativeGenerationToTask,
+  deleteCreativeGenerationByClientTaskId,
+  downloadCreativeAsset,
+  listCreativeImageGenerations,
+  type CreativeGenerationRecord,
+} from './lib/creativeStorage'
 import { hasActiveDataOperations } from './lib/dataOperations'
 import { blobToDataUrl, fileToDataUrl } from './lib/dataUrl'
 import {
@@ -180,25 +187,26 @@ import {
   getTransparentRequestParams,
   removeKeyedBackgroundFromDataUrl,
 } from './lib/transparentImage'
-import type {
-  AgentConversation,
-  AgentInputDraft,
-  AgentMessage,
-  AgentRound,
-  ApiMode,
-  ApiProfile,
-  AppSettings,
-  AppMode,
-  TaskParams,
-  InputImage,
-  MaskDraft,
-  TaskRecord,
-  FavoriteCollection,
-  ResponsesOutputItem,
-  StoredImage,
-  StoredImageThumbnail,
+import {
+  DEFAULT_AGENT_MAX_TOOL_ROUNDS,
+  DEFAULT_PARAMS,
+  type AgentConversation,
+  type AgentInputDraft,
+  type AgentMessage,
+  type AgentRound,
+  type ApiMode,
+  type ApiProfile,
+  type AppMode,
+  type AppSettings,
+  type FavoriteCollection,
+  type InputImage,
+  type MaskDraft,
+  type ResponsesOutputItem,
+  type StoredImage,
+  type StoredImageThumbnail,
+  type TaskParams,
+  type TaskRecord,
 } from './types'
-import { DEFAULT_AGENT_MAX_TOOL_ROUNDS, DEFAULT_PARAMS } from './types'
 
 const FAL_RECOVERY_POLL_MS = 10_000
 const CUSTOM_RECOVERY_POLL_MS = 10_000
@@ -1529,6 +1537,79 @@ function putTask(task: TaskRecord): Promise<IDBValidKey> {
   return dbPutTask(getPersistableTask(task))
 }
 
+async function restoreCreativeImageHistory(
+  storedTasks: TaskRecord[],
+  generations: CreativeGenerationRecord[]
+): Promise<TaskRecord[]> {
+  const localTasks = new Map(storedTasks.map((task) => [task.id, task]))
+  const restoredTasks: TaskRecord[] = []
+
+  for (const generation of generations) {
+    if (
+      generation.status === 'processing' ||
+      !generation.client_task_id.trim()
+    ) {
+      continue
+    }
+    const localTask = localTasks.get(generation.client_task_id)
+    const outputImages: string[] = []
+
+    for (let index = 0; index < generation.assets.length; index++) {
+      const localImageId = localTask?.outputImages[index]
+      if (localImageId && (await getImage(localImageId))) {
+        outputImages.push(localImageId)
+        continue
+      }
+
+      try {
+        const blob = await downloadCreativeAsset(
+          generation.assets[index].content_url
+        )
+        const dataUrl = await blobToDataUrl(
+          blob,
+          generation.assets[index].mime_type
+        )
+        const stored = await storeImageWithSize(dataUrl, 'generated')
+        cacheImage(stored.id, dataUrl)
+        outputImages.push(stored.id)
+      } catch {
+        // 单个对象读取失败不应阻断本地画廊初始化。
+      }
+    }
+
+    if (!localTask && outputImages.length === 0) continue
+    const restored = creativeGenerationToTask(
+      generation,
+      outputImages.length > 0 ? outputImages : localTask?.outputImages || [],
+      getSystemName()
+    )
+    const merged = localTask
+      ? {
+          ...restored,
+          ...localTask,
+          outputImages:
+            outputImages.length > 0 ? outputImages : localTask.outputImages,
+          rawImageUrls: restored.rawImageUrls,
+          ...(localTask.status === 'done'
+            ? {}
+            : {
+                status: restored.status,
+                error: restored.error,
+                finishedAt: restored.finishedAt,
+                elapsed: restored.elapsed,
+              }),
+        }
+      : restored
+    restoredTasks.push(merged)
+    localTasks.delete(generation.client_task_id)
+    await putTask(merged)
+  }
+
+  return [...restoredTasks, ...localTasks.values()].sort(
+    (left, right) => right.createdAt - left.createdAt
+  )
+}
+
 export function getCodexCliPromptKey(settings: AppSettings): string {
   const profile = getActiveApiProfile(settings)
   return `${profile.baseUrl}\n${profile.apiKey}`
@@ -2126,9 +2207,18 @@ export async function initStore() {
   const legacyAgentConversations = normalizeAgentConversations(
     useStore.getState().agentConversations
   )
-  const storedTasks = await getAllTasks()
+  const [localTasks, rawAgentConversations, creativeGenerations] =
+    await Promise.all([
+      getAllTasks(),
+      getAllAgentConversations(),
+      listCreativeImageGenerations().catch(() => []),
+    ])
+  const storedTasks = await restoreCreativeImageHistory(
+    localTasks,
+    creativeGenerations
+  )
   const storedAgentConversations = normalizeAgentConversations(
-    await getAllAgentConversations()
+    rawAgentConversations
   )
   let loadedAgentConversations = mergePersistedAgentConversations(
     storedAgentConversations,
@@ -5139,6 +5229,7 @@ async function executeTask(taskId: string) {
 
     const result = await callImageApi({
       settings: requestSettings,
+      clientTaskId: taskId,
       prompt: replaceImageMentionsForApi(requestPrompt, inputDataUrls.length),
       params: task.params,
       newApiSelection: taskNewApiSelection ?? undefined,
@@ -6030,7 +6121,14 @@ async function removeTasks(
   updateState?: TaskDeletionStateUpdater
 ) {
   const toDelete = new Set(taskIds)
-  let deletedTasks: TaskRecord[] = []
+  let deletedTasks = useStore
+    .getState()
+    .tasks.filter((task) => toDelete.has(task.id))
+  await Promise.all(
+    deletedTasks
+      .filter((task) => task.apiProfileId === 'newapi')
+      .map((task) => deleteCreativeGenerationByClientTaskId(task.id))
+  )
   useStore.setState((state) => {
     deletedTasks = state.tasks.filter((task) => toDelete.has(task.id))
     const streamPreviews = { ...state.streamPreviews }
@@ -6186,6 +6284,12 @@ export async function clearData(
   } = useStore.getState()
 
   if (options.clearTasks) {
+    await Promise.all(
+      useStore
+        .getState()
+        .tasks.filter((task) => task.apiProfileId === 'newapi')
+        .map((task) => deleteCreativeGenerationByClientTaskId(task.id))
+    )
     await dbClearTasks()
     await dbClearAgentConversations()
     await clearImages()

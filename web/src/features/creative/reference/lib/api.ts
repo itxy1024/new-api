@@ -16,6 +16,11 @@ import { callOpenAICompatibleImageApi } from './openaiCompatibleImageApi'
 export type { CallApiOptions, CallApiResult } from './imageApiShared'
 export { normalizeBaseUrl } from './devProxy'
 
+type NewApiCallApiOptions = CallApiOptions & {
+  /** 浏览器任务 ID，用于将服务端记录与 IndexedDB 任务关联 */
+  clientTaskId?: string
+}
+
 function isNewApiProfile(
   profile: ReturnType<typeof getActiveApiProfile>
 ): boolean {
@@ -43,7 +48,7 @@ function resolveImageUrl(value: string): string {
 }
 
 async function callNewApiImageApi(
-  opts: CallApiOptions,
+  opts: NewApiCallApiOptions,
   profile: ReturnType<typeof getActiveApiProfile>
 ): Promise<CallApiResult> {
   const selection = opts.newApiSelection ?? getNewApiSelection()
@@ -62,6 +67,7 @@ async function callNewApiImageApi(
 
   const params: Record<string, unknown> = {
     key_id: keyId,
+    client_task_id: opts.clientTaskId,
     model,
     // 始终显式传递 group；空字符串表示使用当前 Key 的唯一分组，
     // 不让请求体缺字段而触发中间层的默认分组回退。
@@ -130,7 +136,7 @@ async function callNewApiImageApi(
 }
 
 export async function callImageApi(
-  opts: CallApiOptions
+  opts: NewApiCallApiOptions
 ): Promise<CallApiResult> {
   const profile = getActiveApiProfile(opts.settings)
   if (isNewApiProfile(profile)) return callNewApiImageApi(opts, profile)

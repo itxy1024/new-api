@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 
 import { DEFAULT_PARAMS } from '../../types'
-import { DEFAULT_SETTINGS } from '../apiProfiles'
 import { callImageApi } from '../api'
+import { DEFAULT_SETTINGS } from '../apiProfiles'
 import { setNewApiSelection } from '../newApiSelection'
 
 describe('NewAPI 图片请求', () => {
@@ -43,6 +43,7 @@ describe('NewAPI 图片请求', () => {
           },
         ],
       },
+      clientTaskId: 'local-task-123',
       prompt: 'a test image',
       params: { ...DEFAULT_PARAMS },
       inputImageDataUrls: [],
@@ -52,6 +53,7 @@ describe('NewAPI 图片请求', () => {
     expect(post.mock.calls[0]?.[0]).toBe('/api/creative/images')
     expect(post.mock.calls[0]?.[1]).toMatchObject({
       key_id: 17,
+      client_task_id: 'local-task-123',
       model: 'vendor-image-model',
       group: 'premium',
     })

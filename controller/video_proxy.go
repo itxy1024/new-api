@@ -83,6 +83,7 @@ func VideoProxy(c *gin.Context) {
 	}
 
 	var descriptor *relaychannel.TaskContentRequest
+	artifactKey := "video"
 	if taskHasPluginExecution(task) {
 		artifacts, projectionErr := projectTaskArtifacts(task)
 		if projectionErr == nil {
@@ -90,6 +91,7 @@ func VideoProxy(c *gin.Context) {
 				if artifact.Type != "video" {
 					continue
 				}
+				artifactKey = artifact.Key
 				adaptor, adaptorErr := initTaskArtifactAdaptor(task)
 				if adaptorErr == nil {
 					if provider, ok := adaptor.(relaychannel.TaskContentRequestProvider); ok {
@@ -123,6 +125,13 @@ func VideoProxy(c *gin.Context) {
 			Method:         c.Request.Method,
 			Credentialless: true,
 		}
+	}
+	artifactStore := service.GetTaskArtifactStore()
+	if ref, resolveErr := artifactStore.Resolve(task, artifactKey); resolveErr == nil && ref != nil {
+		if serveErr := artifactStore.Serve(c, task, ref); serveErr != nil {
+			writeTaskMediaProxyError(c, serveErr)
+		}
+		return
 	}
 	if err := proxyTaskMedia(c, task, descriptor); err != nil {
 		writeTaskMediaProxyError(c, err)

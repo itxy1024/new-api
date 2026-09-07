@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -12,7 +13,11 @@ import (
 )
 
 func TestDisabledTaskArtifactStoreHasNoStorageBehavior(t *testing.T) {
-	store := GetTaskArtifactStore()
+	store, err := newTaskArtifactStore(system_setting.TaskArtifactStoreConfig{
+		Mode:                system_setting.TaskArtifactStoreModeUpstream,
+		S3PresignTTLSeconds: system_setting.DefaultTaskArtifactStorePresignTTLSeconds,
+	})
+	require.NoError(t, err)
 	require.NotNil(t, store)
 	assert.False(t, store.Enabled())
 
@@ -25,7 +30,6 @@ func TestDisabledTaskArtifactStoreHasNoStorageBehavior(t *testing.T) {
 	assert.Nil(t, ref)
 	assert.ErrorIs(t, err, ErrTaskArtifactStoreDisabled)
 	assert.ErrorIs(t, store.Serve(&gin.Context{}, task, &StoredArtifactRef{Backend: "s3"}), ErrTaskArtifactStoreDisabled)
-	assert.Same(t, store, GetTaskArtifactStore())
 }
 
 var _ TaskArtifactStore = disabledArtifactStore{}

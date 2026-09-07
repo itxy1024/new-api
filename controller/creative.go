@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
+	"unicode"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -25,7 +27,32 @@ import (
 
 // 使用登录态复用生图 relay，浏览器不需要接触任何 API Key。
 func CreativeImage(c *gin.Context) {
+	if !service.GetTaskArtifactStore().Enabled() {
+		Relay(c, types.RelayFormatOpenAIImage)
+		return
+	}
+	metadataValue, _ := c.Get(creativeImageRequestContextKey)
+	metadata, _ := metadataValue.(creativeRequestEnvelope)
+	userID := c.GetInt("id")
+	tokenID := c.GetInt("token_id")
+	group := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+	startedAt := time.Now()
+	generation := beginCreativeImageGeneration(metadata, userID, tokenID, group, startedAt)
+	originalWriter := c.Writer
+	captureWriter := &creativeCaptureWriter{ResponseWriter: originalWriter}
+	c.Writer = captureWriter
 	Relay(c, types.RelayFormatOpenAIImage)
+	elapsedMS := time.Since(startedAt).Milliseconds()
+	status := captureWriter.Status()
+	c.Writer = originalWriter
+	if status < http.StatusOK || status >= http.StatusMultipleChoices || captureWriter.overflow || captureWriter.buffer.Len() == 0 {
+		if generation != nil {
+			_ = model.UpdateCreativeGenerationResult(c.Request.Context(), generation.ID, model.CreativeGenerationStatusFailed, elapsedMS, time.Now().Unix(), "图片生成请求失败")
+		}
+		return
+	}
+	responseBody := append([]byte(nil), captureWriter.buffer.Bytes()...)
+	go persistCreativeImageResponse(metadata, generation, userID, tokenID, group, startedAt, elapsedMS, responseBody)
 }
 
 // 在分发中间件前建立登录态令牌上下文。
@@ -132,6 +159,9 @@ func CreativeVideoFetch(c *gin.Context) {
 	c.Request.URL.Path = "/v1/video/generations/" + c.Param("task_id")
 	c.Request.RequestURI = c.Request.URL.Path
 	RelayTaskFetch(c)
+	if c.Writer.Status() >= http.StatusOK && c.Writer.Status() < http.StatusMultipleChoices {
+		scheduleCreativeVideoPersistence(c.GetInt("id"), c.Param("task_id"))
+	}
 }
 
 // 通过现有的视频内容安全代理返回结果。
@@ -158,11 +188,28 @@ func prepareCreativeContext(c *gin.Context) error {
 		values := url.Values(form.Value)
 		keyID := strings.TrimSpace(values.Get("key_id"))
 		requestedGroup := strings.TrimSpace(values.Get("group"))
+		metadata := creativeRequestEnvelope{
+			ClientTaskID: strings.TrimSpace(values.Get("client_task_id")),
+			Model:        strings.TrimSpace(values.Get("model")),
+			Prompt:       values.Get("prompt"),
+			Size:         strings.TrimSpace(values.Get("size")),
+			Quality:      strings.TrimSpace(values.Get("quality")),
+			OutputFormat: strings.TrimSpace(values.Get("output_format")),
+		}
+		if outputCompression, parseErr := strconv.Atoi(values.Get("output_compression")); parseErr == nil {
+			metadata.OutputCompression = &outputCompression
+		}
+		if count, parseErr := strconv.Atoi(values.Get("n")); parseErr == nil {
+			metadata.N = &count
+		}
 		if keyID == "" {
 			return errors.New("creative key_id is required")
 		}
+		if err := validateCreativeClientTaskID(metadata.ClientTaskID); err != nil {
+			return err
+		}
 		// 这些字段只用于创作中心路由，不应随 multipart 请求转发到厂商。
-		for _, field := range []string{"key_id", "group", "interface_mode", "retry_count"} {
+		for _, field := range []string{"key_id", "group", "client_task_id", "interface_mode", "retry_count"} {
 			delete(form.Value, field)
 		}
 		c.Request.PostForm = url.Values(form.Value)
@@ -177,8 +224,11 @@ func prepareCreativeContext(c *gin.Context) error {
 			return err
 		}
 		if requestedGroup != "" {
-			return setCreativeGroup(c, requestedGroup)
+			if err := setCreativeGroup(c, requestedGroup); err != nil {
+				return err
+			}
 		}
+		c.Set(creativeImageRequestContextKey, metadata)
 		return nil
 	}
 
@@ -201,6 +251,9 @@ func prepareCreativeContext(c *gin.Context) error {
 	if envelope.KeyID <= 0 {
 		return errors.New("creative key_id is required")
 	}
+	if err := validateCreativeClientTaskID(envelope.ClientTaskID); err != nil {
+		return err
+	}
 	if len(envelope.Images) > 0 || strings.TrimSpace(envelope.Mask) != "" {
 		c.Set("creative_image_edit", true)
 	}
@@ -208,7 +261,20 @@ func prepareCreativeContext(c *gin.Context) error {
 		return err
 	}
 	if strings.TrimSpace(envelope.Group) != "" {
-		return setCreativeGroup(c, envelope.Group)
+		if err := setCreativeGroup(c, envelope.Group); err != nil {
+			return err
+		}
+	}
+	c.Set(creativeImageRequestContextKey, envelope)
+	return nil
+}
+
+func validateCreativeClientTaskID(clientTaskID string) error {
+	if clientTaskID == "" {
+		return nil
+	}
+	if clientTaskID != strings.TrimSpace(clientTaskID) || len(clientTaskID) > 191 || strings.IndexFunc(clientTaskID, unicode.IsControl) >= 0 {
+		return errors.New("creative client_task_id is invalid")
 	}
 	return nil
 }
@@ -217,23 +283,24 @@ func prepareCreativeContext(c *gin.Context) error {
 // OpenAI 图片接口公共字段的最小集合。输入图片仍然只在服务端转换为
 // multipart 文件，厂商密钥不会进入浏览器或上游请求体。
 type creativeRequestEnvelope struct {
-	KeyID            int      `json:"key_id"`
-	Group            string   `json:"group"`
-	Model            string   `json:"model"`
-	Prompt           string   `json:"prompt"`
-	Size             string   `json:"size"`
-	Quality          string   `json:"quality"`
-	ResponseFormat   string   `json:"response_format"`
-	OutputFormat     string   `json:"output_format"`
-	OutputCompression *int    `json:"output_compression"`
-	Moderation       string   `json:"moderation"`
-	N                *int     `json:"n"`
-	Stream           *bool    `json:"stream"`
-	Background       string   `json:"background"`
-	InputFidelity    string   `json:"input_fidelity"`
-	Watermark        *bool    `json:"watermark"`
-	Images           []string `json:"images"`
-	Mask             string   `json:"mask"`
+	KeyID             int      `json:"key_id"`
+	ClientTaskID      string   `json:"client_task_id"`
+	Group             string   `json:"group"`
+	Model             string   `json:"model"`
+	Prompt            string   `json:"prompt"`
+	Size              string   `json:"size"`
+	Quality           string   `json:"quality"`
+	ResponseFormat    string   `json:"response_format"`
+	OutputFormat      string   `json:"output_format"`
+	OutputCompression *int     `json:"output_compression"`
+	Moderation        string   `json:"moderation"`
+	N                 *int     `json:"n"`
+	Stream            *bool    `json:"stream"`
+	Background        string   `json:"background"`
+	InputFidelity     string   `json:"input_fidelity"`
+	Watermark         *bool    `json:"watermark"`
+	Images            []string `json:"images"`
+	Mask              string   `json:"mask"`
 }
 
 // convertCreativeJSONEditToMultipart 将参考项目使用的 data URL 数组转换为

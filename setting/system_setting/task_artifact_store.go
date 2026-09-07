@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -21,6 +23,18 @@ const (
 )
 
 const (
+	TaskArtifactStoreModeOption         = "TaskArtifactStoreMode"
+	TaskArtifactStoreS3EndpointOption   = "TaskArtifactStoreS3Endpoint"
+	TaskArtifactStoreS3BucketOption     = "TaskArtifactStoreS3Bucket"
+	TaskArtifactStoreS3RegionOption     = "TaskArtifactStoreS3Region"
+	TaskArtifactStoreS3AccessKeyOption  = "TaskArtifactStoreS3AccessKey"
+	TaskArtifactStoreS3SecretKeyOption  = "TaskArtifactStoreS3SecretKey"
+	TaskArtifactStoreS3PrefixOption     = "TaskArtifactStoreS3Prefix"
+	TaskArtifactStoreS3PathStyleOption  = "TaskArtifactStoreS3PathStyle"
+	TaskArtifactStoreS3PresignTTLOption = "TaskArtifactStoreS3PresignTTL"
+)
+
+const (
 	TaskArtifactStoreModeEnv         = "TASK_ARTIFACT_STORE_MODE"
 	TaskArtifactStoreS3EndpointEnv   = "TASK_ARTIFACT_STORE_S3_ENDPOINT"
 	TaskArtifactStoreS3BucketEnv     = "TASK_ARTIFACT_STORE_S3_BUCKET"
@@ -28,6 +42,7 @@ const (
 	TaskArtifactStoreS3AccessKeyEnv  = "TASK_ARTIFACT_STORE_S3_ACCESS_KEY"
 	TaskArtifactStoreS3SecretKeyEnv  = "TASK_ARTIFACT_STORE_S3_SECRET_KEY"
 	TaskArtifactStoreS3PrefixEnv     = "TASK_ARTIFACT_STORE_S3_PREFIX"
+	TaskArtifactStoreS3PathStyleEnv  = "TASK_ARTIFACT_STORE_S3_PATH_STYLE"
 	TaskArtifactStoreS3PresignTTLEnv = "TASK_ARTIFACT_STORE_S3_PRESIGN_TTL"
 )
 
@@ -36,8 +51,6 @@ var (
 	taskArtifactStoreRegionPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
 )
 
-// TaskArtifactStoreConfig reserves the configuration contract for a future S3
-// implementation. The current release always falls back to upstream proxying.
 type TaskArtifactStoreConfig struct {
 	Mode                string
 	S3Endpoint          string
@@ -46,32 +59,59 @@ type TaskArtifactStoreConfig struct {
 	S3AccessKey         string
 	S3SecretKey         string
 	S3Prefix            string
+	S3PathStyle         bool
 	S3PresignTTLSeconds int
 }
 
-// LoadTaskArtifactStoreConfig reads and validates startup-only configuration.
-// S3 mode is deliberately disabled until a storage implementation is shipped.
+// LoadTaskArtifactStoreConfig 优先读取管理员保存的数据库配置；未保存的字段
+// 才回退到环境变量，便于原有部署平滑迁移。
 func LoadTaskArtifactStoreConfig() TaskArtifactStoreConfig {
+	presignTTL := DefaultTaskArtifactStorePresignTTLSeconds
+	presignTTLValue := taskArtifactStoreValue(
+		TaskArtifactStoreS3PresignTTLOption,
+		TaskArtifactStoreS3PresignTTLEnv,
+		strconv.Itoa(DefaultTaskArtifactStorePresignTTLSeconds),
+	)
+	if parsed, err := strconv.Atoi(presignTTLValue); err == nil {
+		presignTTL = parsed
+	} else {
+		presignTTL = 0
+	}
+	pathStyle, _ := strconv.ParseBool(taskArtifactStoreValue(
+		TaskArtifactStoreS3PathStyleOption,
+		TaskArtifactStoreS3PathStyleEnv,
+		"false",
+	))
 	config := TaskArtifactStoreConfig{
-		Mode:                common.GetEnvOrDefaultString(TaskArtifactStoreModeEnv, TaskArtifactStoreModeUpstream),
-		S3Endpoint:          common.GetEnvOrDefaultString(TaskArtifactStoreS3EndpointEnv, ""),
-		S3Bucket:            common.GetEnvOrDefaultString(TaskArtifactStoreS3BucketEnv, ""),
-		S3Region:            common.GetEnvOrDefaultString(TaskArtifactStoreS3RegionEnv, ""),
-		S3AccessKey:         common.GetEnvOrDefaultString(TaskArtifactStoreS3AccessKeyEnv, ""),
-		S3SecretKey:         common.GetEnvOrDefaultString(TaskArtifactStoreS3SecretKeyEnv, ""),
-		S3Prefix:            common.GetEnvOrDefaultString(TaskArtifactStoreS3PrefixEnv, ""),
-		S3PresignTTLSeconds: common.GetEnvOrDefault(TaskArtifactStoreS3PresignTTLEnv, DefaultTaskArtifactStorePresignTTLSeconds),
+		Mode:                taskArtifactStoreValue(TaskArtifactStoreModeOption, TaskArtifactStoreModeEnv, TaskArtifactStoreModeUpstream),
+		S3Endpoint:          taskArtifactStoreValue(TaskArtifactStoreS3EndpointOption, TaskArtifactStoreS3EndpointEnv, ""),
+		S3Bucket:            taskArtifactStoreValue(TaskArtifactStoreS3BucketOption, TaskArtifactStoreS3BucketEnv, ""),
+		S3Region:            taskArtifactStoreValue(TaskArtifactStoreS3RegionOption, TaskArtifactStoreS3RegionEnv, ""),
+		S3AccessKey:         taskArtifactStoreValue(TaskArtifactStoreS3AccessKeyOption, TaskArtifactStoreS3AccessKeyEnv, ""),
+		S3SecretKey:         taskArtifactStoreValue(TaskArtifactStoreS3SecretKeyOption, TaskArtifactStoreS3SecretKeyEnv, ""),
+		S3Prefix:            taskArtifactStoreValue(TaskArtifactStoreS3PrefixOption, TaskArtifactStoreS3PrefixEnv, ""),
+		S3PathStyle:         pathStyle,
+		S3PresignTTLSeconds: presignTTL,
 	}
 	if err := ValidateTaskArtifactStoreConfig(config); err != nil {
 		common.SysError("invalid task artifact store configuration: " + err.Error() + "; using upstream mode")
 		config.Mode = TaskArtifactStoreModeUpstream
 		return config
 	}
-	if config.Mode == TaskArtifactStoreModeS3 {
-		common.SysError("task artifact S3 storage is not implemented; using upstream mode")
-		config.Mode = TaskArtifactStoreModeUpstream
-	}
 	return config
+}
+
+func taskArtifactStoreValue(optionKey, envKey, defaultValue string) string {
+	common.OptionMapRWMutex.RLock()
+	value, exists := common.OptionMap[optionKey]
+	common.OptionMapRWMutex.RUnlock()
+	if exists {
+		return value
+	}
+	if envValue, ok := os.LookupEnv(envKey); ok {
+		return envValue
+	}
+	return defaultValue
 }
 
 // ValidateTaskArtifactStoreConfig performs syntax checks only. It never
