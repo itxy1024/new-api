@@ -1,3 +1,5 @@
+import { t } from 'i18next'
+
 import { api } from '@/lib/api'
 
 import { DEFAULT_PARAMS, type TaskParams, type TaskRecord } from '../types'
@@ -9,7 +11,6 @@ export interface CreativeStorageConfig {
   region: string
   prefix: string
   path_style: boolean
-  presign_ttl_seconds: number
   access_key_configured: boolean
   secret_key_configured: boolean
 }
@@ -21,7 +22,6 @@ export interface CreativeStorageInput {
   region: string
   prefix: string
   path_style: boolean
-  presign_ttl_seconds: number
   access_key: string
   secret_key: string
 }
@@ -83,6 +83,19 @@ export async function listCreativeImageGenerations(): Promise<
 }
 
 export async function downloadCreativeAsset(contentUrl: string): Promise<Blob> {
+  if (/^https?:\/\//i.test(contentUrl)) {
+    const response = await fetch(contentUrl, {
+      credentials: 'omit',
+    })
+    if (!response.ok) {
+      throw new Error(
+        t('Failed to download OSS resource: HTTP {{status}}', {
+          status: response.status,
+        })
+      )
+    }
+    return response.blob()
+  }
   const response = await api.get(contentUrl, {
     responseType: 'blob',
     skipErrorHandler: true,

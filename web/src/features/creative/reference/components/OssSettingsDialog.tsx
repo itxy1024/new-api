@@ -43,7 +43,6 @@ interface OssFormValues {
   region: string
   prefix: string
   pathStyle: boolean
-  presignTTL: string
   accessKey: string
   secretKey: string
 }
@@ -55,7 +54,6 @@ const EMPTY_VALUES: OssFormValues = {
   region: '',
   prefix: 'newapi',
   pathStyle: false,
-  presignTTL: '900',
   accessKey: '',
   secretKey: '',
 }
@@ -77,7 +75,6 @@ export default function OssSettingsDialog(props: OssSettingsDialogProps) {
           region: z.string(),
           prefix: z.string(),
           pathStyle: z.boolean(),
-          presignTTL: z.string().regex(/^\d+$/, t('Enter a valid number')),
           accessKey: z.string(),
           secretKey: z.string(),
         })
@@ -111,16 +108,6 @@ export default function OssSettingsDialog(props: OssSettingsDialogProps) {
               message: t('This field is required'),
             })
           }
-          const ttl = Number(values.presignTTL)
-          if (!Number.isInteger(ttl) || ttl < 1 || ttl > 604800) {
-            context.addIssue({
-              code: 'custom',
-              path: ['presignTTL'],
-              message: t(
-                'Presigned URL validity must be between 1 and 604800 seconds'
-              ),
-            })
-          }
         }),
     [accessKeyConfigured, secretKeyConfigured, t]
   )
@@ -145,7 +132,6 @@ export default function OssSettingsDialog(props: OssSettingsDialogProps) {
           region: config.region,
           prefix: config.prefix || 'newapi',
           pathStyle: config.path_style,
-          presignTTL: String(config.presign_ttl_seconds || 900),
           accessKey: '',
           secretKey: '',
         })
@@ -166,7 +152,6 @@ export default function OssSettingsDialog(props: OssSettingsDialogProps) {
     region: values.region.trim(),
     prefix: values.prefix.trim(),
     path_style: values.pathStyle,
-    presign_ttl_seconds: Number(values.presignTTL),
     access_key: values.accessKey.trim(),
     secret_key: values.secretKey.trim(),
   })
@@ -335,36 +320,16 @@ export default function OssSettingsDialog(props: OssSettingsDialogProps) {
                   <FieldError errors={[form.formState.errors.secretKey]} />
                 </Field>
               </div>
-              <div className='grid gap-5 sm:grid-cols-2'>
-                <Field data-disabled={!enabled}>
-                  <FieldLabel htmlFor='creative-oss-prefix'>
-                    {t('Object prefix')}
-                  </FieldLabel>
-                  <Input
-                    id='creative-oss-prefix'
-                    disabled={!enabled}
-                    {...form.register('prefix')}
-                  />
-                </Field>
-                <Field
-                  data-disabled={!enabled}
-                  data-invalid={Boolean(form.formState.errors.presignTTL)}
-                >
-                  <FieldLabel htmlFor='creative-oss-presign-ttl'>
-                    {t('Presigned URL validity (seconds)')}
-                  </FieldLabel>
-                  <Input
-                    id='creative-oss-presign-ttl'
-                    type='number'
-                    min={1}
-                    max={604800}
-                    disabled={!enabled}
-                    aria-invalid={Boolean(form.formState.errors.presignTTL)}
-                    {...form.register('presignTTL')}
-                  />
-                  <FieldError errors={[form.formState.errors.presignTTL]} />
-                </Field>
-              </div>
+              <Field data-disabled={!enabled}>
+                <FieldLabel htmlFor='creative-oss-prefix'>
+                  {t('Object prefix')}
+                </FieldLabel>
+                <Input
+                  id='creative-oss-prefix'
+                  disabled={!enabled}
+                  {...form.register('prefix')}
+                />
+              </Field>
               <Field orientation='horizontal' data-disabled={!enabled}>
                 <div className='flex flex-1 flex-col gap-0.5'>
                   <FieldLabel htmlFor='creative-oss-path-style'>

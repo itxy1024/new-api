@@ -14,6 +14,7 @@ vi.mock('@/lib/api', () => ({
 const {
   creativeGenerationToTask,
   deleteCreativeGenerationByClientTaskId,
+  downloadCreativeAsset,
   listCreativeImageGenerations,
 } = await import('../creativeStorage')
 
@@ -107,5 +108,21 @@ describe('创作结果持久化接口', () => {
       '/api/creative/generations/client/browser%2Ftask%2091',
       { skipErrorHandler: true }
     )
+  })
+
+  it('从 OSS 固定地址下载时不携带 NewAPI 登录凭证', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('image', { status: 200 }))
+
+    const result = await downloadCreativeAsset(
+      'https://bucket.oss.example/creative/image.png'
+    )
+    expect(await result.text()).toBe('image')
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://bucket.oss.example/creative/image.png',
+      { credentials: 'omit' }
+    )
+    expect(apiMocks.get).not.toHaveBeenCalled()
   })
 })

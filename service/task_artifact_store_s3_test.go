@@ -86,6 +86,7 @@ func TestS3ArtifactStorePersistsStreamAndMetadata(t *testing.T) {
 	require.NoError(t, uploadErr)
 	assert.Equal(t, content, string(uploaded))
 	assert.Equal(t, int64(len(content)), ref.Size)
+	assert.Contains(t, ref.PublicURL, "/artifacts/newapi/creative/31/image/")
 
 	asset, exists, err := model.GetCreativeAssetByGenerationKey(
 		t.Context(), generation.UserID, generation.ID, "image-1",
@@ -96,6 +97,7 @@ func TestS3ArtifactStorePersistsStreamAndMetadata(t *testing.T) {
 	assert.Equal(t, hex.EncodeToString(expectedChecksum[:]), asset.Checksum)
 	assert.Equal(t, 1024, asset.Width)
 	assert.Equal(t, 1024, asset.Height)
+	assert.Equal(t, ref.PublicURL, asset.PublicURL)
 
 	deletedGeneration := &model.CreativeGeneration{
 		ClientTaskID: "deleted-client-task",
@@ -114,4 +116,41 @@ func TestS3ArtifactStorePersistsStreamAndMetadata(t *testing.T) {
 	}, strings.NewReader(content))
 	assert.ErrorIs(t, err, model.ErrCreativeGenerationInactive)
 	assert.Equal(t, 1, deleteCount)
+}
+
+func TestCreativeAssetPublicURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		config    system_setting.TaskArtifactStoreConfig
+		bucket    string
+		objectKey string
+		expected  string
+	}{
+		{
+			name: "阿里云虚拟主机地址",
+			config: system_setting.TaskArtifactStoreConfig{
+				S3Endpoint: "https://oss-cn-shanghai.aliyuncs.com",
+			},
+			bucket:    "lebozntc-test-oss",
+			objectKey: "canvas/creative/1/image/image 1.png",
+			expected:  "https://lebozntc-test-oss.oss-cn-shanghai.aliyuncs.com/canvas/creative/1/image/image%201.png",
+		},
+		{
+			name: "路径样式地址",
+			config: system_setting.TaskArtifactStoreConfig{
+				S3Endpoint:  "https://objects.example.com/storage",
+				S3PathStyle: true,
+			},
+			bucket:    "creative-assets",
+			objectKey: "canvas/image.png",
+			expected:  "https://objects.example.com/storage/creative-assets/canvas/image.png",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual, err := creativeAssetPublicURL(test.config, test.bucket, test.objectKey)
+			require.NoError(t, err)
+			assert.Equal(t, test.expected, actual)
+		})
+	}
 }

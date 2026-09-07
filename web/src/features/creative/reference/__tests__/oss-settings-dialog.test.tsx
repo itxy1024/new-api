@@ -56,6 +56,9 @@ describe('OSS 设置弹窗', () => {
     const endpoint = await screen.findByLabelText('Endpoint')
     expect(screen.getByLabelText('Access Key')).toHaveValue('')
     expect(screen.getByLabelText('Secret Key')).toHaveValue('')
+    expect(
+      screen.queryByLabelText('Presigned URL validity (seconds)')
+    ).not.toBeInTheDocument()
 
     await user.clear(endpoint)
     await user.type(endpoint, 'https://new-oss.example.com')

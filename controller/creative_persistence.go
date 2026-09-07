@@ -250,11 +250,16 @@ func ListCreativeGenerations(c *gin.Context) {
 	for index := range generations {
 		assets := make([]gin.H, 0, len(generations[index].Assets))
 		for assetIndex := range generations[index].Assets {
-			asset := generations[index].Assets[assetIndex]
+			asset := &generations[index].Assets[assetIndex]
+			contentURL, urlErr := service.EnsureCreativeAssetPublicURL(c.Request.Context(), asset)
+			if urlErr != nil {
+				logger.LogError(c.Request.Context(), "读取创作中心 OSS 固定地址失败: "+urlErr.Error())
+				contentURL = fmt.Sprintf("/api/creative/generations/%d/assets/%d/content", generations[index].ID, asset.ID)
+			}
 			assets = append(assets, gin.H{
 				"id":          asset.ID,
 				"asset_key":   asset.AssetKey,
-				"content_url": fmt.Sprintf("/api/creative/generations/%d/assets/%d/content", generations[index].ID, asset.ID),
+				"content_url": contentURL,
 				"mime_type":   asset.MimeType,
 				"byte_size":   asset.ByteSize,
 				"width":       asset.Width,

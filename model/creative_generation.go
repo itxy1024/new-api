@@ -48,6 +48,7 @@ type CreativeAsset struct {
 	StorageBackend string `json:"storage_backend" gorm:"type:varchar(20);not null"`
 	Bucket         string `json:"bucket" gorm:"type:varchar(255);not null"`
 	ObjectKey      string `json:"object_key" gorm:"type:varchar(1024);not null"`
+	PublicURL      string `json:"public_url" gorm:"type:text"`
 	MimeType       string `json:"mime_type" gorm:"type:varchar(255)"`
 	ByteSize       int64  `json:"byte_size"`
 	Width          int    `json:"width"`
@@ -90,6 +91,12 @@ func InsertCreativeAssetForActiveGeneration(ctx context.Context, asset *Creative
 		}
 		return tx.Create(asset).Error
 	})
+}
+
+func SetCreativeAssetPublicURL(ctx context.Context, assetID int64, publicURL string) error {
+	return DB.WithContext(ctx).Model(&CreativeAsset{}).
+		Where("id = ? AND (public_url = ? OR public_url IS NULL)", assetID, "").
+		Update("public_url", publicURL).Error
 }
 
 func GetCreativeGenerationByClientTaskID(ctx context.Context, userID int, clientTaskID string) (*CreativeGeneration, bool, error) {

@@ -1964,6 +1964,7 @@
     "Failed to disable model": "モデルの無効化に失敗しました",
     "Failed to disable tag channels": "タグチャネルの無効化に失敗しました",
     "Failed to discover OIDC endpoints": "OIDCエンドポイントの検出に失敗しました",
+    "Failed to download OSS resource: HTTP {{status}}": "OSS ファイルのダウンロードに失敗しました: HTTP {{status}}",
     "Failed to enable {{count}} model(s)": "{{count}} 個のモデルの有効化に失敗しました",
     "Failed to enable 2FA": "2FA の有効化に失敗しました",
     "Failed to enable channels": "チャネルの有効化に失敗しました",

@@ -9,6 +9,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -30,6 +31,7 @@ type StoredArtifactRef struct {
 	Backend   string
 	Bucket    string
 	ObjectKey string
+	PublicURL string
 	MimeType  string
 	Size      int64
 }
@@ -73,10 +75,9 @@ func (disabledArtifactStore) Serve(*gin.Context, *model.Task, *StoredArtifactRef
 }
 
 type s3ArtifactStore struct {
-	config    system_setting.TaskArtifactStoreConfig
-	client    *s3.Client
-	presigner *s3.PresignClient
-	uploader  *manager.Uploader
+	config   system_setting.TaskArtifactStoreConfig
+	client   *s3.Client
+	uploader *manager.Uploader
 }
 
 type countingHashReader struct {
@@ -154,10 +155,9 @@ func newTaskArtifactStore(config system_setting.TaskArtifactStoreConfig) (TaskAr
 		options.UsePathStyle = config.S3PathStyle
 	})
 	return &s3ArtifactStore{
-		config:    config,
-		client:    client,
-		presigner: s3.NewPresignClient(client),
-		uploader:  manager.NewUploader(client),
+		config:   config,
+		client:   client,
+		uploader: manager.NewUploader(client),
 	}, nil
 }
 
@@ -240,15 +240,16 @@ func (s *s3ArtifactStore) Serve(c *gin.Context, _ *model.Task, ref *StoredArtifa
 	if ref == nil || ref.ObjectKey == "" {
 		return errors.New("stored artifact is required")
 	}
-	request, err := s.presigner.PresignGetObject(c.Request.Context(), &s3.GetObjectInput{
-		Bucket: aws.String(ref.Bucket),
-		Key:    aws.String(ref.ObjectKey),
-	}, s3.WithPresignExpires(time.Duration(s.config.S3PresignTTLSeconds)*time.Second))
-	if err != nil {
-		return err
+	publicURL := strings.TrimSpace(ref.PublicURL)
+	if publicURL == "" {
+		var err error
+		publicURL, err = creativeAssetPublicURL(s.config, ref.Bucket, ref.ObjectKey)
+		if err != nil {
+			return err
+		}
 	}
-	c.Header("Cache-Control", "private, no-store")
-	c.Redirect(http.StatusTemporaryRedirect, request.URL)
+	c.Header("Cache-Control", "private, max-age=3600")
+	c.Redirect(http.StatusTemporaryRedirect, publicURL)
 	return nil
 }
 
@@ -277,45 +278,35 @@ func PersistCreativeAsset(ctx context.Context, upload CreativeAssetUpload, conte
 }
 
 func ServeCreativeAsset(c *gin.Context, asset *model.CreativeAsset) error {
+	publicURL, err := EnsureCreativeAssetPublicURL(c.Request.Context(), asset)
+	if err != nil {
+		return err
+	}
+	c.Header("Cache-Control", "private, max-age=3600")
+	c.Redirect(http.StatusTemporaryRedirect, publicURL)
+	return nil
+}
+
+func EnsureCreativeAssetPublicURL(ctx context.Context, asset *model.CreativeAsset) (string, error) {
+	if asset == nil {
+		return "", errors.New("creative asset is required")
+	}
+	if publicURL := strings.TrimSpace(asset.PublicURL); publicURL != "" {
+		return publicURL, nil
+	}
 	store, err := existingS3ArtifactStore()
 	if err != nil {
-		return err
+		return "", err
 	}
-	input := &s3.GetObjectInput{
-		Bucket: aws.String(asset.Bucket),
-		Key:    aws.String(asset.ObjectKey),
-	}
-	if rangeHeader := strings.TrimSpace(c.GetHeader("Range")); rangeHeader != "" {
-		input.Range = aws.String(rangeHeader)
-	}
-	output, err := store.client.GetObject(c.Request.Context(), input)
+	publicURL, err := creativeAssetPublicURL(store.config, asset.Bucket, asset.ObjectKey)
 	if err != nil {
-		return err
+		return "", err
 	}
-	defer output.Body.Close()
-	if output.ContentType != nil {
-		c.Header("Content-Type", *output.ContentType)
-	} else if asset.MimeType != "" {
-		c.Header("Content-Type", asset.MimeType)
+	if err := model.SetCreativeAssetPublicURL(ctx, asset.ID, publicURL); err != nil {
+		return "", err
 	}
-	if output.ContentLength != nil {
-		c.Header("Content-Length", strconv.FormatInt(*output.ContentLength, 10))
-	}
-	if output.ContentRange != nil {
-		c.Header("Content-Range", *output.ContentRange)
-	}
-	if output.ETag != nil {
-		c.Header("ETag", *output.ETag)
-	}
-	c.Header("Accept-Ranges", "bytes")
-	c.Header("Cache-Control", "private, max-age=3600")
-	status := http.StatusOK
-	if output.ContentRange != nil {
-		status = http.StatusPartialContent
-	}
-	c.Status(status)
-	_, err = io.Copy(c.Writer, output.Body)
-	return err
+	asset.PublicURL = publicURL
+	return publicURL, nil
 }
 
 func DeleteCreativeAssets(ctx context.Context, assets []model.CreativeAsset) error {
@@ -373,9 +364,13 @@ func (s *s3ArtifactStore) persistCreativeAsset(ctx context.Context, upload Creat
 		strconv.FormatInt(upload.GenerationID, 10),
 		upload.AssetKey+"-"+uuid.NewString()+extension,
 	)
+	publicURL, err := creativeAssetPublicURL(s.config, s.config.S3Bucket, objectKey)
+	if err != nil {
+		return nil, err
+	}
 	hasher := sha256.New()
 	reader := &countingHashReader{reader: content, hash: hasher}
-	_, err := s.uploader.Upload(ctx, &s3.PutObjectInput{
+	_, err = s.uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(s.config.S3Bucket),
 		Key:         aws.String(objectKey),
 		Body:        reader,
@@ -391,6 +386,7 @@ func (s *s3ArtifactStore) persistCreativeAsset(ctx context.Context, upload Creat
 		StorageBackend: system_setting.TaskArtifactStoreModeS3,
 		Bucket:         s.config.S3Bucket,
 		ObjectKey:      objectKey,
+		PublicURL:      publicURL,
 		MimeType:       mimeType,
 		ByteSize:       reader.size,
 		Width:          upload.Width,
@@ -417,9 +413,29 @@ func storedArtifactRef(asset *model.CreativeAsset) *StoredArtifactRef {
 		Backend:   asset.StorageBackend,
 		Bucket:    asset.Bucket,
 		ObjectKey: asset.ObjectKey,
+		PublicURL: asset.PublicURL,
 		MimeType:  asset.MimeType,
 		Size:      asset.ByteSize,
 	}
+}
+
+func creativeAssetPublicURL(config system_setting.TaskArtifactStoreConfig, bucket, objectKey string) (string, error) {
+	endpoint, err := url.Parse(strings.TrimSpace(config.S3Endpoint))
+	if err != nil || endpoint == nil || endpoint.Host == "" {
+		return "", errors.New("S3 endpoint is invalid")
+	}
+	bucket = strings.TrimSpace(bucket)
+	objectKey = strings.TrimLeft(strings.TrimSpace(objectKey), "/")
+	if bucket == "" || objectKey == "" {
+		return "", errors.New("creative asset storage location is incomplete")
+	}
+	if config.S3PathStyle {
+		endpoint.Path = path.Join(endpoint.Path, bucket, objectKey)
+	} else {
+		endpoint.Host = bucket + "." + endpoint.Host
+		endpoint.Path = path.Join(endpoint.Path, objectKey)
+	}
+	return endpoint.String(), nil
 }
 
 func creativeAssetExtension(mimeType string) string {

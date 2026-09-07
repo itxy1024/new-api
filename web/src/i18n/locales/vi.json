@@ -1964,6 +1964,7 @@
     "Failed to disable model": "Không thể vô hiệu hóa mô hình",
     "Failed to disable tag channels": "Không thể vô hiệu hóa các kênh thẻ",
     "Failed to discover OIDC endpoints": "Khám phá điểm cuối OIDC thất bại",
+    "Failed to download OSS resource: HTTP {{status}}": "Không thể tải tài nguyên OSS: HTTP {{status}}",
     "Failed to enable {{count}} model(s)": "Không thể bật {{count}} mô hình",
     "Failed to enable 2FA": "Không thể bật 2FA",
     "Failed to enable channels": "Không thể kích hoạt các kênh",

@@ -1964,6 +1964,7 @@
     "Failed to disable model": "Не удалось отключить модель",
     "Failed to disable tag channels": "Не удалось отключить каналы тегов",
     "Failed to discover OIDC endpoints": "Не удалось обнаружить конечные точки OIDC",
+    "Failed to download OSS resource: HTTP {{status}}": "Не удалось скачать ресурс OSS: HTTP {{status}}",
     "Failed to enable {{count}} model(s)": "Не удалось включить {{count}} моделей",
     "Failed to enable 2FA": "Не удалось включить 2FA",
     "Failed to enable channels": "Не удалось включить каналы",
