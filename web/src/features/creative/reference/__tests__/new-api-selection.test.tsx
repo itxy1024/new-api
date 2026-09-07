@@ -95,6 +95,16 @@ vi.mock('@/components/model-group-selector', () => ({
 
 const { default: NewApiSelection } = await import('../NewApiSelection')
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+  return { promise, reject, resolve }
+}
+
 describe('图片生成页的模型分组选择', () => {
   beforeEach(() => {
     window.localStorage.clear()
@@ -262,4 +272,155 @@ describe('图片生成页的模型分组选择', () => {
       })
     })
   })
+
+  test('Key 列表返回后立即可选，不等待后台模型扫描完成', async () => {
+    const pendingModels = deferred<{ data: { data: ModelOptionFixture[] } }>()
+    mocks.apiGet.mockImplementation((url: string) =>
+      url === '/api/token/'
+        ? Promise.resolve({
+            data: {
+              data: {
+                items: [{ id: 7, name: '绘图 Key', status: 1 }],
+                total: 1,
+              },
+            },
+          })
+        : pendingModels.promise
+    )
+
+    render(<NewApiSelection />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '绘图 Key' })).toBeEnabled()
+    })
+    expect(screen.getByTestId('selected-key')).toBeEmptyDOMElement()
+
+    pendingModels.resolve({ data: { data: [] } })
+  })
+
+  test('后台默认扫描最多同时请求四个 Key 的模型', async () => {
+    const pendingRequests: Array<ReturnType<typeof deferred<ModelResponse>>> =
+      []
+    mocks.apiGet.mockImplementation((url: string) => {
+      if (url === '/api/token/') {
+        return Promise.resolve({
+          data: {
+            data: {
+              items: Array.from({ length: 6 }, (_, index) => ({
+                id: index + 1,
+                name: `Key ${index + 1}`,
+                status: 1,
+              })),
+              total: 6,
+            },
+          },
+        })
+      }
+      const request = deferred<ModelResponse>()
+      pendingRequests.push(request)
+      return request.promise
+    })
+
+    render(<NewApiSelection />)
+
+    await waitFor(() => expect(pendingRequests).toHaveLength(4))
+    pendingRequests[0].resolve({ data: { data: [] } })
+    await waitFor(() => expect(pendingRequests).toHaveLength(5))
+
+    for (const request of pendingRequests) {
+      request.resolve({ data: { data: [] } })
+    }
+  })
+
+  test('用户手动选择后不被迟到的默认模型扫描覆盖', async () => {
+    const key7Models = deferred<ModelResponse>()
+    const key8Models = deferred<ModelResponse>()
+    mocks.apiGet.mockImplementation(
+      (url: string, config?: { params?: { key_id?: string } }) => {
+        if (url === '/api/token/') {
+          return Promise.resolve({
+            data: {
+              data: {
+                items: [
+                  { id: 7, name: '绘图 Key', status: 1 },
+                  { id: 8, name: '备用 Key', status: 1 },
+                ],
+                total: 2,
+              },
+            },
+          })
+        }
+        return String(config?.params?.key_id) === '7'
+          ? key7Models.promise
+          : key8Models.promise
+      }
+    )
+
+    render(<NewApiSelection />)
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '备用 Key' })).toBeEnabled()
+    })
+    fireEvent.click(screen.getByRole('button', { name: '备用 Key' }))
+    key8Models.resolve({
+      data: { data: [{ id: 'image-backup', group: 'backup' }] },
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'image-backup' })).toBeEnabled()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'image-backup' }))
+
+    key7Models.resolve({
+      data: { data: [{ id: 'gpt-image-2', group: 'image' }] },
+    })
+    await waitFor(() => {
+      expect(screen.getByTestId('selected-key')).toHaveTextContent('8')
+      expect(screen.getByTestId('selected-model')).toHaveTextContent(
+        'backup\x00image-backup'
+      )
+    })
+  })
+
+  test('模型接口确认 Key 分组不可用时从选择器移除该 Key', async () => {
+    mocks.apiGet.mockImplementation(
+      (url: string, config?: { params?: { key_id?: string } }) => {
+        if (url === '/api/token/') {
+          return Promise.resolve({
+            data: {
+              data: {
+                items: [
+                  { id: 7, name: '失效 Key', status: 1 },
+                  { id: 8, name: '可用 Key', status: 1 },
+                ],
+                total: 2,
+              },
+            },
+          })
+        }
+        if (String(config?.params?.key_id) === '7') {
+          return Promise.reject({
+            response: {
+              data: {
+                error: {
+                  message: 'creative key group is not available for this user',
+                },
+              },
+            },
+          })
+        }
+        return Promise.resolve({ data: { data: [] } })
+      }
+    )
+
+    render(<NewApiSelection />)
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', { name: '失效 Key' })
+      ).not.toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: '可用 Key' })).toBeEnabled()
+  })
 })
+
+type ModelOptionFixture = { id: string; group?: string }
+type ModelResponse = { data: { data: ModelOptionFixture[] } }

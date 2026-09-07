@@ -656,7 +656,7 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
       window.cancelAnimationFrame(firstFrameId)
       window.cancelAnimationFrame(secondFrameId)
     }
-  }, [open, selectedGroup, selectedModel])
+  }, [open])
 
   const renderTrigger = () => (
     <Button

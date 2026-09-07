@@ -505,17 +505,9 @@ func prepareCreativeKeyContext(c *gin.Context, requestedKeyID string) error {
 	if token.ExpiredTime != -1 && token.ExpiredTime <= common.GetTimestamp() {
 		return errors.New("creative key is expired")
 	}
-	tokenGroups := token.GetGroups()
-	userGroups := service.GetUserUsableGroups(user.Group)
-	for _, group := range tokenGroups {
-		if group != "auto" {
-			if _, ok := userGroups[group]; !ok {
-				return errors.New("creative key group is not available for this user")
-			}
-			if !ratio_setting.ContainsGroupRatio(group) {
-				return errors.New("creative key group is no longer available")
-			}
-		}
+	tokenGroups := getCreativeUsableTokenGroups(user.Group, token.GetGroups())
+	if len(tokenGroups) == 0 {
+		return errors.New("creative key group is not available for this user")
 	}
 	user.WriteContext(c)
 	// 临时上下文只承载用户选择的 Key，不向浏览器返回真实 Key。
@@ -525,15 +517,37 @@ func prepareCreativeKeyContext(c *gin.Context, requestedKeyID string) error {
 	// 普通 TokenAuth 会在 SetupContextForToken 前设置 using_group；创作中心
 	// 直接从登录态进入，因此这里必须同步所选 Key 的分组，否则分发器会
 	// 回退到用户默认分组。
-	usingGroup := token.Group
-	if groups := token.GetGroups(); len(groups) > 0 {
-		usingGroup = groups[0]
-	}
+	common.SetContextKey(c, constant.ContextKeyTokenGroups, tokenGroups)
+	usingGroup := tokenGroups[0]
 	if strings.TrimSpace(usingGroup) == "" {
 		usingGroup = user.Group
 	}
+	common.SetContextKey(c, constant.ContextKeyTokenGroup, usingGroup)
 	common.SetContextKey(c, constant.ContextKeyUsingGroup, usingGroup)
 	return nil
+}
+
+func getCreativeUsableTokenGroups(userGroup string, tokenGroups []string) []string {
+	if len(tokenGroups) == 0 {
+		tokenGroups = []string{userGroup}
+	}
+	groups := make([]string, 0, len(tokenGroups))
+	seen := make(map[string]struct{}, len(tokenGroups))
+	for _, group := range tokenGroups {
+		group = strings.TrimSpace(group)
+		if group == "" {
+			continue
+		}
+		if _, exists := seen[group]; exists {
+			continue
+		}
+		seen[group] = struct{}{}
+		if group != "auto" && !service.IsUserSelectableGroup(userGroup, group) {
+			continue
+		}
+		groups = append(groups, group)
+	}
+	return groups
 }
 
 func setCreativeGroup(c *gin.Context, requested string) error {

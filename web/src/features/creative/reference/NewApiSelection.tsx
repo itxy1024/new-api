@@ -4,7 +4,7 @@
  * 本文件基于 gpt_image_playground（MIT License）改编。
  * 这里只保留 NewAPI 的 Key 和模型选择，不在浏览器保存或展示真实厂商密钥。
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { ModelGroupSelector } from '@/components/model-group-selector'
@@ -19,6 +19,16 @@ type ModelOption = { id: string; group?: string }
 
 const KEY_PAGE_SIZE = 100
 const DEFAULT_IMAGE_MODEL = 'gpt-image-2'
+const MODEL_SCAN_CONCURRENCY = 4
+
+const UNAVAILABLE_KEY_ERRORS = new Set([
+  'creative key is not available',
+  'creative key is disabled',
+  'creative key quota is exhausted',
+  'creative key is expired',
+  'creative key group is not available for this user',
+  'creative key group is no longer available',
+])
 
 function getKeyLabel(item: KeyOption): string {
   return item.name?.trim() || '未命名 Key'
@@ -44,6 +54,15 @@ function normalizeModelOptions(raw: unknown): ModelOption[] {
     .filter((item): item is ModelOption => Boolean(item.id?.trim()))
 }
 
+function isUnavailableCreativeKeyError(error: unknown): boolean {
+  const message = (
+    error as {
+      response?: { data?: { error?: { message?: unknown } } }
+    }
+  )?.response?.data?.error?.message
+  return typeof message === 'string' && UNAVAILABLE_KEY_ERRORS.has(message)
+}
+
 export default function NewApiSelection() {
   const setSettings = useStore((state) => state.setSettings)
   const configuredSystemName = useSystemConfigStore(
@@ -57,6 +76,50 @@ export default function NewApiSelection() {
   const [model, setModel] = useState('')
   const [group, setGroup] = useState('')
   const modelsByKeyRef = useRef(new Map<string, ModelOption[]>())
+  const modelRequestsByKeyRef = useRef(
+    new Map<string, Promise<ModelOption[]>>()
+  )
+  const selectedKeyIdRef = useRef('')
+  const userInteractedRef = useRef(false)
+
+  const loadModelsForKey = useCallback((requestedKeyId: string) => {
+    const cached = modelsByKeyRef.current.get(requestedKeyId)
+    if (cached) return Promise.resolve(cached)
+
+    const pending = modelRequestsByKeyRef.current.get(requestedKeyId)
+    if (pending) return pending
+
+    const request = api
+      .get('/api/creative/models', {
+        params: { key_id: requestedKeyId },
+      })
+      .then((response) => {
+        const next = normalizeModelOptions(response.data?.data)
+        modelsByKeyRef.current.set(requestedKeyId, next)
+        return next
+      })
+      .finally(() => {
+        if (modelRequestsByKeyRef.current.get(requestedKeyId) === request) {
+          modelRequestsByKeyRef.current.delete(requestedKeyId)
+        }
+      })
+    modelRequestsByKeyRef.current.set(requestedKeyId, request)
+    return request
+  }, [])
+
+  const removeUnavailableKey = useCallback((unavailableKeyId: string) => {
+    modelsByKeyRef.current.delete(unavailableKeyId)
+    setKeys((current) =>
+      current.filter((item) => String(item.id) !== unavailableKeyId)
+    )
+    if (selectedKeyIdRef.current !== unavailableKeyId) return
+
+    selectedKeyIdRef.current = ''
+    setKeyId('')
+    setModels([])
+    setModel('')
+    setGroup('')
+  }, [])
 
   const selectedModelValue = group ? `${group}\x00${model}` : model
   const keyGroups = useMemo(
@@ -78,6 +141,10 @@ export default function NewApiSelection() {
 
   useEffect(() => {
     let active = true
+    userInteractedRef.current = false
+    selectedKeyIdRef.current = ''
+    modelsByKeyRef.current.clear()
+    modelRequestsByKeyRef.current.clear()
     setNewApiSelection(null)
     void (async () => {
       try {
@@ -109,48 +176,64 @@ export default function NewApiSelection() {
         const next = [...firstItems, ...remainingItems].filter(
           (item: KeyOption) => Number(item.status) === 1
         )
-        const modelResults = await Promise.all(
-          next.map(async (item: KeyOption) => {
-            try {
-              const response = await api.get('/api/creative/models', {
-                params: { key_id: String(item.id) },
-              })
-              return {
-                keyId: String(item.id),
-                models: normalizeModelOptions(response.data?.data),
-              }
-            } catch {
-              return { keyId: String(item.id), models: null }
-            }
-          })
-        )
-        if (!active) return
-
-        const modelsByKey = new Map<string, ModelOption[]>()
-        for (const result of modelResults) {
-          if (result.models) modelsByKey.set(result.keyId, result.models)
-        }
-        modelsByKeyRef.current = modelsByKey
         setKeys(next)
 
-        const defaultResult = modelResults.find((result) =>
-          result.models?.some((item) => item.id === DEFAULT_IMAGE_MODEL)
+        const modelResults = Array.from(
+          { length: next.length },
+          (): ModelOption[] | undefined => undefined
         )
-        const defaultModel = defaultResult?.models?.find(
-          (item) => item.id === DEFAULT_IMAGE_MODEL
-        )
-        if (defaultResult && defaultModel) {
-          setKeyId(defaultResult.keyId)
-          setModels(defaultResult.models ?? [])
-          setModel(defaultModel.id)
-          setGroup(defaultModel.group ?? '')
-          return
+        const settled = Array.from({ length: next.length }, () => false)
+        let scanIndex = 0
+        let nextDefaultCandidate = 0
+        let defaultApplied = false
+
+        const applyDefaultWhenReady = () => {
+          if (defaultApplied || userInteractedRef.current || !active) return
+
+          while (settled[nextDefaultCandidate]) {
+            const defaultModel = modelResults[nextDefaultCandidate]?.find(
+              (item) => item.id === DEFAULT_IMAGE_MODEL
+            )
+            if (defaultModel) {
+              const defaultKeyId = String(next[nextDefaultCandidate].id)
+              defaultApplied = true
+              selectedKeyIdRef.current = defaultKeyId
+              setKeyId(defaultKeyId)
+              setModels(modelResults[nextDefaultCandidate] ?? [])
+              setModel(defaultModel.id)
+              setGroup(defaultModel.group ?? '')
+              return
+            }
+            nextDefaultCandidate += 1
+          }
         }
 
-        setKeyId('')
-        setModels([])
-        setModel('')
-        setGroup('')
+        const scanModels = async () => {
+          while (active) {
+            const currentIndex = scanIndex
+            scanIndex += 1
+            if (currentIndex >= next.length) return
+
+            const currentKeyId = String(next[currentIndex].id)
+            try {
+              modelResults[currentIndex] = await loadModelsForKey(currentKeyId)
+            } catch (error) {
+              modelResults[currentIndex] = []
+              if (active && isUnavailableCreativeKeyError(error)) {
+                removeUnavailableKey(currentKeyId)
+              }
+            }
+            settled[currentIndex] = true
+            applyDefaultWhenReady()
+          }
+        }
+
+        await Promise.all(
+          Array.from(
+            { length: Math.min(MODEL_SCAN_CONCURRENCY, next.length) },
+            scanModels
+          )
+        )
       } catch {
         if (active) useStore.getState().showToast('加载 API Key 失败', 'error')
       }
@@ -158,23 +241,29 @@ export default function NewApiSelection() {
     return () => {
       active = false
     }
-  }, [])
+  }, [loadModelsForKey, removeUnavailableKey])
 
   useEffect(() => {
-    if (!keyId || modelsByKeyRef.current.has(keyId)) return
+    if (!keyId) return
+
+    const cached = modelsByKeyRef.current.get(keyId)
+    if (cached) {
+      setModels(cached)
+      return
+    }
 
     let active = true
     void (async () => {
       try {
-        const response = await api.get('/api/creative/models', {
-          params: { key_id: keyId },
-        })
-        if (!active) return
-        const next = normalizeModelOptions(response.data?.data)
-        modelsByKeyRef.current.set(keyId, next)
+        const next = await loadModelsForKey(keyId)
+        if (!active || selectedKeyIdRef.current !== keyId) return
         setModels(next)
-      } catch {
+      } catch (error) {
         if (!active) return
+        if (isUnavailableCreativeKeyError(error)) {
+          removeUnavailableKey(keyId)
+          return
+        }
         setModels([])
         setModel('')
         setGroup('')
@@ -185,7 +274,7 @@ export default function NewApiSelection() {
     return () => {
       active = false
     }
-  }, [keyId])
+  }, [keyId, loadModelsForKey, removeUnavailableKey])
 
   useEffect(() => {
     const parsedKeyId = Number(keyId)
@@ -271,6 +360,7 @@ export default function NewApiSelection() {
           selectedModel={selectedModelValue}
           models={modelOptions}
           onModelChange={(value) => {
+            userInteractedRef.current = true
             const selected = models.find(
               (item) => getModelValue(item) === value
             )
@@ -282,6 +372,8 @@ export default function NewApiSelection() {
           groups={keyGroups}
           onGroupChange={(value) => {
             if (value !== keyId) {
+              userInteractedRef.current = true
+              selectedKeyIdRef.current = value
               setModels(modelsByKeyRef.current.get(value) ?? [])
               setKeyId(value)
               setModel('')
