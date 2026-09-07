@@ -27,7 +27,14 @@ const MAX_IMAGE_CACHE_ENTRIES = 8
 const MAX_THUMBNAIL_CACHE_ENTRIES = 80
 const MAX_THUMBNAIL_BACKFILL_CONCURRENT = 4
 
+function isRemoteImageURL(value: string): boolean {
+  return /^https?:\/\//i.test(value)
+}
+
 export function getCachedImage(id: string): string | undefined {
+  if (isRemoteImageURL(id)) {
+    return id
+  }
   const dataUrl = imageCache.get(id)
   if (dataUrl) {
     imageCache.delete(id)
@@ -102,6 +109,12 @@ export async function ensureImageCached(
 export async function ensureImageThumbnailCached(
   id: string
 ): Promise<ImageThumbnail | undefined> {
+  if (isRemoteImageURL(id)) {
+    return {
+      dataUrl: id,
+      thumbnailVersion: CURRENT_THUMBNAIL_VERSION,
+    }
+  }
   const cached = getCachedThumbnail(id)
   if (cached) return cached
 
@@ -143,10 +156,14 @@ export function scheduleThumbnailBackfill(
   priority: 'visible' | 'background' = 'background'
 ) {
   for (const id of ids) {
+    if (isRemoteImageURL(id)) {
+      continue
+    }
     if (getCachedThumbnail(id) || thumbnailBackfillRunningIds.has(id)) continue
     const currentPriority = thumbnailBackfillIds.get(id)
-    if (!currentPriority || priority === 'visible')
+    if (!currentPriority || priority === 'visible') {
       thumbnailBackfillIds.set(id, priority)
+    }
   }
   scheduleThumbnailBackfillTick()
 }

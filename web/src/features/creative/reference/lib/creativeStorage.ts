@@ -1,5 +1,3 @@
-import { t } from 'i18next'
-
 import { api } from '@/lib/api'
 
 import { DEFAULT_PARAMS, type TaskParams, type TaskRecord } from '../types'
@@ -82,28 +80,6 @@ export async function listCreativeImageGenerations(): Promise<
   return Array.isArray(response.data?.data) ? response.data.data : []
 }
 
-export async function downloadCreativeAsset(contentUrl: string): Promise<Blob> {
-  if (/^https?:\/\//i.test(contentUrl)) {
-    const response = await fetch(contentUrl, {
-      credentials: 'omit',
-    })
-    if (!response.ok) {
-      throw new Error(
-        t('Failed to download OSS resource: HTTP {{status}}', {
-          status: response.status,
-        })
-      )
-    }
-    return response.blob()
-  }
-  const response = await api.get(contentUrl, {
-    responseType: 'blob',
-    skipErrorHandler: true,
-    disableDuplicate: true,
-  })
-  return response.data as Blob
-}
-
 export async function deleteCreativeGenerationByClientTaskId(
   clientTaskId: string
 ): Promise<void> {
@@ -169,9 +145,11 @@ function parseTaskParams(value: string): TaskParams {
 
 export function creativeGenerationToTask(
   generation: CreativeGenerationRecord,
-  outputImages: string[],
   sourceName: string
 ): TaskRecord {
+  const outputImages = generation.assets
+    .map((asset) => asset.content_url.trim())
+    .filter(Boolean)
   const params = parseTaskParams(generation.request_params)
   params.n = outputImages.length || params.n
   const createdAt = generation.created_at * 1000
@@ -180,10 +158,10 @@ export function creativeGenerationToTask(
     : null
   const status = generation.status === 'completed' ? 'done' : 'error'
   const actualParamsByImage: Record<string, Partial<TaskParams>> = {}
-  generation.assets.forEach((asset, index) => {
-    const imageId = outputImages[index]
-    if (imageId && asset.width > 0 && asset.height > 0) {
-      actualParamsByImage[imageId] = {
+  generation.assets.forEach((asset) => {
+    const imageURL = asset.content_url.trim()
+    if (imageURL && asset.width > 0 && asset.height > 0) {
+      actualParamsByImage[imageURL] = {
         size: `${asset.width}x${asset.height}`,
       }
     }

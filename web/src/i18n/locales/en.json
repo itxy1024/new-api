@@ -1964,7 +1964,6 @@
     "Failed to disable model": "Failed to disable model",
     "Failed to disable tag channels": "Failed to disable tag channels",
     "Failed to discover OIDC endpoints": "Failed to discover OIDC endpoints",
-    "Failed to download OSS resource: HTTP {{status}}": "Failed to download OSS resource: HTTP {{status}}",
     "Failed to enable {{count}} model(s)": "Failed to enable {{count}} model(s)",
     "Failed to enable 2FA": "Failed to enable 2FA",
     "Failed to enable channels": "Failed to enable channels",

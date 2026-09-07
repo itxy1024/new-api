@@ -14,7 +14,6 @@ vi.mock('@/lib/api', () => ({
 const {
   creativeGenerationToTask,
   deleteCreativeGenerationByClientTaskId,
-  downloadCreativeAsset,
   listCreativeImageGenerations,
 } = await import('../creativeStorage')
 
@@ -43,7 +42,7 @@ const generation: CreativeGenerationRecord = {
     {
       id: 12,
       asset_key: 'image-1',
-      content_url: '/api/creative/generations/91/assets/12/content',
+      content_url: 'https://bucket.oss.example/creative/image-1.webp',
       mime_type: 'image/webp',
       byte_size: 2048,
       width: 1536,
@@ -59,11 +58,7 @@ describe('创作结果持久化接口', () => {
   })
 
   it('将当前用户的服务端图片记录还原为画廊任务', () => {
-    const task = creativeGenerationToTask(
-      generation,
-      ['indexed-db-image-id'],
-      '小鱼中转站'
-    )
+    const task = creativeGenerationToTask(generation, '小鱼中转站')
 
     expect(task).toMatchObject({
       id: 'browser-task-91',
@@ -72,7 +67,7 @@ describe('创作结果持久化接口', () => {
       apiModel: 'gpt-image-1',
       newApiKeyId: 17,
       newApiGroup: 'premium',
-      outputImages: ['indexed-db-image-id'],
+      outputImages: ['https://bucket.oss.example/creative/image-1.webp'],
       status: 'done',
       elapsed: 4200,
       params: {
@@ -83,9 +78,11 @@ describe('创作结果持久化接口', () => {
         n: 1,
       },
     })
-    expect(task.actualParamsByImage?.['indexed-db-image-id']).toEqual({
-      size: '1536x1024',
-    })
+    expect(
+      task.actualParamsByImage?.[
+        'https://bucket.oss.example/creative/image-1.webp'
+      ]
+    ).toEqual({ size: '1536x1024' })
   })
 
   it('只查询图片记录并限制恢复数量', async () => {
@@ -108,21 +105,5 @@ describe('创作结果持久化接口', () => {
       '/api/creative/generations/client/browser%2Ftask%2091',
       { skipErrorHandler: true }
     )
-  })
-
-  it('从 OSS 固定地址下载时不携带 NewAPI 登录凭证', async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('image', { status: 200 }))
-
-    const result = await downloadCreativeAsset(
-      'https://bucket.oss.example/creative/image.png'
-    )
-    expect(await result.text()).toBe('image')
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://bucket.oss.example/creative/image.png',
-      { credentials: 'omit' }
-    )
-    expect(apiMocks.get).not.toHaveBeenCalled()
   })
 })

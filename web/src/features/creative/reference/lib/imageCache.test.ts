@@ -14,6 +14,7 @@ import {
   cacheThumbnail,
   clearImageCaches,
   deleteImageCacheEntry,
+  ensureImageCached,
   ensureImageThumbnailCached,
   getCachedImage,
   scheduleThumbnailBackfill,
@@ -87,6 +88,19 @@ describe('imageCache', () => {
 
     db.getStoredFreshImageThumbnail.mockClear()
     await ensureImageThumbnailCached('image')
+    expect(db.getStoredFreshImageThumbnail).not.toHaveBeenCalled()
+  })
+
+  it('直接使用远程图片地址且不读取 IndexedDB', async () => {
+    const imageURL = 'https://bucket.oss.example/creative/image.png'
+
+    expect(getCachedImage(imageURL)).toBe(imageURL)
+    await expect(ensureImageCached(imageURL)).resolves.toBe(imageURL)
+    await expect(ensureImageThumbnailCached(imageURL)).resolves.toEqual({
+      dataUrl: imageURL,
+      thumbnailVersion: db.CURRENT_THUMBNAIL_VERSION,
+    })
+    expect(db.getImage).not.toHaveBeenCalled()
     expect(db.getStoredFreshImageThumbnail).not.toHaveBeenCalled()
   })
 

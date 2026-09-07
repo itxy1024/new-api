@@ -1964,7 +1964,6 @@
     "Failed to disable model": "停用模型失敗",
     "Failed to disable tag channels": "停用標籤渠道失敗",
     "Failed to discover OIDC endpoints": "發現 OIDC 端點失敗",
-    "Failed to download OSS resource: HTTP {{status}}": "下載 OSS 檔案失敗：HTTP {{status}}",
     "Failed to enable {{count}} model(s)": "啟用 {{count}} 個模型失敗",
     "Failed to enable 2FA": "啟用 2FA 失敗",
     "Failed to enable channels": "啟用渠道失敗",

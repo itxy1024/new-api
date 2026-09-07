@@ -1964,7 +1964,6 @@
     "Failed to disable model": "禁用模型失败",
     "Failed to disable tag channels": "禁用标签渠道失败",
     "Failed to discover OIDC endpoints": "发现 OIDC 端点失败",
-    "Failed to download OSS resource: HTTP {{status}}": "下载 OSS 文件失败：HTTP {{status}}",
     "Failed to enable {{count}} model(s)": "启用 {{count}} 个模型失败",
     "Failed to enable 2FA": "启用 2FA 失败",
     "Failed to enable channels": "启用渠道失败",

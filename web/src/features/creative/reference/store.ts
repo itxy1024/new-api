@@ -58,7 +58,6 @@ import { validateMaskMatchesImage } from './lib/canvasImage'
 import {
   creativeGenerationToTask,
   deleteCreativeGenerationByClientTaskId,
-  downloadCreativeAsset,
   listCreativeImageGenerations,
   type CreativeGenerationRecord,
 } from './lib/creativeStorage'
@@ -1552,43 +1551,18 @@ async function restoreCreativeImageHistory(
       continue
     }
     const localTask = localTasks.get(generation.client_task_id)
-    const outputImages: string[] = []
-
-    for (let index = 0; index < generation.assets.length; index++) {
-      const localImageId = localTask?.outputImages[index]
-      if (localImageId && (await getImage(localImageId))) {
-        outputImages.push(localImageId)
-        continue
-      }
-
-      try {
-        const blob = await downloadCreativeAsset(
-          generation.assets[index].content_url
-        )
-        const dataUrl = await blobToDataUrl(
-          blob,
-          generation.assets[index].mime_type
-        )
-        const stored = await storeImageWithSize(dataUrl, 'generated')
-        cacheImage(stored.id, dataUrl)
-        outputImages.push(stored.id)
-      } catch {
-        // 单个对象读取失败不应阻断本地画廊初始化。
-      }
+    const restored = creativeGenerationToTask(generation, getSystemName())
+    if (!localTask && restored.outputImages.length === 0) {
+      continue
     }
-
-    if (!localTask && outputImages.length === 0) continue
-    const restored = creativeGenerationToTask(
-      generation,
-      outputImages.length > 0 ? outputImages : localTask?.outputImages || [],
-      getSystemName()
-    )
     const merged = localTask
       ? {
           ...restored,
           ...localTask,
           outputImages:
-            outputImages.length > 0 ? outputImages : localTask.outputImages,
+            restored.outputImages.length > 0
+              ? restored.outputImages
+              : localTask.outputImages,
           rawImageUrls: restored.rawImageUrls,
           ...(localTask.status === 'done'
             ? {}
