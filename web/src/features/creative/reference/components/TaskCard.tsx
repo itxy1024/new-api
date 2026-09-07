@@ -85,6 +85,24 @@ export default function TaskCard({
   const [swipeActionActive, setSwipeActionActive] = useState(false)
   const [swipeDirection, setSwipeDirection] = useState<-1 | 0 | 1>(0)
   const [streamPreviewLoaded, setStreamPreviewLoaded] = useState(false)
+  const coverImageId = task.outputImages?.[0]
+  const persistedCoverMetadata = coverImageId
+    ? task.outputImageMetadata?.[coverImageId]
+    : undefined
+  const persistedCoverRatio =
+    persistedCoverMetadata?.width && persistedCoverMetadata.height
+      ? formatImageRatio(
+          persistedCoverMetadata.width,
+          persistedCoverMetadata.height
+        )
+      : ''
+  const persistedCoverSize =
+    persistedCoverMetadata?.width && persistedCoverMetadata.height
+      ? `${persistedCoverMetadata.width}×${persistedCoverMetadata.height}`
+      : ''
+  const displayCoverRatio = coverRatio || persistedCoverRatio
+  const displayCoverSize = coverSize || persistedCoverSize
+  const displayCoverByteSize = coverByteSize ?? persistedCoverMetadata?.byteSize
   const toggleTaskSelection = useStore((s) => s.toggleTaskSelection)
   const settings = useStore((s) => s.settings)
   const openFavoritePicker = useStore((s) => s.openFavoritePicker)
@@ -619,8 +637,8 @@ export default function TaskCard({
             <div className='absolute top-1.5 left-1.5 flex items-center gap-1'>
               {showRunningTimer ||
               task.status !== 'done' ||
-              !coverRatio ||
-              !coverSize ? (
+              !displayCoverRatio ||
+              !displayCoverSize ? (
                 <span className='flex items-center gap-1 rounded bg-black/50 px-1.5 py-0.5 font-mono text-[10px] text-white backdrop-blur-sm sm:text-xs'>
                   <svg
                     className='h-3 w-3'
@@ -640,10 +658,10 @@ export default function TaskCard({
               ) : (
                 <>
                   <span className='rounded bg-black/50 px-1.5 py-0.5 font-mono text-[10px] text-white backdrop-blur-sm sm:text-xs'>
-                    {coverRatio}
+                    {displayCoverRatio}
                   </span>
                   <span className='rounded bg-black/50 px-1.5 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur-sm sm:text-xs'>
-                    {coverSize}
+                    {displayCoverSize}
                   </span>
                 </>
               )}
@@ -723,13 +741,13 @@ export default function TaskCard({
                     <span className='font-mono'>{duration}</span>
                   </span>
                 )}
-                {coverByteSize != null && (
+                {displayCoverByteSize != null && (
                   <span
                     className='flex flex-shrink-0 items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600 dark:bg-white/[0.04] dark:text-gray-300'
-                    title={formatByteSize(coverByteSize)}
+                    title={formatByteSize(displayCoverByteSize)}
                   >
                     <span className='font-mono'>
-                      {formatByteSize(coverByteSize)}
+                      {formatByteSize(displayCoverByteSize)}
                     </span>
                   </span>
                 )}

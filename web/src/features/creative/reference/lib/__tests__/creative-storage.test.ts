@@ -68,6 +68,14 @@ describe('创作结果持久化接口', () => {
       newApiKeyId: 17,
       newApiGroup: 'premium',
       outputImages: ['https://bucket.oss.example/creative/image-1.webp'],
+      outputImageMetadata: {
+        'https://bucket.oss.example/creative/image-1.webp': {
+          byteSize: 2048,
+          width: 1536,
+          height: 1024,
+          mimeType: 'image/webp',
+        },
+      },
       status: 'done',
       elapsed: 4200,
       params: {

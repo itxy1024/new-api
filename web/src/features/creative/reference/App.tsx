@@ -4,7 +4,7 @@
  * 本文件基于 gpt_image_playground（MIT License）改编。
  * NewAPI 仅替换认证、Key/模型选择和生成接口，画廊交互保持原项目结构。
  */
-import { useEffect } from 'react'
+import { useLayoutEffect } from 'react'
 
 import { Main } from '@/components/layout'
 
@@ -25,7 +25,9 @@ import SupportPromptModal from './components/SupportPromptModal'
 import TaskGrid from './components/TaskGrid'
 import Toast from './components/Toast'
 import { useGlobalClickSuppression } from './lib/clickSuppression'
+import { clearInputDraftState } from './lib/inputDraftState'
 import { initStore, useStore } from './store'
+import { DEFAULT_PARAMS } from './types'
 
 import './index.css'
 
@@ -42,10 +44,23 @@ export default function ReferenceCreativeApp() {
   )
   useGlobalClickSuppression()
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const resetPageInput = () => {
+      useStore.getState().setAppMode('gallery')
+      useStore.setState({
+        ...clearInputDraftState(),
+        galleryInputDraft: null,
+        params: { ...DEFAULT_PARAMS },
+        reusedTaskApiProfileId: null,
+        reusedTaskApiProfileName: null,
+        reusedTaskApiProfileMissing: false,
+      })
+    }
+
+    resetPageInput()
     if (initialized) return
     initialized = true
-    void initStore().then(() => useStore.getState().setAppMode('gallery'))
+    void initStore().then(resetPageInput)
   }, [])
 
   return (

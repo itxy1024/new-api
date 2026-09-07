@@ -304,11 +304,25 @@ export default function DetailModal() {
   const showReferenceSection = allInputImageIds.length > 0 || isAgentEditTool
 
   const outputLen = outputSlots.length
+  const currentImageMetadata = currentOutputImageId
+    ? task.outputImageMetadata?.[currentOutputImageId]
+    : undefined
+  const persistedImageRatio =
+    currentImageMetadata?.width && currentImageMetadata.height
+      ? formatImageRatio(
+          currentImageMetadata.width,
+          currentImageMetadata.height
+        )
+      : ''
+  const persistedImageSize =
+    currentImageMetadata?.width && currentImageMetadata.height
+      ? `${currentImageMetadata.width}×${currentImageMetadata.height}`
+      : ''
   const currentImageRatio = currentOutputImageId
-    ? imageRatios[currentOutputImageId]
+    ? imageRatios[currentOutputImageId] || persistedImageRatio
     : ''
   const currentImageSize = currentOutputImageId
-    ? imageSizes[currentOutputImageId]
+    ? imageSizes[currentOutputImageId] || persistedImageSize
     : ''
   const baseActualParams = currentOutputImageId
     ? (task.actualParamsByImage?.[currentOutputImageId] ?? task.actualParams)

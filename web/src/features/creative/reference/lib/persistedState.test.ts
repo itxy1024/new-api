@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import type {
-  AgentConversation,
-  AppSettings,
-  FavoriteCollection,
+import {
+  DEFAULT_PARAMS,
+  type AgentConversation,
+  type AppSettings,
+  type FavoriteCollection,
 } from '../types'
-import { DEFAULT_PARAMS } from '../types'
 import { DEFAULT_SETTINGS } from './apiProfiles'
 import { DEFAULT_FAVORITE_COLLECTION_ID } from './favoriteState'
 import {
@@ -74,7 +74,47 @@ function fallback() {
   }
 }
 
+function requireNormalizedState(
+  ...args: Parameters<typeof normalizePersistedState>
+) {
+  const result = normalizePersistedState(...args)
+  if (!result) throw new Error('持久化状态应为有效对象')
+  return result
+}
+
 describe('persisted state codec', () => {
+  it('ignores cached gallery composer values and restores input defaults', () => {
+    const result = requireNormalizedState(
+      {
+        settings: DEFAULT_SETTINGS,
+        params: {
+          ...DEFAULT_PARAMS,
+          size: '1024x768',
+          quality: 'high',
+          output_format: 'webp',
+          n: 4,
+        },
+        prompt: '缓存中的提示词',
+        inputImages: [imageA],
+        galleryInputDraft: {
+          prompt: '缓存中的画廊草稿',
+          inputImages: [imageA],
+          maskDraft: null,
+          maskEditorImageId: imageA.id,
+        },
+      },
+      fallback(),
+      100
+    )
+
+    expect(result.state.params).toEqual(DEFAULT_PARAMS)
+    expect(result.state.prompt).toBe('')
+    expect(result.state.inputImages).toEqual([])
+    expect(result.state.galleryInputDraft).toBeNull()
+    expect(result.state.maskDraft).toBeNull()
+    expect(result.state.maskEditorImageId).toBeNull()
+  })
+
   it('rejects non-record unknown data and falls back field-by-field for an invalid record', () => {
     class ExternalState {}
 
@@ -86,7 +126,7 @@ describe('persisted state codec', () => {
       normalizePersistedState(new ExternalState(), fallback(), 100)
     ).toBeNull()
 
-    const result = normalizePersistedState(
+    const result = requireNormalizedState(
       {
         params: { quality: 'invalid', n: Number.NaN },
         dismissedCodexCliPrompts: 'invalid',
@@ -96,7 +136,7 @@ describe('persisted state codec', () => {
       },
       fallback(),
       100
-    )!
+    )
 
     expect(result.state.params).toEqual(DEFAULT_PARAMS)
     expect(result.state.dismissedCodexCliPrompts).toEqual(['current'])
@@ -151,7 +191,7 @@ describe('persisted state codec', () => {
   })
 
   it('normalizes legacy conversations, active ID, and top-level Agent draft fallback', () => {
-    const result = normalizePersistedState(
+    const result = requireNormalizedState(
       {
         settings: DEFAULT_SETTINGS,
         appMode: 'agent',
@@ -174,7 +214,7 @@ describe('persisted state codec', () => {
       },
       fallback(),
       100
-    )!
+    )
 
     expect(result.hasLegacyAgentConversations).toBe(true)
     expect(result.shouldMigrateAgentConversations).toBe(true)
@@ -190,7 +230,7 @@ describe('persisted state codec', () => {
     expect(result.state.prompt).toBe('旧版 Agent 草稿')
   })
 
-  it('persists gallery and Agent drafts only when input persistence is enabled', () => {
+  it('does not persist gallery input while preserving enabled Agent drafts', () => {
     const previousPresetConfig = {
       customProviders: [],
       profiles: [DEFAULT_SETTINGS.profiles[0]],
@@ -250,18 +290,17 @@ describe('persisted state codec', () => {
       true
     )
 
-    expect(enabled.prompt).toBe('画廊输入')
-    expect(enabled.inputImages).toEqual([{ id: imageA.id, dataUrl: '' }])
-    expect(enabled.galleryInputDraft?.inputImages).toEqual([
-      { id: imageA.id, dataUrl: '' },
-    ])
+    expect(enabled).not.toHaveProperty('params')
+    expect(enabled).not.toHaveProperty('prompt')
+    expect(enabled).not.toHaveProperty('inputImages')
+    expect(enabled).not.toHaveProperty('galleryInputDraft')
     expect(enabled.agentInputDrafts['conversation-a'].inputImages).toEqual([
       { id: imageA.id, dataUrl: '' },
     ])
     expect(enabled.previousPresetConfig).toEqual(previousPresetConfig)
     expect(disabled).not.toHaveProperty('prompt')
     expect(disabled).not.toHaveProperty('inputImages')
-    expect(disabled.galleryInputDraft).toBeNull()
+    expect(disabled).not.toHaveProperty('galleryInputDraft')
     expect(disabled.agentInputDrafts).toEqual({})
     expect(
       JSON.stringify(withLegacyConversation.agentConversations)
@@ -269,7 +308,7 @@ describe('persisted state codec', () => {
   })
 
   it('preserves an empty deployed profile snapshot when restoring persisted state', () => {
-    const result = normalizePersistedState(
+    const result = requireNormalizedState(
       {
         previousPresetConfig: {
           customProviders: [
@@ -283,7 +322,7 @@ describe('persisted state codec', () => {
         },
       },
       fallback()
-    )!
+    )
 
     expect(result.state.previousPresetConfig?.profiles).toEqual([])
     expect(result.state.previousPresetConfig?.customProviders).toEqual([
@@ -292,7 +331,7 @@ describe('persisted state codec', () => {
   })
 
   it('does not restore Agent drafts or legacy top-level input when input persistence is disabled', () => {
-    const result = normalizePersistedState(
+    const result = requireNormalizedState(
       {
         settings: { ...DEFAULT_SETTINGS, persistInputOnRestart: false },
         appMode: 'agent',
@@ -309,7 +348,7 @@ describe('persisted state codec', () => {
       },
       fallback(),
       100
-    )!
+    )
 
     expect(result.state.activeAgentConversationId).toBe('indexed-conversation')
     expect(result.state.galleryInputDraft).toBeNull()
@@ -321,7 +360,7 @@ describe('persisted state codec', () => {
   })
 
   it('filters malformed external response output before later payload stripping', () => {
-    const result = normalizePersistedState(
+    const result = requireNormalizedState(
       {
         agentConversations: [
           {
@@ -399,7 +438,7 @@ describe('persisted state codec', () => {
       },
       fallback(),
       100
-    )!
+    )
     const encoded = createPersistedState(
       {
         ...source(),
@@ -466,8 +505,8 @@ describe('persisted state codec', () => {
     })
   })
 
-  it('restores old gallery and keyed Agent drafts while normalizing favorites and default ID', () => {
-    const gallery = normalizePersistedState(
+  it('drops old gallery drafts while restoring keyed Agent drafts and favorites', () => {
+    const gallery = requireNormalizedState(
       {
         settings: DEFAULT_SETTINGS,
         prompt: '旧画廊草稿',
@@ -485,8 +524,8 @@ describe('persisted state codec', () => {
       },
       fallback(),
       100
-    )!
-    const agent = normalizePersistedState(
+    )
+    const agent = requireNormalizedState(
       {
         settings: DEFAULT_SETTINGS,
         appMode: 'agent',
@@ -506,17 +545,16 @@ describe('persisted state codec', () => {
       },
       fallback(),
       100
-    )!
-    const emptyFavorites = normalizePersistedState(
+    )
+    const emptyFavorites = requireNormalizedState(
       { favoriteCollections: [] },
       fallback(),
       100
-    )!
+    )
 
-    expect(gallery.state.galleryInputDraft).toMatchObject({
-      prompt: '旧画廊草稿',
-      inputImages: [{ id: imageA.id, dataUrl: '' }],
-    })
+    expect(gallery.state.galleryInputDraft).toBeNull()
+    expect(gallery.state.prompt).toBe('')
+    expect(gallery.state.inputImages).toEqual([])
     expect(gallery.state.favoriteCollections).toEqual([
       { id: 'collection-b', name: '收藏夹 B', createdAt: 2, updatedAt: 3 },
     ])

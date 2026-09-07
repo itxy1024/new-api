@@ -22,11 +22,9 @@ import {
 import {
   cleanStaleAgentInputDrafts,
   getPersistableAgentInputDrafts,
-  isEmptyAgentInputDraft,
   normalizeAgentInputDraft,
   normalizeAgentInputDrafts,
   normalizeAgentInputDraftsByKey,
-  saveGalleryInputDraft,
 } from './inputDraftState'
 
 export interface PersistedAppState {
@@ -37,12 +35,12 @@ export interface PersistedAppState {
   > | null
   dismissedPresetProfileIds?: string[]
   dismissedPresetProviderIds?: string[]
-  params: TaskParams
+  params?: TaskParams
   prompt?: string
   inputImages?: InputImage[]
   dismissedCodexCliPrompts: string[]
   appMode: AppMode
-  galleryInputDraft: AgentInputDraft | null
+  galleryInputDraft?: AgentInputDraft | null
   agentConversations?: AgentConversation[]
   activeAgentConversationId: string | null
   agentInputDrafts: Record<string, AgentInputDraft>
@@ -70,13 +68,13 @@ type PersistedStateSource = Omit<
 type PersistedStateFallback = Pick<
   PersistedAppState,
   | 'settings'
-  | 'params'
   | 'dismissedPresetProfileIds'
   | 'dismissedPresetProviderIds'
   | 'dismissedCodexCliPrompts'
   | 'favoriteCollections'
   | 'defaultFavoriteCollectionId'
 > & {
+  params: TaskParams
   agentConversations: AgentConversation[]
 }
 
@@ -84,8 +82,10 @@ export type NormalizedPersistedAppState = PersistedAppState & {
   previousPresetConfig: Pick<AppSettings, 'customProviders' | 'profiles'> | null
   dismissedPresetProfileIds: string[]
   dismissedPresetProviderIds: string[]
+  params: TaskParams
   prompt: string
   inputImages: InputImage[]
+  galleryInputDraft: AgentInputDraft | null
   maskDraft: MaskDraft | null
   maskEditorImageId: string | null
   agentConversations: AgentConversation[]
@@ -108,79 +108,18 @@ function normalizeStringArray(value: unknown, fallback: string[]) {
   return value.filter((item): item is string => typeof item === 'string')
 }
 
-function normalizeParams(value: unknown, fallback: TaskParams): TaskParams {
-  if (!isRecord(value)) return fallback
-  return {
-    size: typeof value.size === 'string' ? value.size : fallback.size,
-    quality:
-      value.quality === 'auto' ||
-      value.quality === 'low' ||
-      value.quality === 'medium' ||
-      value.quality === 'high'
-        ? value.quality
-        : fallback.quality,
-    output_format:
-      value.output_format === 'png' ||
-      value.output_format === 'jpeg' ||
-      value.output_format === 'webp'
-        ? value.output_format
-        : fallback.output_format,
-    output_compression:
-      value.output_compression === null ||
-      (typeof value.output_compression === 'number' &&
-        Number.isFinite(value.output_compression))
-        ? value.output_compression
-        : fallback.output_compression,
-    moderation:
-      value.moderation === 'auto' || value.moderation === 'low'
-        ? value.moderation
-        : fallback.moderation,
-    n:
-      typeof value.n === 'number' && Number.isFinite(value.n)
-        ? value.n
-        : fallback.n,
-    transparent_output:
-      typeof value.transparent_output === 'boolean'
-        ? value.transparent_output
-        : fallback.transparent_output,
-  }
-}
-
 export function createPersistedState(
   state: PersistedStateSource,
   includeLegacyAgentConversations = false
 ): PersistedAppState {
   const settings = normalizeSettings(state.settings)
-  const galleryInputDraft = saveGalleryInputDraft(state)
   return {
     settings,
     previousPresetConfig: state.previousPresetConfig ?? null,
     dismissedPresetProfileIds: state.dismissedPresetProfileIds ?? [],
     dismissedPresetProviderIds: state.dismissedPresetProviderIds ?? [],
-    params: state.params,
-    ...(settings.persistInputOnRestart &&
-    (state.appMode === 'gallery' || galleryInputDraft)
-      ? {
-          prompt: galleryInputDraft?.prompt ?? '',
-          inputImages:
-            galleryInputDraft?.inputImages.map((img) => ({
-              id: img.id,
-              dataUrl: '',
-            })) ?? [],
-        }
-      : {}),
     dismissedCodexCliPrompts: state.dismissedCodexCliPrompts,
     appMode: state.appMode,
-    galleryInputDraft:
-      settings.persistInputOnRestart && galleryInputDraft
-        ? {
-            ...galleryInputDraft,
-            inputImages: galleryInputDraft.inputImages.map((img) => ({
-              id: img.id,
-              dataUrl: '',
-            })),
-          }
-        : null,
     ...(includeLegacyAgentConversations
       ? {
           agentConversations: getPersistableAgentConversations(
@@ -258,25 +197,15 @@ export function normalizePersistedState(
       ? persistedState.activeAgentConversationId
       : (agentConversations[0]?.id ?? null)
   const appMode = persistedState.appMode === 'agent' ? 'agent' : 'gallery'
-  const galleryInputDraft = settings.persistInputOnRestart
-    ? normalizeAgentInputDraft(
-        persistedState.galleryInputDraft ?? {
-          prompt: persistedState.prompt,
-          inputImages: persistedState.inputImages,
-          maskDraft: null,
-          maskEditorImageId: null,
-        },
-        now
-      )
-    : null
-  const normalizedAgentInputDrafts = !settings.persistInputOnRestart
-    ? {}
-    : hasLegacyAgentConversations
+  let normalizedAgentInputDrafts: Record<string, AgentInputDraft> = {}
+  if (settings.persistInputOnRestart) {
+    normalizedAgentInputDrafts = hasLegacyAgentConversations
       ? normalizeAgentInputDrafts(
           persistedState.agentInputDrafts,
           agentConversations
         )
       : normalizeAgentInputDraftsByKey(persistedState.agentInputDrafts)
+  }
   const cleanedAgentInputDrafts = cleanStaleAgentInputDrafts(
     normalizedAgentInputDrafts,
     activeAgentConversationId,
@@ -331,16 +260,13 @@ export function normalizePersistedState(
         persistedState.dismissedPresetProviderIds,
         fallback.dismissedPresetProviderIds ?? []
       ),
-      params: normalizeParams(persistedState.params, fallback.params),
+      params: { ...fallback.params },
       dismissedCodexCliPrompts: normalizeStringArray(
         persistedState.dismissedCodexCliPrompts,
         fallback.dismissedCodexCliPrompts
       ),
       appMode,
-      galleryInputDraft:
-        galleryInputDraft && !isEmptyAgentInputDraft(galleryInputDraft)
-          ? galleryInputDraft
-          : null,
+      galleryInputDraft: null,
       agentConversations,
       activeAgentConversationId,
       agentInputDrafts,
@@ -362,18 +288,12 @@ export function normalizePersistedState(
       supportPromptSkippedForImportedData: Boolean(
         persistedState.supportPromptSkippedForImportedData
       ),
-      prompt: restoredAgentDraft
-        ? restoredAgentDraft.prompt
-        : (galleryInputDraft?.prompt ?? ''),
-      inputImages: restoredAgentDraft
-        ? restoredAgentDraft.inputImages
-        : (galleryInputDraft?.inputImages ?? []),
-      maskDraft: restoredAgentDraft
-        ? restoredAgentDraft.maskDraft
-        : (galleryInputDraft?.maskDraft ?? null),
+      prompt: restoredAgentDraft ? restoredAgentDraft.prompt : '',
+      inputImages: restoredAgentDraft ? restoredAgentDraft.inputImages : [],
+      maskDraft: restoredAgentDraft ? restoredAgentDraft.maskDraft : null,
       maskEditorImageId: restoredAgentDraft
         ? restoredAgentDraft.maskEditorImageId
-        : (galleryInputDraft?.maskEditorImageId ?? null),
+        : null,
     },
     hasLegacyAgentConversations,
     shouldMigrateAgentConversations:
@@ -389,8 +309,9 @@ export function mergePersistedAgentConversations(
   for (const conversation of stored) merged.set(conversation.id, conversation)
   for (const conversation of legacy) {
     const existing = merged.get(conversation.id)
-    if (!existing || conversation.updatedAt >= existing.updatedAt)
+    if (!existing || conversation.updatedAt >= existing.updatedAt) {
       merged.set(conversation.id, conversation)
+    }
   }
   return [...merged.values()].sort((a, b) => a.createdAt - b.createdAt)
 }

@@ -158,12 +158,23 @@ export function creativeGenerationToTask(
     : null
   const status = generation.status === 'completed' ? 'done' : 'error'
   const actualParamsByImage: Record<string, Partial<TaskParams>> = {}
+  const outputImageMetadata: NonNullable<TaskRecord['outputImageMetadata']> = {}
   generation.assets.forEach((asset) => {
     const imageURL = asset.content_url.trim()
     if (imageURL && asset.width > 0 && asset.height > 0) {
       actualParamsByImage[imageURL] = {
         size: `${asset.width}x${asset.height}`,
       }
+    }
+    if (!imageURL) return
+    const metadata = {
+      ...(asset.byte_size > 0 ? { byteSize: asset.byte_size } : {}),
+      ...(asset.width > 0 ? { width: asset.width } : {}),
+      ...(asset.height > 0 ? { height: asset.height } : {}),
+      ...(asset.mime_type.trim() ? { mimeType: asset.mime_type.trim() } : {}),
+    }
+    if (Object.keys(metadata).length > 0) {
+      outputImageMetadata[imageURL] = metadata
     }
   })
 
@@ -185,6 +196,10 @@ export function creativeGenerationToTask(
         : undefined,
     inputImageIds: [],
     outputImages,
+    outputImageMetadata:
+      Object.keys(outputImageMetadata).length > 0
+        ? outputImageMetadata
+        : undefined,
     rawImageUrls: generation.assets.map((asset) => asset.content_url),
     status,
     error:

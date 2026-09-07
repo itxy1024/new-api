@@ -248,6 +248,8 @@ export interface TaskRecord {
   maskImageId?: string | null
   /** 输出图片的 image store id 列表 */
   outputImages: string[]
+  /** 输出图片元数据，key 为 outputImages 中的图片 id 或 OSS 地址。 */
+  outputImageMetadata?: Record<string, OutputImageMetadata>
   /** 并发多图中失败的输出槽位，requestIndex 为从 0 开始的请求序号 */
   outputErrors?: Array<{ requestIndex: number; error: string }>
   /** 流式生成的中间步骤图片 id 列表，仅失败时保留供排查/下载 */
@@ -289,6 +291,13 @@ export interface FavoriteCollection {
   name: string
   createdAt: number
   updatedAt: number
+}
+
+export interface OutputImageMetadata {
+  byteSize?: number
+  width?: number
+  height?: number
+  mimeType?: string
 }
 
 // ===== Agent 模式 =====
