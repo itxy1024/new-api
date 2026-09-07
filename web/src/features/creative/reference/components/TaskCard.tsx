@@ -1,10 +1,13 @@
+import { Clock3 } from 'lucide-react'
 import { useEffect, useState, useRef, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { DEFAULT_IMAGES_MODEL, DEFAULT_FAL_MODEL } from '../lib/apiProfiles'
 import {
   ensureImageThumbnailCached,
   subscribeImageThumbnail,
 } from '../lib/imageCache'
+import { formatByteSize, formatElapsedDuration } from '../lib/mediaMetadata'
 import { getParamDisplay, ActualValueBadge } from '../lib/paramDisplay'
 import { formatImageRatio } from '../lib/size'
 import { isAgentTaskPromptPending } from '../lib/taskPromptDisplay'
@@ -71,9 +74,11 @@ export default function TaskCard({
   isSelected,
   disableSwipe,
 }: Props) {
+  const { t } = useTranslation()
   const [thumbSrc, setThumbSrc] = useState<string>('')
   const [coverRatio, setCoverRatio] = useState<string>('')
   const [coverSize, setCoverSize] = useState<string>('')
+  const [coverByteSize, setCoverByteSize] = useState<number | undefined>()
   const [now, setNow] = useState(Date.now())
   const [isSwiping, setIsSwiping] = useState(false)
   const [swipeStartedSelected, setSwipeStartedSelected] = useState(false)
@@ -268,6 +273,7 @@ export default function TaskCard({
   useEffect(() => {
     setCoverRatio('')
     setCoverSize('')
+    setCoverByteSize(undefined)
     setThumbSrc('')
 
     let cancelled = false
@@ -276,11 +282,13 @@ export default function TaskCard({
 
     const applyThumbnail = (thumbnail: {
       dataUrl: string
+      byteSize?: number
       width?: number
       height?: number
     }) => {
       if (cancelled) return
       setThumbSrc(thumbnail.dataUrl)
+      setCoverByteSize(thumbnail.byteSize)
       if (thumbnail.width && thumbnail.height) {
         setCoverRatio(formatImageRatio(thumbnail.width, thumbnail.height))
         setCoverSize(`${thumbnail.width}×${thumbnail.height}`)
@@ -316,17 +324,24 @@ export default function TaskCard({
     } else if (task.elapsed != null) {
       seconds = Math.floor(task.elapsed / 1000)
     } else {
-      return '00:00'
+      return ''
     }
-    const mm = String(Math.floor(seconds / 60)).padStart(2, '0')
-    const ss = String(seconds % 60).padStart(2, '0')
-    return `${mm}:${ss}`
+    return formatElapsedDuration(seconds, {
+      hour: t('h'),
+      minute: t('m'),
+      second: t('s'),
+    })
   })()
   const showSwipeAction = swipeActionActive
   const isFalReconnecting = task.status === 'error' && task.falRecoverable
   const isCustomReconnecting = task.status === 'error' && task.customRecoverable
   const showRunningTimer =
     task.status === 'running' || isFalReconnecting || isCustomReconnecting
+  const hasDuration =
+    task.elapsed != null ||
+    task.status === 'running' ||
+    isFalReconnecting ||
+    isCustomReconnecting
   const swipeBgClass = showSwipeAction
     ? swipeStartedSelected
       ? 'bg-gray-500 dark:bg-gray-600'
@@ -696,6 +711,25 @@ export default function TaskCard({
                     </svg>
                     <span className='max-w-[8rem] truncate'>
                       {task.apiModel}
+                    </span>
+                  </span>
+                )}
+                {hasDuration && duration && (
+                  <span
+                    className='flex flex-shrink-0 items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600 dark:bg-white/[0.04] dark:text-gray-300'
+                    title={duration}
+                  >
+                    <Clock3 className='h-3 w-3 flex-shrink-0 text-gray-400' />
+                    <span className='font-mono'>{duration}</span>
+                  </span>
+                )}
+                {coverByteSize != null && (
+                  <span
+                    className='flex flex-shrink-0 items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600 dark:bg-white/[0.04] dark:text-gray-300'
+                    title={formatByteSize(coverByteSize)}
+                  >
+                    <span className='font-mono'>
+                      {formatByteSize(coverByteSize)}
                     </span>
                   </span>
                 )}

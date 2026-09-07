@@ -342,6 +342,8 @@ export interface AgentConversation {
 export interface StoredImage {
   id: string
   dataUrl: string
+  /** 原图实际字节数 */
+  byteSize?: number
   /** 图片首次存储时间（ms） */
   createdAt?: number
   /** 图片来源：用户上传 / API 生成 / 遮罩 */
@@ -356,6 +358,8 @@ export interface StoredImageThumbnail {
   id: string
   /** 列表缩略图，用于避免卡片页解码完整 4K 原图 */
   thumbnailDataUrl: string
+  /** 原图实际字节数 */
+  byteSize?: number
   /** 原图宽度 */
   width?: number
   /** 原图高度 */

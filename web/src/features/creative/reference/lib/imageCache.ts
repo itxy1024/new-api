@@ -7,6 +7,7 @@ import {
 
 type ImageThumbnail = {
   dataUrl: string
+  byteSize?: number
   width?: number
   height?: number
   thumbnailVersion?: number
@@ -112,6 +113,7 @@ export async function ensureImageThumbnailCached(
 
   const thumbnail = {
     dataUrl: rec.thumbnailDataUrl,
+    ...(rec.byteSize == null ? {} : { byteSize: rec.byteSize }),
     width: rec.width,
     height: rec.height,
     thumbnailVersion: rec.thumbnailVersion,
@@ -227,17 +229,21 @@ async function startThumbnailBackfill(id: string) {
     if (thumbnail?.thumbnailDataUrl) {
       cacheThumbnail(id, {
         dataUrl: thumbnail.thumbnailDataUrl,
+        ...(thumbnail.byteSize == null ? {} : { byteSize: thumbnail.byteSize }),
         width: thumbnail.width,
         height: thumbnail.height,
         thumbnailVersion: thumbnail.thumbnailVersion,
       })
-      thumbnailSubscribers.get(id)?.forEach((callback) =>
+      thumbnailSubscribers.get(id)?.forEach((callback) => {
         callback({
           dataUrl: thumbnail.thumbnailDataUrl,
+          ...(thumbnail.byteSize == null
+            ? {}
+            : { byteSize: thumbnail.byteSize }),
           width: thumbnail.width,
           height: thumbnail.height,
         })
-      )
+      })
     }
   } catch {
     // 缩略图生成失败时保留占位图，后续仍可再次补全。

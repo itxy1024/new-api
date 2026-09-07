@@ -4,6 +4,7 @@ import type {
   StoredImage,
   StoredImageThumbnail,
 } from '../types'
+import { dataUrlToBytes } from './dataUrl'
 
 const DB_NAME = 'gpt-image-playground'
 const DB_VERSION = 3
@@ -16,6 +17,15 @@ const THUMBNAIL_QUALITY = 0.9
 const THUMBNAIL_VERSION = 2
 
 export const CURRENT_THUMBNAIL_VERSION = THUMBNAIL_VERSION
+
+function getDataUrlByteSize(dataUrl: string): number | undefined {
+  try {
+    const byteSize = dataUrlToBytes(dataUrl).bytes.byteLength
+    return Number.isFinite(byteSize) ? byteSize : undefined
+  } catch {
+    return undefined
+  }
+}
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -151,9 +161,17 @@ export async function getStoredFreshImageThumbnail(
   id: string
 ): Promise<StoredImageThumbnail | undefined> {
   const thumbnail = await getStoredImageThumbnail(id)
-  return thumbnail?.thumbnailVersion === THUMBNAIL_VERSION
-    ? thumbnail
-    : undefined
+  if (thumbnail?.thumbnailVersion !== THUMBNAIL_VERSION) return undefined
+  if (thumbnail.byteSize != null) return thumbnail
+
+  const image = await getImage(id)
+  if (!image) return thumbnail
+  const byteSize = image.byteSize ?? getDataUrlByteSize(image.dataUrl)
+  if (byteSize == null) return thumbnail
+  if (image.byteSize !== byteSize) await putImage({ ...image, byteSize })
+  const refreshedThumbnail = { ...thumbnail, byteSize }
+  await putImageThumbnail(refreshedThumbnail)
+  return refreshedThumbnail
 }
 
 export function putImageThumbnail(
@@ -168,19 +186,24 @@ export async function getImageThumbnail(
   const existingThumbnail = await getStoredImageThumbnail(id)
   if (existingThumbnail?.thumbnailVersion === THUMBNAIL_VERSION) {
     const image = await getImage(id)
-    if (
-      image &&
-      (!image.width || !image.height) &&
-      existingThumbnail.width &&
-      existingThumbnail.height
-    ) {
-      await putImage({
-        ...image,
-        width: existingThumbnail.width,
-        height: existingThumbnail.height,
-      })
+    let refreshedThumbnail = existingThumbnail
+    if (image) {
+      const byteSize = image.byteSize ?? getDataUrlByteSize(image.dataUrl)
+      const width = image.width || existingThumbnail.width
+      const height = image.height || existingThumbnail.height
+      if (
+        (byteSize != null && image.byteSize !== byteSize) ||
+        (width != null && image.width !== width) ||
+        (height != null && image.height !== height)
+      ) {
+        await putImage({ ...image, byteSize, width, height })
+      }
+      if (existingThumbnail.byteSize == null && byteSize != null) {
+        refreshedThumbnail = { ...existingThumbnail, byteSize }
+        await putImageThumbnail(refreshedThumbnail)
+      }
     }
-    return existingThumbnail
+    return refreshedThumbnail
   }
 
   const image = await getImage(id)
@@ -193,6 +216,7 @@ export async function getImageThumbnail(
     const thumbnail: StoredImageThumbnail = {
       id,
       thumbnailDataUrl: legacyImage.thumbnailDataUrl,
+      byteSize: image.byteSize,
       width: legacyImage.width,
       height: legacyImage.height,
       thumbnailVersion: THUMBNAIL_VERSION,
@@ -217,6 +241,7 @@ export async function getImageThumbnail(
   const thumbnail: StoredImageThumbnail = {
     id,
     thumbnailDataUrl: metadata.thumbnailDataUrl,
+    byteSize: image.byteSize ?? getDataUrlByteSize(image.dataUrl),
     width: metadata.width,
     height: metadata.height,
     thumbnailVersion: THUMBNAIL_VERSION,
@@ -303,6 +328,7 @@ function hashDataUrlFallback(dataUrl: string): string {
 
 export interface StoreImageResult {
   id: string
+  byteSize?: number
   width?: number
   height?: number
 }
@@ -323,12 +349,14 @@ export async function storeImageWithSize(
   source: NonNullable<StoredImage['source']> = 'upload'
 ): Promise<StoreImageResult> {
   const id = await hashDataUrl(dataUrl)
+  const byteSize = getDataUrlByteSize(dataUrl)
   const existing = await getImage(id)
   if (!existing) {
     const thumbnail = await safeCreateImageThumbnail(dataUrl)
     await putImage({
       id,
       dataUrl,
+      byteSize,
       createdAt: Date.now(),
       source,
       width: thumbnail.width,
@@ -338,12 +366,13 @@ export async function storeImageWithSize(
       await putImageThumbnail({
         id,
         thumbnailDataUrl: thumbnail.thumbnailDataUrl,
+        byteSize,
         width: thumbnail.width,
         height: thumbnail.height,
         thumbnailVersion: THUMBNAIL_VERSION,
       })
     }
-    return { id, width: thumbnail.width, height: thumbnail.height }
+    return { id, width: thumbnail.width, height: thumbnail.height, byteSize }
   }
 
   if (
@@ -352,14 +381,17 @@ export async function storeImageWithSize(
     const thumbnail = await safeCreateImageThumbnail(existing.dataUrl)
     const width = thumbnail.width ?? existing.width
     const height = thumbnail.height ?? existing.height
+    const existingByteSize = existing.byteSize ?? byteSize
     if (
-      thumbnail.width &&
-      thumbnail.height &&
-      (existing.width !== thumbnail.width ||
-        existing.height !== thumbnail.height)
+      (thumbnail.width &&
+        thumbnail.height &&
+        (existing.width !== thumbnail.width ||
+          existing.height !== thumbnail.height)) ||
+      (existingByteSize != null && existing.byteSize !== existingByteSize)
     ) {
       await putImage({
         ...existing,
+        byteSize: existingByteSize,
         width: thumbnail.width,
         height: thumbnail.height,
       })
@@ -368,14 +400,24 @@ export async function storeImageWithSize(
       await putImageThumbnail({
         id,
         thumbnailDataUrl: thumbnail.thumbnailDataUrl,
+        byteSize: existingByteSize,
         width: thumbnail.width,
         height: thumbnail.height,
         thumbnailVersion: THUMBNAIL_VERSION,
       })
     }
-    return { id, width, height }
+    return { id, width, height, byteSize: existingByteSize }
   }
-  return { id, width: existing.width, height: existing.height }
+  const existingByteSize = existing.byteSize ?? byteSize
+  if (existingByteSize != null && existing.byteSize !== existingByteSize) {
+    await putImage({ ...existing, byteSize: existingByteSize })
+  }
+  return {
+    id,
+    width: existing.width,
+    height: existing.height,
+    byteSize: existingByteSize,
+  }
 }
 
 function loadImage(dataUrl: string): Promise<HTMLImageElement> {
