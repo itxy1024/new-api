@@ -58,4 +58,38 @@ describe('NewAPI 图片请求', () => {
       group: 'premium',
     })
   })
+
+  it('没有选择模型时在发送请求前终止', async () => {
+    const post = vi.spyOn(api, 'post')
+    setNewApiSelection(null)
+
+    await expect(
+      callImageApi({
+        settings: {
+          ...DEFAULT_SETTINGS,
+          activeProfileId: 'newapi',
+          baseUrl: '/api/creative',
+          apiKey: '',
+          model: '',
+          profiles: [
+            {
+              ...DEFAULT_SETTINGS.profiles[0],
+              id: 'newapi',
+              name: 'NewAPI',
+              baseUrl: '/api/creative',
+              apiKey: '',
+              model: '',
+              provider: 'openai',
+              apiMode: 'images',
+            },
+          ],
+        },
+        clientTaskId: 'local-task-without-model',
+        prompt: 'a test image',
+        params: { ...DEFAULT_PARAMS },
+        inputImageDataUrls: [],
+      })
+    ).rejects.toThrow('请选择 API Key 和模型')
+    expect(post).not.toHaveBeenCalled()
+  })
 })

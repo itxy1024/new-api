@@ -53,6 +53,15 @@ describe('OSS 设置弹窗', () => {
     const onOpenChange = vi.fn()
     render(<OssSettingsDialog open onOpenChange={onOpenChange} />)
 
+    expect(screen.getByRole('heading', { name: 'Settings' })).toBeVisible()
+    const storageNavigation = screen.getByRole('navigation', {
+      name: 'Settings',
+    })
+    expect(storageNavigation).toHaveClass('sm:w-48')
+    expect(
+      screen.getByRole('button', { name: 'Storage management' })
+    ).toHaveAttribute('aria-current', 'page')
+
     const endpoint = await screen.findByLabelText('Endpoint')
     expect(screen.getByLabelText('Access Key')).toHaveValue('')
     expect(screen.getByLabelText('Secret Key')).toHaveValue('')

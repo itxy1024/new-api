@@ -2534,7 +2534,6 @@ export async function submitTask(
     !selectedNewApi
   ) {
     showToast('请先选择 API Key 和模型', 'error')
-    useStore.getState().setShowSettings(true)
     return
   }
 
@@ -5610,7 +5609,6 @@ export async function retryTask(task: TaskRecord) {
     (task.apiProfileId === 'newapi' ? getNewApiSelection() : null)
   if (task.apiProfileId === 'newapi' && !selectedNewApi) {
     useStore.getState().showToast('请先选择 API Key 和模型', 'error')
-    useStore.getState().setShowSettings(true)
     return
   }
   const appliedSettings = selectedNewApi

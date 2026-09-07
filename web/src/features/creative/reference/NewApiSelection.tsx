@@ -9,16 +9,16 @@ import { useTranslation } from 'react-i18next'
 
 import { ModelGroupSelector } from '@/components/model-group-selector'
 import { api } from '@/lib/api'
-import {
-  getSystemName,
-  useSystemConfigStore,
-} from '@/stores/system-config-store'
+import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { setNewApiSelection } from './lib/newApiSelection'
 import { useStore } from './store'
 
 type KeyOption = { id: number; name?: string; status?: number }
 type ModelOption = { id: string; group?: string }
+
+const KEY_PAGE_SIZE = 100
+const DEFAULT_IMAGE_MODEL = 'gpt-image-2'
 
 function getKeyLabel(item: KeyOption): string {
   return item.name?.trim() || '未命名 Key'
@@ -30,6 +30,18 @@ function getModelValue(item: ModelOption): string {
 
 function getModelLabel(item: ModelOption): string {
   return item.id
+}
+
+function normalizeModelOptions(raw: unknown): ModelOption[] {
+  if (!Array.isArray(raw)) return []
+
+  return raw
+    .map((item: string | { id?: string; name?: string; group?: string }) =>
+      typeof item === 'string'
+        ? { id: item }
+        : { id: item.id ?? item.name ?? '', group: item.group }
+    )
+    .filter((item): item is ModelOption => Boolean(item.id?.trim()))
 }
 
 export default function NewApiSelection() {
@@ -44,8 +56,7 @@ export default function NewApiSelection() {
   const [keyId, setKeyId] = useState('')
   const [model, setModel] = useState('')
   const [group, setGroup] = useState('')
-  const lastProfileSignature = useRef('')
-  const modelLoadingKeyId = useRef<string | null>(null)
+  const modelsByKeyRef = useRef(new Map<string, ModelOption[]>())
 
   const selectedModelValue = group ? `${group}\x00${model}` : model
   const keyGroups = useMemo(
@@ -67,23 +78,79 @@ export default function NewApiSelection() {
 
   useEffect(() => {
     let active = true
+    setNewApiSelection(null)
     void (async () => {
       try {
-        const response = await api.get('/api/token/', {
-          params: { p: 1, size: 100 },
+        const firstResponse = await api.get('/api/token/', {
+          params: { p: 1, size: KEY_PAGE_SIZE },
+        })
+        const firstData = firstResponse.data?.data ?? {}
+        let firstItems: KeyOption[] = []
+        if (Array.isArray(firstData)) {
+          firstItems = firstData
+        } else if (Array.isArray(firstData.items)) {
+          firstItems = firstData.items
+        }
+        const total = Number(firstData.total ?? firstItems.length)
+        const pageCount = Math.max(1, Math.ceil(total / KEY_PAGE_SIZE))
+        const remainingResponses = await Promise.all(
+          Array.from({ length: pageCount - 1 }, (_, index) =>
+            api.get('/api/token/', {
+              params: { p: index + 2, size: KEY_PAGE_SIZE },
+            })
+          )
+        )
+        const remainingItems = remainingResponses.flatMap((response) => {
+          const data = response.data?.data ?? {}
+          if (Array.isArray(data)) return data
+          return Array.isArray(data.items) ? data.items : []
         })
         if (!active) return
-        const raw = response.data?.data?.items ?? response.data?.data ?? []
-        const next = (Array.isArray(raw) ? raw : []).filter(
+        const next = [...firstItems, ...remainingItems].filter(
           (item: KeyOption) => Number(item.status) === 1
         )
-        setKeys(next)
-        const saved = window.localStorage.getItem('newapi-creative-key-id')
-        setKeyId(
-          saved && next.some((item) => String(item.id) === saved)
-            ? saved
-            : String(next[0]?.id ?? '')
+        const modelResults = await Promise.all(
+          next.map(async (item: KeyOption) => {
+            try {
+              const response = await api.get('/api/creative/models', {
+                params: { key_id: String(item.id) },
+              })
+              return {
+                keyId: String(item.id),
+                models: normalizeModelOptions(response.data?.data),
+              }
+            } catch {
+              return { keyId: String(item.id), models: null }
+            }
+          })
         )
+        if (!active) return
+
+        const modelsByKey = new Map<string, ModelOption[]>()
+        for (const result of modelResults) {
+          if (result.models) modelsByKey.set(result.keyId, result.models)
+        }
+        modelsByKeyRef.current = modelsByKey
+        setKeys(next)
+
+        const defaultResult = modelResults.find((result) =>
+          result.models?.some((item) => item.id === DEFAULT_IMAGE_MODEL)
+        )
+        const defaultModel = defaultResult?.models?.find(
+          (item) => item.id === DEFAULT_IMAGE_MODEL
+        )
+        if (defaultResult && defaultModel) {
+          setKeyId(defaultResult.keyId)
+          setModels(defaultResult.models ?? [])
+          setModel(defaultModel.id)
+          setGroup(defaultModel.group ?? '')
+          return
+        }
+
+        setKeyId('')
+        setModels([])
+        setModel('')
+        setGroup('')
       } catch {
         if (active) useStore.getState().showToast('加载 API Key 失败', 'error')
       }
@@ -94,80 +161,18 @@ export default function NewApiSelection() {
   }, [])
 
   useEffect(() => {
-    if (!keyId) {
-      setNewApiSelection(null)
-      return
-    }
+    if (!keyId || modelsByKeyRef.current.has(keyId)) return
 
-    window.localStorage.setItem('newapi-creative-key-id', keyId)
-    modelLoadingKeyId.current = keyId
-    setNewApiSelection(null)
-    // Key 切换后立即锁定 NewAPI 配置，模型加载期间禁止沿用旧的默认配置。
-    const currentSettings = useStore.getState().settings
-    const existingProfile = currentSettings.profiles.find(
-      (profile) => profile.id === 'newapi'
-    )
-    const baseProfile = existingProfile ?? currentSettings.profiles[0]
-    const pendingProfile = {
-      ...baseProfile,
-      id: 'newapi',
-      name: getSystemName().trim() || 'New API',
-      provider: 'openai' as const,
-      baseUrl: '/api/creative',
-      apiKey: keyId,
-      model: '',
-      apiMode: 'images' as const,
-      codexCli: false,
-      apiProxy: false,
-    }
-    useStore.getState().setSettings({
-      ...currentSettings,
-      profiles: existingProfile
-        ? currentSettings.profiles.map((profile) =>
-            profile.id === 'newapi' ? pendingProfile : profile
-          )
-        : [...currentSettings.profiles, pendingProfile],
-      activeProfileId: 'newapi',
-      baseUrl: '/api/creative',
-      apiKey: keyId,
-      model: '',
-      apiMode: 'images',
-    })
     let active = true
-    // Key 变化时先清空旧选项，防止模型接口返回前继续提交上一把 Key 的模型。
-    // oxlint-disable-next-line react/set-state-in-effect
-    setModels([])
-    setModel('')
-    setGroup('')
-
     void (async () => {
       try {
         const response = await api.get('/api/creative/models', {
           params: { key_id: keyId },
         })
         if (!active) return
-        const raw = response.data?.data ?? []
-        const next = (Array.isArray(raw) ? raw : [])
-          .map(
-            (item: string | { id?: string; name?: string; group?: string }) =>
-              typeof item === 'string'
-                ? { id: item }
-                : { id: item.id ?? item.name ?? '', group: item.group }
-          )
-          .filter((item): item is ModelOption => Boolean(item.id?.trim()))
-        const savedModel =
-          window.localStorage.getItem('newapi-creative-model') ?? ''
-        const savedGroup =
-          window.localStorage.getItem('newapi-creative-group') ?? ''
-        const selected =
-          next.find(
-            (item) =>
-              item.id === savedModel && (item.group ?? '') === savedGroup
-          ) ?? next[0]
-        modelLoadingKeyId.current = null
+        const next = normalizeModelOptions(response.data?.data)
+        modelsByKeyRef.current.set(keyId, next)
         setModels(next)
-        setModel(selected?.id ?? '')
-        setGroup(selected?.group ?? '')
       } catch {
         if (!active) return
         setModels([])
@@ -183,54 +188,49 @@ export default function NewApiSelection() {
   }, [keyId])
 
   useEffect(() => {
-    if (modelLoadingKeyId.current === keyId) return
-    const profileSignature = `${keyId}\x00${model}\x00${group}`
-    if (lastProfileSignature.current === profileSignature) return
-    lastProfileSignature.current = profileSignature
-
     const parsedKeyId = Number(keyId)
     if (Number.isInteger(parsedKeyId) && parsedKeyId > 0 && model) {
-      window.localStorage.setItem('newapi-creative-model', model)
-      window.localStorage.setItem('newapi-creative-group', group)
       setNewApiSelection({ keyId: parsedKeyId, model, group })
     } else {
       setNewApiSelection(null)
-      // Key 或模型仍在异步加载时，不要将空模型写回参考项目设置。
-      return
     }
 
-    // 使用当前 store 快照读取配置，避免把整个 settings 对象作为依赖。
-    // setSettings 会返回新的 settings 对象，依赖它会在每次写入后再次触发本 effect。
-    const currentProfile = useStore
-      .getState()
-      .settings.profiles?.find((profile) => profile.id === 'newapi')
+    const currentSettings = useStore.getState().settings
+    const currentProfile = currentSettings.profiles?.find(
+      (profile) => profile.id === 'newapi'
+    )
     if (
       currentProfile?.id === 'newapi' &&
       currentProfile.apiKey === keyId &&
       currentProfile.model === model &&
-      currentProfile.baseUrl === '/api/creative'
+      currentProfile.baseUrl === '/api/creative' &&
+      currentProfile.name === relayName &&
+      currentSettings.activeProfileId === 'newapi' &&
+      currentSettings.apiKey === keyId &&
+      currentSettings.model === model &&
+      currentSettings.baseUrl === '/api/creative'
     ) {
       return
     }
 
-    const profile = currentProfile ?? {
-      id: 'newapi',
-      name: relayName,
-      provider: 'openai' as const,
-      baseUrl: '',
-      apiKey: '',
-      model: '',
-      timeout: 600,
-      apiMode: 'images' as const,
-      codexCli: false,
-      apiProxy: false,
-      transparentBackgroundMethod: 'api' as const,
-    }
-    const latestSettings = useStore.getState().settings
+    const profile = currentProfile ??
+      currentSettings.profiles[0] ?? {
+        id: 'newapi',
+        name: relayName,
+        provider: 'openai' as const,
+        baseUrl: '',
+        apiKey: '',
+        model: '',
+        timeout: 600,
+        apiMode: 'images' as const,
+        codexCli: false,
+        apiProxy: false,
+        transparentBackgroundMethod: 'api' as const,
+      }
     const nextProfile = {
       ...profile,
       id: 'newapi',
-      name: 'NewAPI',
+      name: relayName,
       apiKey: keyId,
       model,
       provider: 'openai' as const,
@@ -239,15 +239,15 @@ export default function NewApiSelection() {
       codexCli: false,
       apiProxy: false,
     }
-    const nextProfiles = latestSettings.profiles.some(
+    const nextProfiles = currentSettings.profiles.some(
       (item) => item.id === 'newapi'
     )
-      ? latestSettings.profiles.map((item) =>
+      ? currentSettings.profiles.map((item) =>
           item.id === 'newapi' ? nextProfile : item
         )
-      : [...latestSettings.profiles, nextProfile]
+      : [...currentSettings.profiles, nextProfile]
     setSettings({
-      ...latestSettings,
+      ...currentSettings,
       profiles: nextProfiles,
       activeProfileId: 'newapi',
       apiKey: keyId,
@@ -282,12 +282,13 @@ export default function NewApiSelection() {
           groups={keyGroups}
           onGroupChange={(value) => {
             if (value !== keyId) {
+              setModels(modelsByKeyRef.current.get(value) ?? [])
               setKeyId(value)
               setModel('')
               setGroup('')
             }
           }}
-          disabled={!keys.length || !keyId}
+          disabled={!keys.length}
           className='h-[30px] w-full max-w-none justify-start rounded-xl border-gray-200/60 bg-white/50 px-3 text-xs dark:border-white/[0.08] dark:bg-white/[0.03]'
         />
       </label>
