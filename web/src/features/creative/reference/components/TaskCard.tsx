@@ -328,7 +328,7 @@ export default function TaskCard({
     }
     return formatElapsedDuration(seconds, {
       hour: t('h'),
-      minute: t('m'),
+      minute: t('duration.minute.short'),
       second: t('s'),
     })
   })()
