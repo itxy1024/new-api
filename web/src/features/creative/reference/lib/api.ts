@@ -47,6 +47,26 @@ function resolveImageUrl(value: string): string {
   }
 }
 
+function getNewApiErrorMessage(err: unknown): string | null {
+  if (!err || typeof err !== 'object') return null
+
+  const response = (err as { response?: unknown }).response
+  if (!response || typeof response !== 'object') return null
+
+  const data = (response as { data?: unknown }).data
+  if (!data || typeof data !== 'object') return null
+
+  const payload = data as Record<string, unknown>
+  const nestedError = payload.error
+  if (nestedError && typeof nestedError === 'object') {
+    const message = (nestedError as { message?: unknown }).message
+    if (typeof message === 'string' && message.trim()) return message.trim()
+  }
+
+  const message = payload.message
+  return typeof message === 'string' && message.trim() ? message.trim() : null
+}
+
 async function callNewApiImageApi(
   opts: NewApiCallApiOptions,
   profile: ReturnType<typeof getActiveApiProfile>
@@ -91,7 +111,17 @@ async function callNewApiImageApi(
   if (opts.inputImageDataUrls.length) params.images = opts.inputImageDataUrls
   if (opts.maskDataUrl) params.mask = opts.maskDataUrl
 
-  const response = await api.post('/api/creative/images', params)
+  let response
+  try {
+    response = await api.post('/api/creative/images', params, {
+      // 创作任务会在详情卡片中展示具体错误，避免通用拦截器先弹出状态码。
+      skipErrorHandler: true,
+    })
+  } catch (err) {
+    const message = getNewApiErrorMessage(err)
+    if (message) throw new Error(message)
+    throw err
+  }
   const raw = response.data?.data
   const items = getImageItems(raw)
   const mime = MIME_MAP[opts.params.output_format] || 'image/png'

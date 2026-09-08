@@ -1,6 +1,8 @@
-import { Clock3 } from 'lucide-react'
+import { Check, Clock3 } from 'lucide-react'
 import { useEffect, useState, useRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { cn } from '@/lib/utils'
 
 import { DEFAULT_IMAGES_MODEL, DEFAULT_FAL_MODEL } from '../lib/apiProfiles'
 import {
@@ -436,7 +438,7 @@ export default function TaskCard({
 
       <div
         ref={cardRef}
-        className={`relative cursor-pointer touch-pan-y overflow-hidden rounded-xl border bg-white duration-200 will-change-transform hover:shadow-lg dark:bg-gray-900 dark:hover:bg-gray-800/80 ${
+        className={`group relative cursor-pointer touch-pan-y overflow-hidden rounded-xl border bg-white duration-200 will-change-transform hover:shadow-lg dark:bg-gray-900 dark:hover:bg-gray-800/80 ${
           isSwiping ? '!bg-white dark:!bg-gray-900' : ''
         } ${
           !isSwiping
@@ -486,24 +488,26 @@ export default function TaskCard({
           }
         }}
       >
-        {/* 选中时的角标 */}
-        {isSelected && (
-          <div className='absolute top-2 right-2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 shadow-sm'>
-            <svg
-              className='h-3 w-3 text-white'
-              fill='none'
-              stroke='currentColor'
-              viewBox='0 0 24 24'
-            >
-              <path
-                strokeLinecap='round'
-                strokeLinejoin='round'
-                strokeWidth={3}
-                d='M5 13l4 4L19 7'
-              />
-            </svg>
-          </div>
-        )}
+        <button
+          type='button'
+          aria-label={t('Select row')}
+          aria-pressed={Boolean(isSelected)}
+          className={cn(
+            'absolute top-2 right-2 z-10 flex size-5 items-center justify-center rounded-full border shadow-sm transition-opacity focus-visible:opacity-100',
+            isSelected
+              ? 'pointer-events-auto border-blue-500 bg-blue-500 opacity-100'
+              : 'pointer-events-none border-white/90 bg-black/20 opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto'
+          )}
+          onClick={(e) => {
+            e.stopPropagation()
+            toggleTaskSelection(task.id)
+          }}
+          onTouchEnd={(e) => e.stopPropagation()}
+        >
+          {isSelected && (
+            <Check aria-hidden='true' className='size-3 text-white' />
+          )}
+        </button>
         <div className='flex h-40'>
           {/* 左侧图片区域 */}
           <div className='relative flex h-full w-40 min-w-[10rem] flex-shrink-0 items-center justify-center overflow-hidden bg-gray-100 dark:bg-black/20'>
