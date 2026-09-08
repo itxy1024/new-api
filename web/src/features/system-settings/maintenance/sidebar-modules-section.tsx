@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+/* oxlint-disable react/incompatible-library */
 import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -69,6 +70,14 @@ export function SidebarModulesSection({
       title: t('Chat area'),
       description: t('Playground experiments and live conversations.'),
     },
+    creative: {
+      title: t('Creation Center'),
+      description: t('Image and video creation tools.'),
+    },
+    general: {
+      title: t('General'),
+      description: t('Common user-facing tools.'),
+    },
     console: {
       title: t('Console area'),
       description: t('Dashboards, tokens, and usage analytics.'),
@@ -95,6 +104,22 @@ export function SidebarModulesSection({
       chat: {
         title: t('Chat'),
         description: t('Access previous conversations and start new ones.'),
+      },
+    },
+    creative: {
+      image: {
+        title: t('AI Image Generation'),
+        description: t('Generate and edit images with configured models.'),
+      },
+      video: {
+        title: t('Video Generation'),
+        description: t('Create videos with configured models.'),
+      },
+    },
+    general: {
+      iqRadar: {
+        title: t('IQ Radar'),
+        description: t('Show the IQ Radar embedded webpage.'),
       },
     },
     console: {
@@ -253,6 +278,7 @@ export function SidebarModulesSection({
                                 checked={Boolean(field.value)}
                                 onCheckedChange={field.onChange}
                                 disabled={
+                                  // oxlint-disable-next-line react/incompatible-library
                                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                   !form.watch(`${sectionKey}.enabled` as any)
                                 }

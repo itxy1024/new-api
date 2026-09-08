@@ -36,6 +36,7 @@ import {
   Wallet,
   Image,
   Video,
+  Radar,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -74,14 +75,20 @@ export function useSidebarData(): SidebarData {
         title: t('Creation Center'),
         items: [
           {
-            title: t('AI Image Generation'),
-            url: '/creative/image',
+            title: t('Creation Center'),
             icon: Image,
-          },
-          {
-            title: t('Video Generation'),
-            url: '/creative/video',
-            icon: Video,
+            items: [
+              {
+                title: t('AI Image Generation'),
+                url: '/creative/image',
+                icon: Image,
+              },
+              {
+                title: t('Video Generation'),
+                url: '/creative/video',
+                icon: Video,
+              },
+            ],
           },
         ],
       },
@@ -115,6 +122,11 @@ export function useSidebarData(): SidebarData {
             activeUrls: ['/usage-logs/drawing'],
             configUrls: ['/usage-logs/drawing', '/usage-logs/task'],
             icon: ListTodo,
+          },
+          {
+            title: t('IQ Radar'),
+            url: '/iq-radar',
+            icon: Radar,
           },
         ],
       },

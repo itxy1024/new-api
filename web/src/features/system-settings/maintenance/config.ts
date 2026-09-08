@@ -59,6 +59,15 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     playground: true,
     chat: true,
   },
+  creative: {
+    enabled: true,
+    image: true,
+    video: true,
+  },
+  general: {
+    enabled: true,
+    iqRadar: true,
+  },
   console: {
     enabled: true,
     detail: true,

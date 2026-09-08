@@ -47,6 +47,10 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     playground: true,
     chat: true,
   },
+  general: {
+    enabled: true,
+    iqRadar: true,
+  },
   console: {
     enabled: true,
     detail: true,
@@ -103,6 +107,7 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/playground': { section: 'chat', module: 'playground' },
   '/creative/image': { section: 'creative', module: 'image' },
   '/creative/video': { section: 'creative', module: 'video' },
+  '/iq-radar': { section: 'general', module: 'iqRadar' },
   '/dashboard': { section: 'console', module: 'detail' },
   '/dashboard/overview': { section: 'console', module: 'detail' },
   '/dashboard/models': { section: 'console', module: 'detail' },
