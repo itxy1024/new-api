@@ -37,12 +37,12 @@ export async function downloadImageIds(
 
   for (let index = 0; index < imageIds.length; index++) {
     try {
-      const blob = await getImageBlob(imageIds[index])
+      const source = await resolveImageSource(imageIds[index])
       const order = String(index + 1).padStart(2, '0')
       const fileName = multiple
-        ? `${fileNameBase}-${order}.${getBlobExtension(blob)}`
-        : `${fileNameBase}.${getBlobExtension(blob)}`
-      triggerDownload(blob, fileName)
+        ? `${fileNameBase}-${order}.${getImageExtension(source)}`
+        : `${fileNameBase}.${getImageExtension(source)}`
+      triggerSourceDownload(source, fileName)
       successCount++
       if (multiple) await delay(100)
     } catch (err) {
@@ -65,16 +65,20 @@ export async function downloadImageEntriesAsZip(
   const zipFiles: Record<string, Uint8Array | [Uint8Array, { mtime: Date }]> =
     {}
   const usedNames = new Set<string>()
+  const resolvedEntries: Array<{
+    source: ResolvedImageSource
+    fileName: string
+  }> = []
 
   for (let index = 0; index < entries.length; index++) {
     const entry = entries[index]
     try {
-      const blob = await getImageBlob(entry.imageId)
+      const source = await resolveImageSource(entry.imageId)
       const order = String(index + 1).padStart(2, '0')
       const base =
         sanitizeFileNamePart(entry.fileNameBase || `image-${order}`) ||
         `image-${order}`
-      const ext = getBlobExtension(blob)
+      const ext = getImageExtension(source)
       let fileName = `${base}.${ext}`
       let duplicateIndex = 2
       while (usedNames.has(fileName)) {
@@ -82,10 +86,7 @@ export async function downloadImageEntriesAsZip(
         duplicateIndex++
       }
       usedNames.add(fileName)
-      zipFiles[fileName] = [
-        new Uint8Array(await blob.arrayBuffer()),
-        { mtime: new Date() },
-      ]
+      resolvedEntries.push({ source, fileName })
       successCount++
     } catch (err) {
       console.error(err)
@@ -94,6 +95,20 @@ export async function downloadImageEntriesAsZip(
   }
 
   if (successCount > 0) {
+    if (resolvedEntries.some(({ source }) => source.remote)) {
+      for (const { source, fileName } of resolvedEntries) {
+        triggerSourceDownload(source, fileName)
+      }
+      return { successCount, failCount }
+    }
+    for (const { source, fileName } of resolvedEntries) {
+      const blob = source.blob
+      if (!blob) continue
+      zipFiles[fileName] = [
+        new Uint8Array(await blob.arrayBuffer()),
+        { mtime: new Date() },
+      ]
+    }
     const zipped = zipSync(zipFiles, { level: 6 })
     const buffer = zipped.buffer.slice(
       zipped.byteOffset,
@@ -128,7 +143,15 @@ export function getImageZipEntries(
   }))
 }
 
-async function getImageBlob(imageIdOrUrl: string): Promise<Blob> {
+interface ResolvedImageSource {
+  remote: boolean
+  src: string
+  blob?: Blob
+}
+
+async function resolveImageSource(
+  imageIdOrUrl: string
+): Promise<ResolvedImageSource> {
   let src = imageIdOrUrl
   if (
     !imageIdOrUrl.startsWith('data:') &&
@@ -138,10 +161,50 @@ async function getImageBlob(imageIdOrUrl: string): Promise<Blob> {
     src = (await ensureImageCached(imageIdOrUrl)) ?? imageIdOrUrl
   }
 
+  if (isRemoteImageUrl(src)) return { remote: true, src }
+
   const res = await fetch(src)
-  if (!res.ok && !src.startsWith('data:'))
+  if (!res.ok && !src.startsWith('data:')) {
     throw new Error(`读取图片失败：${imageIdOrUrl}`)
-  return await res.blob()
+  }
+  return { remote: false, src, blob: await res.blob() }
+}
+
+function isRemoteImageUrl(src: string) {
+  return /^https?:\/\//i.test(src)
+}
+
+function triggerSourceDownload(source: ResolvedImageSource, fileName: string) {
+  if (source.remote) {
+    triggerDirectDownload(source.src, fileName)
+    return
+  }
+  if (!source.blob) throw new Error(`读取图片失败：${source.src}`)
+  triggerDownload(source.blob, fileName)
+}
+
+function triggerDirectDownload(src: string, fileName: string) {
+  const a = document.createElement('a')
+  a.href = src
+  a.download = fileName
+  a.target = '_blank'
+  a.rel = 'noopener noreferrer'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
+function getImageExtension(source: ResolvedImageSource): string {
+  if (source.blob) return getBlobExtension(source.blob)
+
+  try {
+    const pathname = new URL(source.src).pathname
+    const extension = pathname.split('.').pop()?.toLowerCase()
+    if (extension && /^[a-z0-9]{2,5}$/.test(extension)) return extension
+  } catch {
+    // URL 格式异常时使用默认扩展名。
+  }
+  return 'png'
 }
 
 function triggerDownload(blob: Blob, fileName: string) {
