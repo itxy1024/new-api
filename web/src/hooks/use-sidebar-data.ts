@@ -68,12 +68,6 @@ export function useSidebarData(): SidebarData {
             icon: MessageSquare,
             type: 'chat-presets',
           },
-        ],
-      },
-      {
-        id: 'creative',
-        title: t('Creation Center'),
-        items: [
           {
             title: t('Creation Center'),
             icon: Image,

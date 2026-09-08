@@ -26,14 +26,17 @@ vi.mock('react-i18next', () => ({
 }))
 
 describe('useSidebarData', () => {
-  it('将图片和视频入口放在创作中心二级菜单中', () => {
+  it('将创作中心二级菜单放入聊天分类', () => {
     const { result } = renderHook(() => useSidebarData())
-    const creativeGroup = result.current.navGroups.find(
-      (group) => group.id === 'creative'
+    const chatGroup = result.current.navGroups.find(
+      (group) => group.id === 'chat'
     )
 
-    expect(creativeGroup?.items).toHaveLength(1)
-    expect(creativeGroup?.items[0]).toMatchObject({
+    expect(
+      result.current.navGroups.some((group) => group.id === 'creative')
+    ).toBe(false)
+    expect(chatGroup?.items).toHaveLength(3)
+    expect(chatGroup?.items[2]).toMatchObject({
       title: 'Creation Center',
       items: [
         { title: 'AI Image Generation', url: '/creative/image' },
