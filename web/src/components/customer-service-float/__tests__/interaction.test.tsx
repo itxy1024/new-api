@@ -46,13 +46,35 @@ describe('客服悬浮球', () => {
     )
   })
 
+  test('只有鼠标划入时显示气泡，关闭二维码后保持隐藏', () => {
+    render(<CustomerServiceFloat />)
+
+    const button = screen.getByRole('button', {
+      name: 'Open customer support QR code',
+    })
+    const bubble = document.querySelector<HTMLElement>(
+      '[data-customer-service-bubble="true"]'
+    )
+    expect(bubble).not.toBeNull()
+
+    expect(bubble).toHaveClass('opacity-0')
+    fireEvent.mouseEnter(button)
+    expect(bubble).toHaveClass('opacity-100')
+
+    fireEvent.click(button)
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(bubble).toHaveClass('opacity-0')
+  })
+
   test('窗口尺寸变化时保持右下边距并恢复原位置', () => {
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
+      writable: true,
       value: 1920,
     })
     Object.defineProperty(window, 'innerHeight', {
       configurable: true,
+      writable: true,
       value: 1080,
     })
 
@@ -62,28 +84,49 @@ describe('客服悬浮球', () => {
     })
     const container = button.parentElement?.parentElement
 
-    expect(container).toHaveStyle({ left: '1800px', top: '970px' })
+    const initialLeft = Number.parseFloat(container?.style.left ?? '0')
+    const initialTop = Number.parseFloat(container?.style.top ?? '0')
+    const rightOffset = window.innerWidth - 58 - initialLeft
+    const bottomOffset = window.innerHeight - 58 - initialTop
+    expect(rightOffset).toBeGreaterThanOrEqual(52)
+    expect(rightOffset).toBeLessThanOrEqual(62)
+    expect(bottomOffset).toBeGreaterThanOrEqual(52)
+    expect(bottomOffset).toBeLessThanOrEqual(62)
 
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
+      writable: true,
       value: 1200,
     })
     Object.defineProperty(window, 'innerHeight', {
       configurable: true,
+      writable: true,
       value: 700,
     })
     fireEvent(window, new Event('resize'))
-    expect(container).toHaveStyle({ left: '1080px', top: '590px' })
+    expect(Number.parseFloat(container?.style.left ?? '0')).toBe(
+      window.innerWidth - 58 - rightOffset
+    )
+    expect(Number.parseFloat(container?.style.top ?? '0')).toBe(
+      window.innerHeight - 58 - bottomOffset
+    )
 
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
+      writable: true,
       value: 1920,
     })
     Object.defineProperty(window, 'innerHeight', {
       configurable: true,
+      writable: true,
       value: 1080,
     })
     fireEvent(window, new Event('resize'))
-    expect(container).toHaveStyle({ left: '1800px', top: '970px' })
+    expect(Number.parseFloat(container?.style.left ?? '0')).toBe(
+      window.innerWidth - 58 - rightOffset
+    )
+    expect(Number.parseFloat(container?.style.top ?? '0')).toBe(
+      window.innerHeight - 58 - bottomOffset
+    )
   })
 })

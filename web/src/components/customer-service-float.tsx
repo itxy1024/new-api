@@ -35,7 +35,7 @@ const POSITION_STORAGE_KEY = 'customer-service-float-position-v2'
 const ORB_SIZE = 58
 const VIEWPORT_GUTTER = 16
 const DEFAULT_RIGHT_OFFSET = 62
-const DEFAULT_BOTTOM_OFFSET = 52
+const DEFAULT_BOTTOM_OFFSET = 62
 const EDGE_ANCHOR_THRESHOLD = 120
 
 type Position = {
@@ -87,6 +87,7 @@ export function CustomerServiceFloat() {
   const [position, setPosition] = useState<Position>(getInitialPosition)
   const [open, setOpen] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [hovered, setHovered] = useState(false)
   const dragRef = useRef<{
     pointerId: number
     startX: number
@@ -196,12 +197,18 @@ export function CustomerServiceFloat() {
         data-dragging={dragging ? 'true' : 'false'}
         style={{ left: position.x, top: position.y }}
       >
-        <div className='group relative'>
+        <div
+          className='group relative'
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+        >
           <div
+            data-customer-service-bubble='true'
             className={cn(
               'pointer-events-none absolute right-0 bottom-[calc(100%+0.65rem)] w-[min(18rem,calc(100vw-2rem))] origin-bottom-right transition-all duration-200',
-              'translate-y-1 scale-95 opacity-0 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:scale-100 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:scale-100 group-focus-within:opacity-100',
-              dragging && 'opacity-0'
+              hovered && !dragging
+                ? 'pointer-events-auto translate-y-0 scale-100 opacity-100'
+                : 'translate-y-1 scale-95 opacity-0'
             )}
           >
             <div className='relative rounded-2xl border border-white/20 bg-slate-950/95 p-3 text-white shadow-2xl backdrop-blur-md'>
@@ -247,7 +254,13 @@ export function CustomerServiceFloat() {
         </div>
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen)
+          if (!nextOpen) setHovered(false)
+        }}
+      >
         <DialogContent className='max-w-md text-center sm:max-w-md'>
           <DialogHeader className='items-center'>
             <DialogTitle>{t('Scan to contact support')}</DialogTitle>
