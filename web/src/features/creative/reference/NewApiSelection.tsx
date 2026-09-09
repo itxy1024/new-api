@@ -24,7 +24,7 @@ type KeyOption = {
 type ModelOption = { id: string; group?: string }
 
 const KEY_PAGE_SIZE = 100
-const DEFAULT_IMAGE_MODEL = 'gpt-image-2'
+const DEFAULT_IMAGE_MODEL_KEYWORD = 'image'
 const MODEL_SCAN_CONCURRENCY = 4
 
 const UNAVAILABLE_KEY_ERRORS = new Set([
@@ -234,7 +234,8 @@ export default function NewApiSelection() {
 
           while (settled[nextDefaultCandidate]) {
             const defaultModel = modelResults[nextDefaultCandidate]?.find(
-              (item) => item.id === DEFAULT_IMAGE_MODEL
+              (item) =>
+                item.id.toLowerCase().includes(DEFAULT_IMAGE_MODEL_KEYWORD)
             )
             if (defaultModel) {
               const defaultKeyId = String(next[nextDefaultCandidate].id)

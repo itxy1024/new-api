@@ -145,7 +145,7 @@ describe('图片生成页的模型分组选择', () => {
 
   afterEach(cleanup)
 
-  test('遍历全部 Key 后默认选择第一个支持 gpt-image-2 的 Key 和模型', async () => {
+  test('遍历全部 Key 后默认选择第一个模型名称包含 image 的 Key 和模型', async () => {
     mocks.apiGet.mockImplementation(
       (url: string, config?: { params?: { key_id?: string; p?: number } }) => {
         if (url === '/api/token/') {
@@ -173,8 +173,8 @@ describe('图片生成页的模型分组选择', () => {
           data: {
             data:
               keyId === '8'
-                ? [{ id: 'gpt-image-2', group: 'image' }]
-                : [{ id: 'image-default', group: 'default' }],
+                ? [{ id: 'vendor-image-v2', group: 'image' }]
+                : [{ id: 'text-default', group: 'default' }],
           },
         })
       }
@@ -185,15 +185,15 @@ describe('图片生成页的模型分组选择', () => {
     await waitFor(() => {
       expect(screen.getByTestId('selected-key')).toHaveTextContent('8')
       expect(screen.getByTestId('selected-model')).toHaveTextContent(
-        'image\x00gpt-image-2'
+        'image\x00vendor-image-v2'
       )
     })
     expect(screen.getByTestId('visible-models')).toHaveTextContent(
-      'gpt-image-2'
+      'vendor-image-v2'
     )
     expect(mocks.setNewApiSelection).toHaveBeenCalledWith({
       keyId: 8,
-      model: 'gpt-image-2',
+      model: 'vendor-image-v2',
       group: 'image',
     })
     expect(mocks.apiGet).toHaveBeenCalledWith('/api/token/', {
@@ -201,7 +201,7 @@ describe('图片生成页的模型分组选择', () => {
     })
   })
 
-  test('多个 Key 都支持 gpt-image-2 时按 Key 原始顺序选择第一个', async () => {
+  test('多个 Key 都有名称包含 image 的模型时按 Key 原始顺序选择第一个', async () => {
     mocks.apiGet.mockImplementation(
       (url: string, config?: { params?: { key_id?: string } }) => {
         if (url === '/api/token/') {
@@ -221,7 +221,10 @@ describe('图片生成页的模型分组选择', () => {
           data: {
             data: [
               {
-                id: 'gpt-image-2',
+                id:
+                  String(config?.params?.key_id) === '7'
+                    ? 'VENDOR-IMAGE-A'
+                    : 'vendor-image-b',
                 group: String(config?.params?.key_id),
               },
             ],
@@ -235,12 +238,40 @@ describe('图片生成页的模型分组选择', () => {
     await waitFor(() => {
       expect(screen.getByTestId('selected-key')).toHaveTextContent('7')
       expect(screen.getByTestId('selected-model')).toHaveTextContent(
-        '7\x00gpt-image-2'
+        '7\x00VENDOR-IMAGE-A'
       )
     })
   })
 
-  test('没有 gpt-image-2 时保持空选择，并允许手动选择 Key 和模型', async () => {
+  test('没有名称包含 image 的模型时保持空选择，并允许手动选择 Key 和模型', async () => {
+    mocks.apiGet.mockImplementation(
+      (url: string, config?: { params?: { key_id?: string } }) => {
+        if (url === '/api/token/') {
+          return Promise.resolve({
+            data: {
+              data: {
+                items: [
+                  { id: 7, name: '绘图 Key', status: 1 },
+                  { id: 8, name: '备用 Key', status: 1 },
+                ],
+              },
+            },
+          })
+        }
+        const keyId = String(config?.params?.key_id)
+        return Promise.resolve({
+          data: {
+            data: [
+              {
+                id: keyId === '8' ? 'vision-backup' : 'vision-default',
+                group: keyId === '8' ? 'backup' : 'default',
+              },
+            ],
+          },
+        })
+      }
+    )
+
     render(<NewApiSelection />)
 
     await waitFor(() => {
@@ -262,17 +293,17 @@ describe('图片生成页的模型分组选择', () => {
     await waitFor(() => {
       expect(screen.getByTestId('selected-key')).toHaveTextContent('7')
       expect(screen.getByTestId('visible-models')).toHaveTextContent(
-        'image-default'
+        'vision-default'
       )
     })
     expect(screen.getByTestId('selected-model')).toBeEmptyDOMElement()
 
-    fireEvent.click(screen.getByRole('button', { name: 'image-default' }))
+    fireEvent.click(screen.getByRole('button', { name: 'vision-default' }))
 
     await waitFor(() => {
       expect(mocks.setNewApiSelection).toHaveBeenCalledWith({
         keyId: 7,
-        model: 'image-default',
+        model: 'vision-default',
         group: 'default',
       })
     })
