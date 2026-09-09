@@ -90,8 +90,8 @@ describe('客服悬浮球', () => {
     const bottomOffset = window.innerHeight - 58 - initialTop
     expect(rightOffset).toBeGreaterThanOrEqual(52)
     expect(rightOffset).toBeLessThanOrEqual(62)
-    expect(bottomOffset).toBeGreaterThanOrEqual(52)
-    expect(bottomOffset).toBeLessThanOrEqual(62)
+    expect(bottomOffset).toBeGreaterThanOrEqual(72)
+    expect(bottomOffset).toBeLessThanOrEqual(82)
 
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,

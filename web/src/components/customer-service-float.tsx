@@ -35,7 +35,7 @@ const POSITION_STORAGE_KEY = 'customer-service-float-position-v2'
 const ORB_SIZE = 58
 const VIEWPORT_GUTTER = 16
 const DEFAULT_RIGHT_OFFSET = 62
-const DEFAULT_BOTTOM_OFFSET = 62
+const DEFAULT_BOTTOM_OFFSET = 82
 const EDGE_ANCHOR_THRESHOLD = 120
 
 type Position = {
@@ -153,7 +153,7 @@ export function CustomerServiceFloat() {
       originY: position.y,
     }
     draggedRef.current = false
-    setDragging(true)
+    setHovered(false)
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
@@ -163,7 +163,10 @@ export function CustomerServiceFloat() {
 
     const deltaX = event.clientX - drag.startX
     const deltaY = event.clientY - drag.startY
-    if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) draggedRef.current = true
+    if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) {
+      draggedRef.current = true
+      setDragging(true)
+    }
     const next = clampPosition({
       x: drag.originX + deltaX,
       y: drag.originY + deltaY,
