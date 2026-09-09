@@ -455,41 +455,46 @@ export default function OssSettingsDialog(props: OssSettingsDialogProps) {
                           />
                         </Field>
                       </FieldGroup>
+                      <div className='mt-5 flex justify-end'>
+                        <Button
+                          type='button'
+                          variant='outline'
+                          disabled={loading || saving || testing || !enabled}
+                          onClick={handleTest}
+                        >
+                          {testing && <Spinner data-icon='inline-start' />}
+                          {t('Test connection')}
+                        </Button>
+                      </div>
                     </form>
                   )}
                 </>
               )}
             </div>
             <DialogFooter className='m-0 shrink-0 rounded-none border-t bg-gray-50/50 p-4 dark:bg-white/[0.02]'>
-              {activeTab === 'basic' ? (
-                <Button
-                  type='button'
-                  variant='outline'
-                  onClick={() => props.onOpenChange(false)}
-                >
-                  {t('Cancel')}
-                </Button>
-              ) : (
-                <>
-                  <Button
-                    type='button'
-                    variant='outline'
-                    disabled={loading || saving || testing || !enabled}
-                    onClick={handleTest}
-                  >
-                    {testing && <Spinner data-icon='inline-start' />}
-                    {t('Test connection')}
-                  </Button>
-                  <Button
-                    type='submit'
-                    form='creative-oss-form'
-                    disabled={loading || saving || testing}
-                  >
-                    {saving && <Spinner data-icon='inline-start' />}
-                    {t('Save')}
-                  </Button>
-                </>
-              )}
+              <Button
+                type='button'
+                variant='outline'
+                disabled={saving || testing}
+                onClick={() => props.onOpenChange(false)}
+              >
+                {t('Cancel')}
+              </Button>
+              <Button
+                type={activeTab === 'storage' ? 'submit' : 'button'}
+                form={activeTab === 'storage' ? 'creative-oss-form' : undefined}
+                disabled={
+                  activeTab === 'storage' && (loading || saving || testing)
+                }
+                onClick={
+                  activeTab === 'basic'
+                    ? () => props.onOpenChange(false)
+                    : undefined
+                }
+              >
+                {saving && <Spinner data-icon='inline-start' />}
+                {t('Save')}
+              </Button>
             </DialogFooter>
           </div>
         </div>

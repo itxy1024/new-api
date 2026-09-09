@@ -62,11 +62,9 @@ describe('OSS 设置弹窗', () => {
       screen.getByRole('button', { name: 'Basic settings' })
     ).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeVisible()
     expect(
       screen.queryByRole('button', { name: 'Test connection' })
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: 'Save' })
     ).not.toBeInTheDocument()
     const storageButton = screen.getByRole('button', {
       name: 'Storage management',
@@ -74,6 +72,9 @@ describe('OSS 设置弹窗', () => {
     expect(storageButton).not.toHaveAttribute('aria-current', 'page')
     await user.click(storageButton)
     expect(storageButton).toHaveAttribute('aria-current', 'page')
+    expect(
+      screen.getByRole('button', { name: 'Test connection' })
+    ).toBeVisible()
     expect(
       screen.getByRole('button', { name: 'Storage management' })
     ).toBeVisible()
