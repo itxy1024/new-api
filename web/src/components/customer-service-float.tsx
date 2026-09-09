@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Headset, MessageCircle } from 'lucide-react'
+import { MessageCircle } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -154,7 +154,8 @@ export function CustomerServiceFloat() {
   return (
     <>
       <div
-        className='pointer-events-none fixed z-40'
+        className='customer-service-float pointer-events-none fixed z-40'
+        data-dragging={dragging ? 'true' : 'false'}
         style={{ left: position.x, top: position.y }}
       >
         <div className='group relative'>
@@ -187,7 +188,7 @@ export function CustomerServiceFloat() {
 
           <button
             type='button'
-            className='pointer-events-auto relative flex size-[58px] touch-none cursor-grab items-center justify-center rounded-full border border-white/60 bg-[conic-gradient(from_210deg,#22d3ee,#34d399,#facc15,#38bdf8,#22d3ee)] shadow-[0_20px_44px_rgba(14,165,233,0.4),inset_0_-10px_22px_rgba(15,23,42,0.16)] transition-transform hover:-translate-y-1 hover:scale-105 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-300/50 active:cursor-grabbing'
+            className='customer-service-orb pointer-events-auto relative flex size-[58px] touch-none cursor-grab items-center justify-center rounded-full border-0 border-white/60 shadow-[0_20px_44px_rgba(14,165,233,0.4),inset_0_-10px_22px_rgba(15,23,42,0.16)] transition-transform hover:-translate-y-1 hover:scale-105 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-300/50 active:cursor-grabbing'
             aria-label={t('Open customer support QR code')}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
@@ -195,26 +196,32 @@ export function CustomerServiceFloat() {
             onPointerCancel={handlePointerUp}
             onClick={handleClick}
           >
-            <span className='absolute inset-1 flex items-center justify-center rounded-full bg-slate-950/80'>
-              <Headset className='size-6 text-white drop-shadow' aria-hidden='true' />
+            <span className='customer-service-wing customer-service-wing-left' />
+            <span className='customer-service-wing customer-service-wing-right' />
+            <span className='customer-service-spark customer-service-spark-one' />
+            <span className='customer-service-spark customer-service-spark-two' />
+            <span className='customer-service-face'>
+              <span className='customer-service-eye customer-service-eye-left' />
+              <span className='customer-service-eye customer-service-eye-right' />
+              <span className='customer-service-smile' />
             </span>
           </button>
         </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className='max-w-sm text-center sm:max-w-sm'>
+        <DialogContent className='max-w-md text-center sm:max-w-md'>
           <DialogHeader className='items-center'>
             <DialogTitle>{t('Scan to contact support')}</DialogTitle>
             <DialogDescription>
               {t('Use WeChat to scan the QR code and contact customer support.')}
             </DialogDescription>
           </DialogHeader>
-          <div className='mx-auto mt-2 rounded-2xl border bg-white p-3 shadow-sm'>
+          <div className='mx-auto mt-2 w-[min(19rem,calc(100vw-3rem))] rounded-2xl border bg-white p-3 shadow-sm'>
             <img
               src={CUSTOMER_SERVICE_QR_URL}
               alt={t('Customer support QR code')}
-              className='size-64 max-w-full object-contain'
+              className='aspect-square w-full rounded-2xl object-contain'
             />
           </div>
         </DialogContent>
