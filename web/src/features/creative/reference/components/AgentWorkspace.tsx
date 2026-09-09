@@ -797,7 +797,7 @@ export default function AgentWorkspace() {
   return (
     <main
       data-agent-workspace
-      className='safe-area-x relative mx-auto flex min-h-[calc(100vh-100px)] max-w-7xl flex-col overflow-visible px-3 transition-all duration-300 lg:flex-row lg:gap-3 lg:px-0'
+      className='safe-area-x relative mx-auto flex min-h-[calc(100vh-100px)] max-w-[1800px] flex-col overflow-visible px-3 transition-all duration-300 lg:flex-row lg:gap-3 lg:px-0'
     >
       {/* Pull Down Indicator */}
       {pullDownOffset > 0 && !agentMobileHeaderVisible && (

@@ -72,7 +72,7 @@ export default function Header() {
         data-no-drag-select
         className={`safe-area-top sticky top-0 z-40 w-full border-b border-gray-200 bg-white/80 backdrop-blur transition-transform duration-300 ease-in-out dark:border-white/[0.08] dark:bg-gray-950/80 ${agentEnabled && appMode === 'agent' && !agentMobileHeaderVisible ? '-translate-y-full sm:translate-y-0' : 'translate-y-0'}`}
       >
-        <div className='safe-area-x safe-header-inner relative mx-auto flex max-w-7xl items-center justify-between'>
+        <div className='safe-area-x safe-header-inner relative mx-auto flex max-w-[1800px] items-center justify-between'>
           <div className='flex min-w-0 flex-1 items-center gap-2 pr-2'>
             <h1 className='relative mr-2 inline-flex min-w-0 items-start'>
               <span className='truncate text-[17px] font-bold tracking-tight text-gray-800 sm:text-lg dark:text-gray-100'>

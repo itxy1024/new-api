@@ -72,7 +72,7 @@ export default function ReferenceCreativeApp() {
         <Header />
         {appMode === 'gallery' ? (
           <main data-home-main data-drag-select-surface className='pb-48'>
-            <div className='safe-area-x mx-auto max-w-7xl'>
+            <div className='safe-area-x mx-auto max-w-[1800px]'>
               <SearchBar />
               {filterFavorite && !activeFavoriteCollectionId ? (
                 <FavoriteCollectionsView />
@@ -82,7 +82,7 @@ export default function ReferenceCreativeApp() {
             </div>
           </main>
         ) : (
-          <main className='safe-area-x mx-auto max-w-7xl pt-24 pb-48'>
+          <main className='safe-area-x mx-auto max-w-[1800px] pt-24 pb-48'>
             <div className='rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800'>
               Agent 模式在 NewAPI 创作中心中不可用，请切换回画廊。
             </div>

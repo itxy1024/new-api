@@ -59,8 +59,17 @@ describe('OSS 设置弹窗', () => {
     })
     expect(storageNavigation).toHaveClass('sm:w-48')
     expect(
-      screen.getByRole('button', { name: 'Storage management' })
+      screen.getByRole('button', { name: 'Basic settings' })
     ).toHaveAttribute('aria-current', 'page')
+    const storageButton = screen.getByRole('button', {
+      name: 'Storage management',
+    })
+    expect(storageButton).not.toHaveAttribute('aria-current', 'page')
+    await user.click(storageButton)
+    expect(storageButton).toHaveAttribute('aria-current', 'page')
+    expect(
+      screen.getByRole('button', { name: 'Storage management' })
+    ).toBeVisible()
 
     const endpoint = await screen.findByLabelText('Endpoint')
     expect(screen.getByLabelText('Access Key')).toHaveValue('')
