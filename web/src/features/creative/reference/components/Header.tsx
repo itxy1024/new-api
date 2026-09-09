@@ -206,6 +206,7 @@ export default function Header() {
         )}
       </header>
       <OssSettingsDialog
+        key={showOssSettings ? 'open' : 'closed'}
         open={showOssSettings}
         onOpenChange={setShowOssSettings}
       />

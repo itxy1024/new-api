@@ -65,8 +65,9 @@ const EMPTY_VALUES: OssFormValues = {
 export default function OssSettingsDialog(props: OssSettingsDialogProps) {
   const { t } = useTranslation()
   const settings = useStore((state) => state.settings)
-  const commitSettings = useStore((state) => state.setSettings)
+  const setSettings = useStore((state) => state.setSettings)
   const [activeTab, setActiveTab] = useState<'basic' | 'storage'>('basic')
+  const [draftSettings, setDraftSettings] = useState(settings)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -125,10 +126,6 @@ export default function OssSettingsDialog(props: OssSettingsDialogProps) {
   const enabled = useWatch({ control: form.control, name: 'enabled' })
 
   useEffect(() => {
-    if (props.open) setActiveTab('basic')
-  }, [props.open])
-
-  useEffect(() => {
     if (!props.open) return
     let active = true
     void getCreativeStorageConfig()
@@ -167,24 +164,33 @@ export default function OssSettingsDialog(props: OssSettingsDialogProps) {
     secret_key: values.secretKey.trim(),
   })
 
-  const handleSave = form.handleSubmit(async (values) => {
+  const handleSave = async () => {
     setSaving(true)
     try {
-      await updateCreativeStorageConfig(toInput(values))
-      setAccessKeyConfigured(
-        Boolean(values.accessKey.trim()) || accessKeyConfigured
-      )
-      setSecretKeyConfigured(
-        Boolean(values.secretKey.trim()) || secretKeyConfigured
-      )
-      form.setValue('accessKey', '')
-      form.setValue('secretKey', '')
-      toast.success(t('OSS settings saved'))
-      props.onOpenChange(false)
+      // 存储表单没有改动时不请求 OSS 接口，基础配置也可以独立保存。
+      if (form.formState.isDirty) {
+        const valid = await form.trigger()
+        if (!valid) {
+          setActiveTab('storage')
+          return
+        }
+        const values = form.getValues()
+        await updateCreativeStorageConfig(toInput(values))
+        setAccessKeyConfigured(
+          Boolean(values.accessKey.trim()) || accessKeyConfigured
+        )
+        setSecretKeyConfigured(
+          Boolean(values.secretKey.trim()) || secretKeyConfigured
+        )
+        form.reset({ ...values, accessKey: '', secretKey: '' })
+      }
+
+      setSettings(draftSettings)
+      toast.success(t('Saved successfully'))
     } finally {
       setSaving(false)
     }
-  })
+  }
 
   const handleTest = form.handleSubmit(async (values) => {
     setTesting(true)
@@ -254,8 +260,8 @@ export default function OssSettingsDialog(props: OssSettingsDialogProps) {
             <div className='min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6'>
               {activeTab === 'basic' ? (
                 <BasicSettingsTab
-                  draft={settings}
-                  commitSettings={commitSettings}
+                  draft={draftSettings}
+                  commitSettings={setDraftSettings}
                 />
               ) : (
                 <>
@@ -274,7 +280,13 @@ export default function OssSettingsDialog(props: OssSettingsDialogProps) {
                       <Spinner />
                     </div>
                   ) : (
-                    <form id='creative-oss-form' onSubmit={handleSave}>
+                    <form
+                      id='creative-oss-form'
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        void handleSave()
+                      }}
+                    >
                       <FieldGroup>
                         <Field orientation='horizontal'>
                           <div className='flex flex-1 flex-col gap-0.5'>
@@ -481,16 +493,11 @@ export default function OssSettingsDialog(props: OssSettingsDialogProps) {
                 {t('Cancel')}
               </Button>
               <Button
-                type={activeTab === 'storage' ? 'submit' : 'button'}
-                form={activeTab === 'storage' ? 'creative-oss-form' : undefined}
+                type='button'
                 disabled={
-                  activeTab === 'storage' && (loading || saving || testing)
+                  saving || testing || (activeTab === 'storage' && loading)
                 }
-                onClick={
-                  activeTab === 'basic'
-                    ? () => props.onOpenChange(false)
-                    : undefined
-                }
+                onClick={() => void handleSave()}
               >
                 {saving && <Spinner data-icon='inline-start' />}
                 {t('Save')}

@@ -2,6 +2,8 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useStore } from '../store'
+
 const mocks = vi.hoisted(() => ({
   getConfig: vi.fn(),
   testConfig: vi.fn(),
@@ -27,7 +29,10 @@ const { default: OssSettingsDialog } =
   await import('../components/OssSettingsDialog')
 
 describe('OSS 设置弹窗', () => {
+  let initialKeyword = ''
+
   beforeEach(() => {
+    initialKeyword = useStore.getState().settings.defaultImageModelKeyword
     mocks.getConfig.mockResolvedValue({
       enabled: true,
       endpoint: 'https://oss.example.com',
@@ -44,6 +49,9 @@ describe('OSS 设置弹窗', () => {
   })
 
   afterEach(() => {
+    useStore.getState().setSettings({
+      defaultImageModelKeyword: initialKeyword,
+    })
     cleanup()
     vi.clearAllMocks()
   })
@@ -66,6 +74,18 @@ describe('OSS 设置弹窗', () => {
     expect(
       screen.queryByRole('button', { name: 'Test connection' })
     ).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+    })
+    const keywordInput = screen.getByLabelText('Default image model keyword')
+    await user.clear(keywordInput)
+    await user.type(keywordInput, 'vision')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(mocks.success).toHaveBeenCalledTimes(1))
+    expect(useStore.getState().settings.defaultImageModelKeyword).toBe('vision')
+    expect(mocks.updateConfig).not.toHaveBeenCalled()
+    expect(onOpenChange).not.toHaveBeenCalled()
+    expect(mocks.success).toHaveBeenCalledWith('Saved successfully')
     const storageButton = screen.getByRole('button', {
       name: 'Storage management',
     })
@@ -103,6 +123,7 @@ describe('OSS 设置弹窗', () => {
 
     await user.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => {
+      expect(mocks.updateConfig).toHaveBeenCalledTimes(1)
       expect(mocks.updateConfig).toHaveBeenCalledWith(
         expect.objectContaining({
           enabled: true,
@@ -110,7 +131,7 @@ describe('OSS 设置弹窗', () => {
           region: 'cn-test-1',
         })
       )
-      expect(onOpenChange).toHaveBeenCalledWith(false)
+      expect(onOpenChange).not.toHaveBeenCalled()
     })
   })
 })
