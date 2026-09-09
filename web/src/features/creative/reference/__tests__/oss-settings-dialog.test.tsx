@@ -61,6 +61,13 @@ describe('OSS 设置弹窗', () => {
     expect(
       screen.getByRole('button', { name: 'Basic settings' })
     ).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: 'Test connection' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Save' })
+    ).not.toBeInTheDocument()
     const storageButton = screen.getByRole('button', {
       name: 'Storage management',
     })
