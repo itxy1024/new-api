@@ -45,4 +45,45 @@ describe('客服悬浮球', () => {
       'https://lebozntc-test-oss.oss-cn-shanghai.aliyuncs.com/codex/16.png'
     )
   })
+
+  test('窗口尺寸变化时保持右下边距并恢复原位置', () => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 1920,
+    })
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 1080,
+    })
+
+    render(<CustomerServiceFloat />)
+    const button = screen.getByRole('button', {
+      name: 'Open customer support QR code',
+    })
+    const container = button.parentElement?.parentElement
+
+    expect(container).toHaveStyle({ left: '1800px', top: '970px' })
+
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 1200,
+    })
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 700,
+    })
+    fireEvent(window, new Event('resize'))
+    expect(container).toHaveStyle({ left: '1080px', top: '590px' })
+
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 1920,
+    })
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 1080,
+    })
+    fireEvent(window, new Event('resize'))
+    expect(container).toHaveStyle({ left: '1800px', top: '970px' })
+  })
 })

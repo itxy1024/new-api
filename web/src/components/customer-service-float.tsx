@@ -31,9 +31,12 @@ import { cn } from '@/lib/utils'
 
 const CUSTOMER_SERVICE_QR_URL =
   'https://lebozntc-test-oss.oss-cn-shanghai.aliyuncs.com/codex/16.png'
-const POSITION_STORAGE_KEY = 'customer-service-float-position'
+const POSITION_STORAGE_KEY = 'customer-service-float-position-v2'
 const ORB_SIZE = 58
 const VIEWPORT_GUTTER = 16
+const DEFAULT_RIGHT_OFFSET = 62
+const DEFAULT_BOTTOM_OFFSET = 52
+const EDGE_ANCHOR_THRESHOLD = 120
 
 type Position = {
   x: number
@@ -74,8 +77,8 @@ function getInitialPosition(): Position {
   }
 
   return clampPosition({
-    x: window.innerWidth - ORB_SIZE - VIEWPORT_GUTTER,
-    y: window.innerHeight - ORB_SIZE - VIEWPORT_GUTTER,
+    x: window.innerWidth - ORB_SIZE - DEFAULT_RIGHT_OFFSET,
+    y: window.innerHeight - ORB_SIZE - DEFAULT_BOTTOM_OFFSET,
   })
 }
 
@@ -92,14 +95,46 @@ export function CustomerServiceFloat() {
     originY: number
   } | null>(null)
   const draggedRef = useRef(false)
+  const positionRef = useRef(position)
+  const viewportRef = useRef({
+    width: typeof window === 'undefined' ? 0 : window.innerWidth,
+    height: typeof window === 'undefined' ? 0 : window.innerHeight,
+  })
 
   useEffect(() => {
-    const handleResize = () => setPosition((current) => clampPosition(current))
+    const handleResize = () => {
+      const previousViewport = viewportRef.current
+      const current = positionRef.current
+      const nextViewport = {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      }
+      const rightOffset =
+        previousViewport.width - ORB_SIZE - current.x
+      const bottomOffset =
+        previousViewport.height - ORB_SIZE - current.y
+      const next = clampPosition({
+        x:
+          rightOffset <= EDGE_ANCHOR_THRESHOLD
+            ? nextViewport.width - ORB_SIZE - rightOffset
+            : current.x,
+        y:
+          bottomOffset <= EDGE_ANCHOR_THRESHOLD
+            ? nextViewport.height - ORB_SIZE - bottomOffset
+            : current.y,
+      })
+
+      viewportRef.current = nextViewport
+      positionRef.current = next
+      setPosition(next)
+    }
+
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
   useEffect(() => {
+    positionRef.current = position
     try {
       window.localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(position))
     } catch {
@@ -128,9 +163,12 @@ export function CustomerServiceFloat() {
     const deltaX = event.clientX - drag.startX
     const deltaY = event.clientY - drag.startY
     if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) draggedRef.current = true
-    setPosition(
-      clampPosition({ x: drag.originX + deltaX, y: drag.originY + deltaY })
-    )
+    const next = clampPosition({
+      x: drag.originX + deltaX,
+      y: drag.originY + deltaY,
+    })
+    positionRef.current = next
+    setPosition(next)
   }
 
   const handlePointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
