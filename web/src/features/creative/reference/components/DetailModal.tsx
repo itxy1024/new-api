@@ -3,7 +3,6 @@ import { useEffect, useState, useMemo, useRef } from 'react'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { useTooltip } from '../hooks/useTooltip'
-import { getApiProviderLabel } from '../lib/apiProfiles'
 import { createMaskPreviewDataUrl } from '../lib/canvasImage'
 import {
   copyImageSourceToClipboard,
@@ -362,14 +361,7 @@ export default function DetailModal() {
     (!currentRevisedPrompt || showRevisedPrompt) &&
     !hasHandledPromptWarning
   )
-  const taskProviderName = taskProvider
-    ? getApiProviderLabel(settings, taskProvider)
-    : '未知'
-  const taskProfileName = task.apiProfileName || '未知'
-  const taskModel = task.apiModel || '未知'
-  const showSourceInfo = Boolean(
-    task.apiProvider || task.apiProfileName || task.apiModel
-  )
+  const taskModel = task.apiModel?.trim() || '未知模型'
   const isFalReconnecting = task.status === 'error' && task.falRecoverable
   const isCustomReconnecting = task.status === 'error' && task.customRecoverable
   const rawImageUrls = task.rawImageUrls ?? []
@@ -1337,21 +1329,15 @@ export default function DetailModal() {
             <h3 className='mb-2 text-xs font-medium tracking-wider text-gray-400 uppercase dark:text-gray-500'>
               参数配置
             </h3>
-            {showSourceInfo && (
-              <div className='mb-2 min-w-0 overflow-hidden rounded-lg bg-gray-50 px-3 py-2 text-xs dark:bg-white/[0.03]'>
-                <span className='text-gray-400 dark:text-gray-500'>来源</span>
-                <br />
-                <div className='hide-scrollbar mask-edge-r mt-0.5 overflow-x-auto pr-2 whitespace-nowrap'>
-                  <span className='font-medium text-gray-700 dark:text-gray-200'>
-                    {taskProviderName}
-                  </span>
-                  <span className='text-gray-400 dark:text-gray-500'>
-                    {' '}
-                    · {taskProfileName} · {taskModel}
-                  </span>
-                </div>
+            <div className='mb-2 min-w-0 overflow-hidden rounded-lg bg-gray-50 px-3 py-2 text-xs dark:bg-white/[0.03]'>
+              <span className='text-gray-400 dark:text-gray-500'>模型</span>
+              <br />
+              <div className='hide-scrollbar mask-edge-r mt-0.5 overflow-x-auto pr-2 whitespace-nowrap'>
+                <span className='font-medium text-gray-700 dark:text-gray-200'>
+                  {taskModel}
+                </span>
               </div>
-            )}
+            </div>
             <div className='mb-4 grid min-w-0 grid-cols-2 gap-2 text-xs'>
               <div className='min-w-0 overflow-hidden rounded-lg bg-gray-50 px-3 py-2 dark:bg-white/[0.03]'>
                 <span className='text-gray-400 dark:text-gray-500'>尺寸</span>

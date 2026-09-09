@@ -1161,6 +1161,10 @@ export function normalizeSettings(
     agentApiConfigMode,
     agentTextProfileId,
     agentImageProfileId,
+    defaultImageModelKeyword:
+      typeof record.defaultImageModelKeyword === 'string'
+        ? record.defaultImageModelKeyword.trim()
+        : 'image',
     profiles,
     activeProfileId,
   }
@@ -1936,4 +1940,5 @@ export const DEFAULT_SETTINGS: AppSettings = normalizeSettings({
   agentApiConfigMode: 'off',
   agentTextProfileId: null,
   agentImageProfileId: null,
+  defaultImageModelKeyword: 'image',
 })

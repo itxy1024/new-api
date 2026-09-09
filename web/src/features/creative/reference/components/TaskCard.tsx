@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
 
-import { DEFAULT_IMAGES_MODEL, DEFAULT_FAL_MODEL } from '../lib/apiProfiles'
 import {
   ensureImageThumbnailCached,
   subscribeImageThumbnail,
@@ -15,7 +14,7 @@ import { formatImageRatio } from '../lib/size'
 import { isAgentTaskPromptPending } from '../lib/taskPromptDisplay'
 import { useStore, retryTask } from '../store'
 import type { TaskRecord } from '../types'
-import { CodeIcon, TransparentBgIcon } from './icons'
+import { TransparentBgIcon } from './icons'
 import ViewportTooltip from './ViewportTooltip'
 
 interface Props {
@@ -395,9 +394,7 @@ export default function TaskCard({
   )
   const hasPartialOutputFailure = task.status === 'done' && outputErrorCount > 0
 
-  const defaultModelForProvider =
-    task.apiProvider === 'fal' ? DEFAULT_FAL_MODEL : DEFAULT_IMAGES_MODEL
-  const showModel = task.apiModel && task.apiModel !== defaultModelForProvider
+  const taskModel = task.apiModel?.trim() || '未知模型'
   const isInterrupted = task.status === 'error' && task.error === '已停止生成。'
 
   return (
@@ -700,42 +697,26 @@ export default function TaskCard({
                 onTouchEnd={(e) => e.stopPropagation()}
                 onTouchCancel={(e) => e.stopPropagation()}
               >
-                {/* API Name */}
-                {(task.apiProfileName || task.apiProvider) && (
-                  <span
-                    className='flex flex-shrink-0 items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600 dark:bg-white/[0.04] dark:text-gray-300'
-                    title={task.apiProfileName || task.apiProvider}
-                  >
-                    <CodeIcon className='h-3 w-3 flex-shrink-0 text-gray-400' />
-                    <span className='max-w-[8rem] truncate'>
-                      {task.apiProfileName || task.apiProvider}
-                    </span>
-                  </span>
-                )}
                 {/* Model */}
-                {showModel && (
-                  <span
-                    className='flex flex-shrink-0 items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600 dark:bg-white/[0.04] dark:text-gray-300'
-                    title={task.apiModel}
+                <span
+                  className='flex flex-shrink-0 items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600 dark:bg-white/[0.04] dark:text-gray-300'
+                  title={taskModel}
+                >
+                  <svg
+                    className='h-3 w-3 flex-shrink-0 text-gray-400'
+                    fill='none'
+                    stroke='currentColor'
+                    viewBox='0 0 24 24'
                   >
-                    <svg
-                      className='h-3 w-3 flex-shrink-0 text-gray-400'
-                      fill='none'
-                      stroke='currentColor'
-                      viewBox='0 0 24 24'
-                    >
-                      <path
-                        strokeLinecap='round'
-                        strokeLinejoin='round'
-                        strokeWidth={2}
-                        d='M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z'
-                      />
-                    </svg>
-                    <span className='max-w-[8rem] truncate'>
-                      {task.apiModel}
-                    </span>
-                  </span>
-                )}
+                    <path
+                      strokeLinecap='round'
+                      strokeLinejoin='round'
+                      strokeWidth={2}
+                      d='M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z'
+                    />
+                  </svg>
+                  <span className='max-w-[8rem] truncate'>{taskModel}</span>
+                </span>
                 {hasDuration && duration && (
                   <span
                     className='flex flex-shrink-0 items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600 dark:bg-white/[0.04] dark:text-gray-300'

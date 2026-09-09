@@ -40,6 +40,7 @@ describe('生成结果卡片元数据', () => {
       prompt: '生成一张图片',
       params: { ...DEFAULT_PARAMS },
       apiProfileName: '小鱼API',
+      apiModel: 'gpt-image-2',
       inputImageIds: [],
       outputImages: [imageURL],
       outputImageMetadata: {
@@ -69,6 +70,8 @@ describe('生成结果卡片元数据', () => {
     expect(screen.getByText('4:3')).toBeInTheDocument()
     expect(screen.getByText('1024×768')).toBeInTheDocument()
     expect(screen.getByText('1.7 MB')).toBeInTheDocument()
+    expect(screen.getByText('gpt-image-2')).toBeInTheDocument()
+    expect(screen.queryByText('小鱼API')).not.toBeInTheDocument()
   })
 
   it('鼠标悬浮时显示选择框，点击选择框不会打开详情', () => {
@@ -101,6 +104,7 @@ describe('生成结果卡片元数据', () => {
     expect(selectionToggle).toHaveAttribute('aria-pressed', 'false')
     expect(selectionToggle).toHaveClass('group-hover:opacity-100')
     expect(selectionToggle).toHaveClass('group-hover:pointer-events-auto')
+    expect(screen.getByText('未知模型')).toBeInTheDocument()
     fireEvent.click(selectionToggle)
     expect(mocks.toggleTaskSelection).toHaveBeenCalledWith('task-selection')
     expect(onClick).not.toHaveBeenCalled()

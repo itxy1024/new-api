@@ -11,6 +11,7 @@ import { ModelGroupSelector } from '@/components/model-group-selector'
 import { api } from '@/lib/api'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
+import { DEFAULT_SETTINGS } from './lib/apiProfiles'
 import { setNewApiSelection } from './lib/newApiSelection'
 import { useStore } from './store'
 
@@ -24,7 +25,6 @@ type KeyOption = {
 type ModelOption = { id: string; group?: string }
 
 const KEY_PAGE_SIZE = 100
-const DEFAULT_IMAGE_MODEL_KEYWORD = 'image'
 const MODEL_SCAN_CONCURRENCY = 4
 
 const UNAVAILABLE_KEY_ERRORS = new Set([
@@ -87,6 +87,11 @@ function isUnavailableCreativeKeyError(error: unknown): boolean {
 
 export default function NewApiSelection() {
   const setSettings = useStore((state) => state.setSettings)
+  const defaultImageModelKeyword = useStore(
+    (state) =>
+      state.settings.defaultImageModelKeyword ??
+      DEFAULT_SETTINGS.defaultImageModelKeyword
+  )
   const configuredSystemName = useSystemConfigStore(
     (state) => state.config.systemName
   )
@@ -235,7 +240,10 @@ export default function NewApiSelection() {
           while (settled[nextDefaultCandidate]) {
             const defaultModel = modelResults[nextDefaultCandidate]?.find(
               (item) =>
-                item.id.toLowerCase().includes(DEFAULT_IMAGE_MODEL_KEYWORD)
+                defaultImageModelKeyword.length > 0 &&
+                item.id
+                  .toLowerCase()
+                  .includes(defaultImageModelKeyword.toLowerCase())
             )
             if (defaultModel) {
               const defaultKeyId = String(next[nextDefaultCandidate].id)
@@ -287,7 +295,7 @@ export default function NewApiSelection() {
     return () => {
       active = false
     }
-  }, [loadModelsForKey, removeUnavailableKey])
+  }, [defaultImageModelKeyword, loadModelsForKey, removeUnavailableKey])
 
   useEffect(() => {
     if (!keyId) return

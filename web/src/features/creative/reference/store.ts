@@ -257,7 +257,13 @@ function isErrorToastTitle(title: string): boolean {
   )
 }
 
-export type SettingsTab = 'general' | 'agent' | 'api' | 'data' | 'about'
+export type SettingsTab =
+  | 'basic'
+  | 'general'
+  | 'agent'
+  | 'api'
+  | 'data'
+  | 'about'
 
 const TIMEOUT_STREAMING_HINT =
   '也可尝试打开「流式传输」，并提高「请求中间步骤图像数」来维持连接。'

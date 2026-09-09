@@ -149,6 +149,8 @@ export interface AppSettings {
   agentApiConfigMode: AgentApiConfigMode
   agentTextProfileId?: string | null
   agentImageProfileId?: string | null
+  /** 页面加载时自动选择模型所使用的匹配关键词 */
+  defaultImageModelKeyword: string
   profiles: ApiProfile[]
   activeProfileId: string
 }

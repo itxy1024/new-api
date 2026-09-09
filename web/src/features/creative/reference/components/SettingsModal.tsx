@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
+import { useTranslation } from 'react-i18next'
 
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
@@ -96,6 +97,7 @@ import {
 import MarkdownRenderer from './MarkdownRenderer'
 import Select from './Select'
 import AgentSettingsTab from './settings/AgentSettingsTab'
+import BasicSettingsTab from './settings/BasicSettingsTab'
 import CustomProviderModal from './settings/CustomProviderModal'
 import GeneralSettingsTab from './settings/GeneralSettingsTab'
 import ProfileImportUrlModal, {
@@ -233,6 +235,7 @@ function isProfileApiProxyEligible(settings: AppSettings, profile: ApiProfile) {
 }
 
 export default function SettingsModal() {
+  const { t } = useTranslation()
   const showSettings = useStore((s) => s.showSettings)
   const settingsTabRequest = useStore((s) => s.settingsTabRequest)
   const setShowSettings = useStore((s) => s.setShowSettings)
@@ -288,7 +291,7 @@ export default function SettingsModal() {
     useState(false)
   const [duplicateProfileTooltipVisible, setDuplicateProfileTooltipVisible] =
     useState(false)
-  const [activeTab, setActiveTab] = useState<SettingsTab>('api')
+  const [activeTab, setActiveTab] = useState<SettingsTab>('basic')
   const [exportConfig, setExportConfig] = useState(true)
   const [exportTasks, setExportTasks] = useState(true)
   const [importConfig, setImportConfig] = useState(true)
@@ -1591,6 +1594,25 @@ export default function SettingsModal() {
           <div className='flex w-full shrink-0 flex-col border-b border-gray-100 bg-gray-50/50 sm:w-48 sm:border-r sm:border-b-0 dark:border-white/[0.08] dark:bg-white/[0.02]'>
             <nav className='custom-scrollbar flex flex-1 space-x-1 overflow-x-auto p-3 sm:flex-col sm:space-y-1 sm:space-x-0 sm:overflow-y-auto'>
               <button
+                onClick={() => setActiveTab('basic')}
+                className={`flex flex-shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm whitespace-nowrap transition-colors ${activeTab === 'basic' ? 'bg-white font-medium text-blue-600 shadow-sm dark:bg-white/[0.08] dark:text-blue-400' : 'text-gray-600 hover:bg-gray-100/80 dark:text-gray-400 dark:hover:bg-white/[0.04]'}`}
+              >
+                <svg
+                  className='h-4 w-4'
+                  fill='none'
+                  stroke='currentColor'
+                  viewBox='0 0 24 24'
+                >
+                  <path
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                    strokeWidth={2}
+                    d='M4 7h16M4 12h16M4 17h10'
+                  />
+                </svg>
+                {t('Basic settings')}
+              </button>
+              <button
                 onClick={() => setActiveTab('api')}
                 className={`flex flex-shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm whitespace-nowrap transition-colors ${activeTab === 'api' ? 'bg-white font-medium text-blue-600 shadow-sm dark:bg-white/[0.08] dark:text-blue-400' : 'text-gray-600 hover:bg-gray-100/80 dark:text-gray-400 dark:hover:bg-white/[0.04]'}`}
               >
@@ -1707,6 +1729,12 @@ export default function SettingsModal() {
           {/* Content */}
           <div className='relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-transparent'>
             <div className='custom-scrollbar flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6'>
+              {activeTab === 'basic' && (
+                <BasicSettingsTab
+                  draft={draft}
+                  commitSettings={commitSettings}
+                />
+              )}
               {activeTab === 'general' && (
                 <GeneralSettingsTab
                   draft={draft}
