@@ -48,8 +48,9 @@ export interface CreativeGenerationRecord {
   status: 'processing' | 'completed' | 'failed'
   elapsed_ms: number
   error_message: string
-  created_at: number
-  finished_at: number
+  created_at: string | number
+  finished_at: string | number | null
+  output_urls?: string
   assets: CreativeGenerationAsset[]
 }
 
@@ -143,6 +144,17 @@ function parseTaskParams(value: string): TaskParams {
   return params
 }
 
+function parseCreativeTime(value: string | number | null | undefined): number {
+  if (typeof value === 'number') {
+    return value > 0 ? value * 1000 : 0
+  }
+  if (typeof value !== 'string' || value.trim() === '') return 0
+  const parsed = Date.parse(
+    value.includes('T') ? value : value.replace(' ', 'T')
+  )
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
 export function creativeGenerationToTask(
   generation: CreativeGenerationRecord,
   sourceName: string
@@ -152,10 +164,9 @@ export function creativeGenerationToTask(
     .filter(Boolean)
   const params = parseTaskParams(generation.request_params)
   params.n = outputImages.length || params.n
-  const createdAt = generation.created_at * 1000
-  const finishedAt = generation.finished_at
-    ? generation.finished_at * 1000
-    : null
+  const createdAt = parseCreativeTime(generation.created_at)
+  const finishedAtValue = parseCreativeTime(generation.finished_at)
+  const finishedAt = finishedAtValue > 0 ? finishedAtValue : null
   const status = generation.status === 'completed' ? 'done' : 'error'
   const actualParamsByImage: Record<string, Partial<TaskParams>> = {}
   const outputImageMetadata: NonNullable<TaskRecord['outputImageMetadata']> = {}

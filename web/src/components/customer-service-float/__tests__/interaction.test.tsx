@@ -46,6 +46,22 @@ describe('客服悬浮球', () => {
     )
   })
 
+  test('刷新挂载时忽略浏览器中保存的旧位置', () => {
+    window.localStorage.setItem(
+      'customer-service-float-position-v2',
+      JSON.stringify({ x: 1, y: 1 })
+    )
+
+    render(<CustomerServiceFloat />)
+
+    const button = screen.getByRole('button', {
+      name: 'Open customer support QR code',
+    })
+    const container = button.parentElement?.parentElement
+
+    expect(container).not.toHaveStyle({ left: '1px', top: '1px' })
+  })
+
   test('只有鼠标划入时显示气泡，关闭二维码后保持隐藏', () => {
     render(<CustomerServiceFloat />)
 

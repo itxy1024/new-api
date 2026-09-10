@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/system_setting"
@@ -54,7 +55,7 @@ func TestS3ArtifactStorePersistsStreamAndMetadata(t *testing.T) {
 		UserID:       31,
 		MediaType:    model.CreativeMediaTypeImage,
 		Status:       model.CreativeGenerationStatusProcessing,
-		CreatedAt:    1,
+		CreatedAt:    time.Unix(1, 0),
 	}
 	require.NoError(t, model.InsertCreativeGeneration(t.Context(), generation))
 
@@ -104,7 +105,7 @@ func TestS3ArtifactStorePersistsStreamAndMetadata(t *testing.T) {
 		UserID:       31,
 		MediaType:    model.CreativeMediaTypeImage,
 		Status:       model.CreativeGenerationStatusDeleted,
-		CreatedAt:    2,
+		CreatedAt:    time.Unix(2, 0),
 	}
 	require.NoError(t, model.InsertCreativeGeneration(t.Context(), deletedGeneration))
 	_, err = store.persistCreativeAsset(t.Context(), CreativeAssetUpload{

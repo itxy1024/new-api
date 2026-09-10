@@ -31,7 +31,6 @@ import { cn } from '@/lib/utils'
 
 const CUSTOMER_SERVICE_QR_URL =
   'https://lebozntc-test-oss.oss-cn-shanghai.aliyuncs.com/codex/16.png'
-const POSITION_STORAGE_KEY = 'customer-service-float-position-v2'
 const ORB_SIZE = 58
 const VIEWPORT_GUTTER = 16
 const DEFAULT_RIGHT_OFFSET = 62
@@ -63,18 +62,6 @@ function clampPosition(position: Position): Position {
 
 function getInitialPosition(): Position {
   if (typeof window === 'undefined') return { x: 0, y: 0 }
-
-  try {
-    const stored = window.localStorage.getItem(POSITION_STORAGE_KEY)
-    if (stored) {
-      const parsed = JSON.parse(stored) as Partial<Position>
-      if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
-        return clampPosition({ x: parsed.x, y: parsed.y })
-      }
-    }
-  } catch {
-    // 本地存储不可用时使用默认位置。
-  }
 
   return clampPosition({
     x: window.innerWidth - ORB_SIZE - DEFAULT_RIGHT_OFFSET,
@@ -136,11 +123,6 @@ export function CustomerServiceFloat() {
 
   useEffect(() => {
     positionRef.current = position
-    try {
-      window.localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(position))
-    } catch {
-      // 本地存储不可用时不影响客服入口使用。
-    }
   }, [position])
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {

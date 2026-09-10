@@ -49,7 +49,8 @@ func CreativeImage(c *gin.Context) {
 	c.Writer = originalWriter
 	if status < http.StatusOK || status >= http.StatusMultipleChoices || captureWriter.overflow || captureWriter.buffer.Len() == 0 {
 		if generation != nil {
-			_ = model.UpdateCreativeGenerationResult(c.Request.Context(), generation.ID, model.CreativeGenerationStatusFailed, elapsedMS, time.Now().Unix(), "图片生成请求失败")
+			finishedAt := time.Now()
+			_ = model.UpdateCreativeGenerationResult(c.Request.Context(), generation.ID, model.CreativeGenerationStatusFailed, elapsedMS, &finishedAt, "图片生成请求失败")
 		}
 		return
 	}

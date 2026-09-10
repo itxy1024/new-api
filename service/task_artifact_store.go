@@ -200,7 +200,7 @@ func (s *s3ArtifactStore) Persist(ctx context.Context, task *model.Task, artifac
 			Group:          task.Group,
 			Prompt:         task.Properties.Input,
 			Status:         model.CreativeGenerationStatusProcessing,
-			CreatedAt:      createdAt,
+			CreatedAt:      time.Unix(createdAt, 0),
 		}
 		if generation.Model == "" {
 			generation.Model = task.Properties.UpstreamModelName
@@ -225,14 +225,20 @@ func (s *s3ArtifactStore) Persist(ctx context.Context, task *model.Task, artifac
 		MimeType:     artifact.MimeType,
 	}, content)
 	if err != nil {
-		_ = model.UpdateCreativeGenerationResult(ctx, generation.ID, model.CreativeGenerationStatusFailed, 0, time.Now().Unix(), err.Error())
+		finishedAt := time.Now()
+		_ = model.UpdateCreativeGenerationResult(ctx, generation.ID, model.CreativeGenerationStatusFailed, 0, &finishedAt, err.Error())
 		return nil, err
 	}
 	elapsedMS := int64(0)
 	if task.FinishTime > task.SubmitTime {
 		elapsedMS = (task.FinishTime - task.SubmitTime) * 1000
 	}
-	_ = model.UpdateCreativeGenerationResult(ctx, generation.ID, model.CreativeGenerationStatusCompleted, elapsedMS, task.FinishTime, "")
+	var finishedAt *time.Time
+	if task.FinishTime > 0 {
+		value := time.Unix(task.FinishTime, 0)
+		finishedAt = &value
+	}
+	_ = model.UpdateCreativeGenerationResult(ctx, generation.ID, model.CreativeGenerationStatusCompleted, elapsedMS, finishedAt, "")
 	return ref, nil
 }
 
@@ -393,7 +399,7 @@ func (s *s3ArtifactStore) persistCreativeAsset(ctx context.Context, upload Creat
 		Height:         upload.Height,
 		DurationMS:     upload.DurationMS,
 		Checksum:       hex.EncodeToString(hasher.Sum(nil)),
-		CreatedAt:      time.Now().Unix(),
+		CreatedAt:      time.Now(),
 	}
 	if err := model.InsertCreativeAssetForActiveGeneration(ctx, asset); err != nil {
 		_, _ = s.client.DeleteObject(ctx, &s3.DeleteObjectInput{

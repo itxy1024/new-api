@@ -36,8 +36,8 @@ const generation: CreativeGenerationRecord = {
   status: 'completed',
   elapsed_ms: 4200,
   error_message: '',
-  created_at: 100,
-  finished_at: 105,
+  created_at: '2026-09-10 14:00:00',
+  finished_at: '2026-09-10 14:00:05',
   assets: [
     {
       id: 12,

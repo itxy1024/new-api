@@ -3,7 +3,10 @@ package model
 import (
 	"context"
 	"errors"
+	"strings"
+	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
 )
 
@@ -19,8 +22,8 @@ const (
 
 var ErrCreativeGenerationInactive = errors.New("creative generation is no longer active")
 
-// CreativeGeneration 保存当前 NewAPI 用户的一次创作请求。
-// 文件二进制不写入数据库，只通过 CreativeAsset 记录对象存储位置。
+// CreativeGeneration 保存当前 NewAPI 用户的一次创作请求及其 OSS 结果地址集合。
+// 文件二进制不写入数据库，详细媒体元数据仍通过 CreativeAsset 记录。
 type CreativeGeneration struct {
 	ID             int64           `json:"id" gorm:"primaryKey"`
 	ClientTaskID   string          `json:"client_task_id" gorm:"type:varchar(191);not null;uniqueIndex:idx_creative_generation_user_client"`
@@ -35,8 +38,9 @@ type CreativeGeneration struct {
 	Status         string          `json:"status" gorm:"type:varchar(20);not null;index"`
 	ElapsedMS      int64           `json:"elapsed_ms"`
 	ErrorMessage   string          `json:"error_message,omitempty" gorm:"type:text"`
-	CreatedAt      int64           `json:"created_at" gorm:"not null;index:idx_creative_generation_user_media_created,priority:3"`
-	FinishedAt     int64           `json:"finished_at"`
+	CreatedAt      time.Time       `json:"created_at" gorm:"not null;index:idx_creative_generation_user_media_created,priority:3"`
+	FinishedAt     *time.Time      `json:"finished_at"`
+	OutputURLs     string          `json:"output_urls,omitempty" gorm:"type:text"`
 	Assets         []CreativeAsset `json:"assets,omitempty" gorm:"foreignKey:GenerationID"`
 }
 
@@ -55,14 +59,14 @@ type CreativeAsset struct {
 	Height         int    `json:"height"`
 	DurationMS     int64  `json:"duration_ms"`
 	Checksum       string `json:"checksum,omitempty" gorm:"type:varchar(64)"`
-	CreatedAt      int64  `json:"created_at" gorm:"not null;index"`
+	CreatedAt      time.Time `json:"created_at" gorm:"not null;index"`
 }
 
 func InsertCreativeGeneration(ctx context.Context, generation *CreativeGeneration) error {
 	return DB.WithContext(ctx).Create(generation).Error
 }
 
-func UpdateCreativeGenerationResult(ctx context.Context, generationID int64, status string, elapsedMS, finishedAt int64, errorMessage string) error {
+func UpdateCreativeGenerationResult(ctx context.Context, generationID int64, status string, elapsedMS int64, finishedAt *time.Time, errorMessage string) error {
 	return DB.WithContext(ctx).Model(&CreativeGeneration{}).
 		Where("id = ? AND status <> ?", generationID, CreativeGenerationStatusDeleted).
 		Updates(map[string]any{
@@ -74,7 +78,42 @@ func UpdateCreativeGenerationResult(ctx context.Context, generationID int64, sta
 }
 
 func InsertCreativeAsset(ctx context.Context, asset *CreativeAsset) error {
-	return DB.WithContext(ctx).Create(asset).Error
+	return DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(asset).Error; err != nil {
+			return err
+		}
+		return appendCreativeGenerationOutputURL(tx, asset.GenerationID, asset.PublicURL)
+	})
+}
+
+func appendCreativeGenerationOutputURL(tx *gorm.DB, generationID int64, publicURL string) error {
+	publicURL = strings.TrimSpace(publicURL)
+	if generationID <= 0 || publicURL == "" {
+		return nil
+	}
+	var generation CreativeGeneration
+	if err := tx.Select("id", "output_urls").First(&generation, generationID).Error; err != nil {
+		return err
+	}
+	urls := make([]string, 0)
+	if strings.TrimSpace(generation.OutputURLs) != "" {
+		if err := common.UnmarshalJsonStr(generation.OutputURLs, &urls); err != nil {
+			return err
+		}
+	}
+	for _, url := range urls {
+		if url == publicURL {
+			return nil
+		}
+	}
+	urls = append(urls, publicURL)
+	encoded, err := common.Marshal(urls)
+	if err != nil {
+		return err
+	}
+	return tx.Model(&CreativeGeneration{}).
+		Where("id = ? AND status <> ?", generationID, CreativeGenerationStatusDeleted).
+		Update("output_urls", string(encoded)).Error
 }
 
 func InsertCreativeAssetForActiveGeneration(ctx context.Context, asset *CreativeAsset) error {
@@ -89,14 +128,29 @@ func InsertCreativeAssetForActiveGeneration(ctx context.Context, asset *Creative
 		if err != nil {
 			return err
 		}
-		return tx.Create(asset).Error
+		if err := tx.Create(asset).Error; err != nil {
+			return err
+		}
+		return appendCreativeGenerationOutputURL(tx, asset.GenerationID, asset.PublicURL)
 	})
 }
 
 func SetCreativeAssetPublicURL(ctx context.Context, assetID int64, publicURL string) error {
-	return DB.WithContext(ctx).Model(&CreativeAsset{}).
-		Where("id = ? AND (public_url = ? OR public_url IS NULL)", assetID, "").
-		Update("public_url", publicURL).Error
+	return DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var asset CreativeAsset
+		if err := tx.Where("id = ?", assetID).First(&asset).Error; err != nil {
+			return err
+		}
+		if strings.TrimSpace(asset.PublicURL) != "" {
+			return nil
+		}
+		if err := tx.Model(&CreativeAsset{}).
+			Where("id = ? AND (public_url = ? OR public_url IS NULL)", assetID, "").
+			Update("public_url", publicURL).Error; err != nil {
+			return err
+		}
+		return appendCreativeGenerationOutputURL(tx, asset.GenerationID, publicURL)
+	})
 }
 
 func GetCreativeGenerationByClientTaskID(ctx context.Context, userID int, clientTaskID string) (*CreativeGeneration, bool, error) {

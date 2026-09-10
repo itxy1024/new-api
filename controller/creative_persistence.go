@@ -101,7 +101,7 @@ func beginCreativeImageGeneration(metadata creativeRequestEnvelope, userID, toke
 		Prompt:        metadata.Prompt,
 		RequestParams: string(requestParams),
 		Status:        model.CreativeGenerationStatusProcessing,
-		CreatedAt:     startedAt.Unix(),
+		CreatedAt:     startedAt,
 	}
 	if err := model.InsertCreativeGeneration(ctx, generation); err != nil {
 		logger.LogError(ctx, "创建创作中心图片记录失败: "+err.Error())
@@ -125,7 +125,8 @@ func persistCreativeImageResponse(metadata creativeRequestEnvelope, generation *
 
 	var response creativeImageResponse
 	if err := common.Unmarshal(responseBody, &response); err != nil || len(response.Data) == 0 {
-		_ = model.UpdateCreativeGenerationResult(ctx, generation.ID, model.CreativeGenerationStatusFailed, elapsedMS, time.Now().Unix(), "图片响应无法解析")
+		finishedAt := time.Now()
+		_ = model.UpdateCreativeGenerationResult(ctx, generation.ID, model.CreativeGenerationStatusFailed, elapsedMS, &finishedAt, "图片响应无法解析")
 		logger.LogError(ctx, "创作中心图片响应无法解析，已跳过 OSS 持久化")
 		return
 	}
@@ -133,7 +134,8 @@ func persistCreativeImageResponse(metadata creativeRequestEnvelope, generation *
 	for index := range response.Data {
 		content, mimeType, err := loadCreativeImageContent(ctx, response.Data[index], metadata.OutputFormat)
 		if err != nil {
-			_ = model.UpdateCreativeGenerationResult(ctx, generation.ID, model.CreativeGenerationStatusFailed, elapsedMS, time.Now().Unix(), err.Error())
+			finishedAt := time.Now()
+			_ = model.UpdateCreativeGenerationResult(ctx, generation.ID, model.CreativeGenerationStatusFailed, elapsedMS, &finishedAt, err.Error())
 			logger.LogError(ctx, "读取创作中心图片结果失败: "+err.Error())
 			return
 		}
@@ -152,12 +154,14 @@ func persistCreativeImageResponse(metadata creativeRequestEnvelope, generation *
 			Height:       height,
 		}, bytes.NewReader(content))
 		if err != nil {
-			_ = model.UpdateCreativeGenerationResult(ctx, generation.ID, model.CreativeGenerationStatusFailed, elapsedMS, time.Now().Unix(), err.Error())
+			finishedAt := time.Now()
+			_ = model.UpdateCreativeGenerationResult(ctx, generation.ID, model.CreativeGenerationStatusFailed, elapsedMS, &finishedAt, err.Error())
 			logger.LogError(ctx, "写入创作中心图片 OSS 失败: "+err.Error())
 			return
 		}
 	}
-	if err := model.UpdateCreativeGenerationResult(ctx, generation.ID, model.CreativeGenerationStatusCompleted, elapsedMS, time.Now().Unix(), ""); err != nil {
+	finishedAt := time.Now()
+	if err := model.UpdateCreativeGenerationResult(ctx, generation.ID, model.CreativeGenerationStatusCompleted, elapsedMS, &finishedAt, ""); err != nil {
 		logger.LogError(ctx, "更新创作中心图片记录失败: "+err.Error())
 	}
 }
@@ -280,12 +284,27 @@ func ListCreativeGenerations(c *gin.Context) {
 			"status":           generations[index].Status,
 			"elapsed_ms":       generations[index].ElapsedMS,
 			"error_message":    generations[index].ErrorMessage,
-			"created_at":       generations[index].CreatedAt,
-			"finished_at":      generations[index].FinishedAt,
+			"created_at":       formatCreativeTime(generations[index].CreatedAt),
+			"finished_at":      formatCreativeTimePtr(generations[index].FinishedAt),
+			"output_urls":      generations[index].OutputURLs,
 			"assets":           assets,
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": items})
+}
+
+func formatCreativeTime(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.Format("2006-01-02 15:04:05")
+}
+
+func formatCreativeTimePtr(value *time.Time) any {
+	if value == nil || value.IsZero() {
+		return nil
+	}
+	return formatCreativeTime(*value)
 }
 
 func CreativeGenerationAssetContent(c *gin.Context) {

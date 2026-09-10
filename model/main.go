@@ -327,6 +327,9 @@ func migrateDB() error {
 	if err := migrateTokenModelLimitsToText(); err != nil {
 		return err
 	}
+	if err := migrateCreativeGenerationTimestamps(DB); err != nil {
+		return err
+	}
 
 	err := DB.AutoMigrate(
 		&Channel{},
@@ -368,6 +371,9 @@ func migrateDB() error {
 		&AuthzRole{},
 	)
 	if err != nil {
+		return err
+	}
+	if err := migrateCreativeGenerationOutputURLs(DB); err != nil {
 		return err
 	}
 	if err := InitializeUserAuthVersions(); err != nil {

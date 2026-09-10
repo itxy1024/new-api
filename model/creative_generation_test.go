@@ -2,6 +2,7 @@ package model
 
 import (
 	"testing"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -23,14 +24,14 @@ func TestCreativeGenerationQueriesEnforceUserOwnership(t *testing.T) {
 		UserID:       101,
 		MediaType:    CreativeMediaTypeImage,
 		Status:       CreativeGenerationStatusCompleted,
-		CreatedAt:    10,
+		CreatedAt:    time.Unix(10, 0),
 	}
 	second := &CreativeGeneration{
 		ClientTaskID: "shared-client-id",
 		UserID:       202,
 		MediaType:    CreativeMediaTypeImage,
 		Status:       CreativeGenerationStatusCompleted,
-		CreatedAt:    20,
+		CreatedAt:    time.Unix(20, 0),
 	}
 	require.NoError(t, InsertCreativeGeneration(t.Context(), first))
 	require.NoError(t, InsertCreativeGeneration(t.Context(), second))
@@ -41,7 +42,8 @@ func TestCreativeGenerationQueriesEnforceUserOwnership(t *testing.T) {
 		StorageBackend: "s3",
 		Bucket:         "artifacts",
 		ObjectKey:      "first/image-2.png",
-		CreatedAt:      12,
+		PublicURL:      "https://artifacts.example/first/image-2.png",
+		CreatedAt:      time.Unix(12, 0),
 	}))
 	require.NoError(t, InsertCreativeAsset(t.Context(), &CreativeAsset{
 		GenerationID:   first.ID,
@@ -50,7 +52,7 @@ func TestCreativeGenerationQueriesEnforceUserOwnership(t *testing.T) {
 		StorageBackend: "s3",
 		Bucket:         "artifacts",
 		ObjectKey:      "first/image-1.png",
-		CreatedAt:      11,
+		CreatedAt:      time.Unix(11, 0),
 	}))
 
 	items, err := ListCreativeGenerations(t.Context(), first.UserID, CreativeMediaTypeImage, 10)
@@ -58,6 +60,7 @@ func TestCreativeGenerationQueriesEnforceUserOwnership(t *testing.T) {
 	require.Len(t, items, 1)
 	require.Len(t, items[0].Assets, 2)
 	assert.Less(t, items[0].Assets[0].ID, items[0].Assets[1].ID)
+	assert.Equal(t, `["https://artifacts.example/first/image-2.png"]`, items[0].OutputURLs)
 
 	_, exists, err := GetCreativeAsset(t.Context(), second.UserID, first.ID, items[0].Assets[0].ID)
 	require.NoError(t, err)
