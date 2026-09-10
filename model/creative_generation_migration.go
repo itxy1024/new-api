@@ -124,16 +124,23 @@ func migrateCreativeUnixColumn(db *gorm.DB, table, column string) error {
 		}
 		return db.Exec("UPDATE " + table + " SET " + column + " = datetime(" + column + ", 'unixepoch') WHERE " + column + " > 0").Error
 	case "mysql":
-		if column == "finished_at" {
-			if err := db.Exec("UPDATE " + table + " SET " + column + " = CASE WHEN " + column + " > 0 THEN FROM_UNIXTIME(" + column + ") ELSE NULL END").Error; err != nil {
-				return err
-			}
-			return db.Exec("ALTER TABLE " + table + " MODIFY COLUMN " + column + " DATETIME NULL").Error
+		// MySQL 严格模式下，不能把 DATETIME 表达式直接写回整数列；先转成字符再改类型。
+		nullable := column == "finished_at"
+		nullSQL := "NOT NULL"
+		if nullable {
+			nullSQL = "NULL"
 		}
-		if err := db.Exec("UPDATE " + table + " SET " + column + " = FROM_UNIXTIME(" + column + ") WHERE " + column + " > 0").Error; err != nil {
+		if err := db.Exec("ALTER TABLE " + table + " MODIFY COLUMN " + column + " VARCHAR(32) " + nullSQL).Error; err != nil {
 			return err
 		}
-		return db.Exec("ALTER TABLE " + table + " MODIFY COLUMN " + column + " DATETIME NOT NULL").Error
+		if nullable {
+			if err := db.Exec("UPDATE " + table + " SET " + column + " = CASE WHEN CAST(" + column + " AS SIGNED) > 0 THEN DATE_FORMAT(FROM_UNIXTIME(CAST(" + column + " AS SIGNED)), '%Y-%m-%d %H:%i:%s') ELSE NULL END").Error; err != nil {
+				return err
+			}
+		} else if err := db.Exec("UPDATE " + table + " SET " + column + " = DATE_FORMAT(FROM_UNIXTIME(GREATEST(CAST(" + column + " AS SIGNED), 0)), '%Y-%m-%d %H:%i:%s')").Error; err != nil {
+			return err
+		}
+		return db.Exec("ALTER TABLE " + table + " MODIFY COLUMN " + column + " DATETIME " + nullSQL).Error
 	case "postgres":
 		if column == "finished_at" {
 			return db.Exec("ALTER TABLE " + table + " ALTER COLUMN " + column + " TYPE TIMESTAMP USING CASE WHEN " + column + " IS NULL OR " + column + " = 0 THEN NULL ELSE to_timestamp(" + column + ") END").Error
