@@ -83,6 +83,8 @@ function QuotaTable(props: { apiKey: ApiKey }) {
   const columns = useApiKeysColumns(now).filter(
     (column) => column.id === 'quota'
   )
+  // 测试夹具需要直接渲染 TanStack Table 返回的动态 API。
+  // oxlint-disable-next-line react/incompatible-library
   const table = useReactTable({
     columns,
     data: [props.apiKey],
@@ -366,6 +368,14 @@ it('combines creation and last use while keeping expiry, models and IP restricti
   })
   expect(quotaHeader).not.toHaveClass('pr-8')
   expect(quotaTrigger.closest('td')).not.toHaveClass('pr-8')
+})
+
+it('keeps the quick group switch mounted in the desktop group column', async () => {
+  await renderKeysPage()
+
+  expect(
+    screen.getByRole('combobox', { name: 'Choose Group' })
+  ).toBeInTheDocument()
 })
 
 it('restores dates hidden by the old default and preserves unrelated column preferences', async () => {

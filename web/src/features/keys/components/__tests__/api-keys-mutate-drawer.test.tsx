@@ -19,6 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, test } from 'vitest'
 
+import type { ApiKey } from '../../types'
+
 const { createInstance } = await import('i18next')
 const { I18nextProvider, initReactI18next } = await import('react-i18next')
 const { QueryClient, QueryClientProvider } =
@@ -37,6 +39,7 @@ type ApiMethod = (url: string, data?: unknown) => Promise<{ data: unknown }>
 type MockableApi = {
   get: ApiMethod
   post: ApiMethod
+  put: ApiMethod
 }
 type RenderedDrawer = {
   queryClient: InstanceType<typeof QueryClient>
@@ -45,9 +48,34 @@ type RenderedDrawer = {
 const apiClient = api as unknown as MockableApi
 const originalGet = apiClient.get
 const originalPost = apiClient.post
+const originalPut = apiClient.put
 let renderedDrawer: RenderedDrawer | null = null
 
-function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
+const aggregatedKey: ApiKey = {
+  id: 7,
+  name: 'aggregated-key',
+  key: 'masked',
+  status: 1,
+  remain_quota: 1000,
+  used_quota: 0,
+  unlimited_quota: false,
+  expired_time: -1,
+  created_time: 1,
+  accessed_time: 0,
+  group: 'vip',
+  groups: ['vip', 'default'],
+  group_aggregation_enabled: true,
+  auto_groups: null,
+  cross_group_retry: false,
+  model_limits_enabled: false,
+  model_limits: '',
+  allow_ips: '',
+}
+
+function installApiFixtures(
+  createdPayloads: Array<Record<string, unknown>>,
+  updatedPayloads: Array<Record<string, unknown>> = []
+) {
   apiClient.get = async (url) => {
     switch (url) {
       case '/api/status':
@@ -72,6 +100,8 @@ function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
             data: { groups: ['vip', 'default'], max_count: 3 },
           },
         }
+      case '/api/token/7':
+        return { data: { success: true, data: aggregatedKey } }
       default:
         throw new Error(`Unexpected GET ${url}`)
     }
@@ -82,9 +112,15 @@ function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
     createdPayloads.push(data as Record<string, unknown>)
     return { data: { success: true, data: {} } }
   }
+  apiClient.put = async (url, data) => {
+    expect(url).toBe('/api/token/')
+    expect(data && typeof data === 'object').toBeTruthy()
+    updatedPayloads.push(data as Record<string, unknown>)
+    return { data: { success: true, data: aggregatedKey } }
+  }
 }
 
-async function renderCreateDrawer(): Promise<void> {
+async function renderDrawer(currentRow?: ApiKey): Promise<void> {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -119,13 +155,24 @@ async function renderCreateDrawer(): Promise<void> {
     },
     { updatedAt: freshAt }
   )
+  if (currentRow) {
+    queryClient.setQueryData(
+      ['api-key', currentRow.id],
+      { success: true, data: currentRow },
+      { updatedAt: freshAt }
+    )
+  }
   renderedDrawer = { queryClient }
 
   render(
     <QueryClientProvider client={queryClient}>
       <I18nextProvider i18n={i18n}>
         <ApiKeysProvider>
-          <ApiKeysMutateDrawer open onOpenChange={() => undefined} />
+          <ApiKeysMutateDrawer
+            open
+            onOpenChange={() => undefined}
+            currentRow={currentRow}
+          />
         </ApiKeysProvider>
       </I18nextProvider>
     </QueryClientProvider>
@@ -137,6 +184,10 @@ async function renderCreateDrawer(): Promise<void> {
     },
     { timeout: 1500 }
   )
+}
+
+async function renderCreateDrawer(): Promise<void> {
+  await renderDrawer()
 }
 
 function findButton(text: string, required: true): HTMLButtonElement
@@ -152,7 +203,9 @@ function findButton(text: string, required = true): HTMLButtonElement | null {
 }
 
 function getControlByLabel(labelText: 'Name' | 'Quantity'): HTMLInputElement
-function getControlByLabel(labelText: 'Group'): HTMLButtonElement
+function getControlByLabel(
+  labelText: 'Group' | 'Group routing order'
+): HTMLButtonElement
 function getControlByLabel(labelText: 'Auto group order'): HTMLElement
 function getControlByLabel(labelText: string): HTMLElement {
   const label = [...document.querySelectorAll<HTMLLabelElement>('label')].find(
@@ -196,6 +249,7 @@ function selectComboboxOption(
 afterEach(() => {
   apiClient.get = originalGet
   apiClient.post = originalPost
+  apiClient.put = originalPut
   localStorage.clear()
   if (renderedDrawer) {
     renderedDrawer.queryClient.clear()
@@ -204,6 +258,57 @@ afterEach(() => {
 })
 
 describe('API keys mutate drawer Auto group integration', () => {
+  test('loads and updates an existing aggregated API key without losing its groups', async () => {
+    const updatedPayloads: Array<Record<string, unknown>> = []
+    installApiFixtures([], updatedPayloads)
+    await renderDrawer(aggregatedKey)
+
+    expect(
+      screen.getByRole('switch', { name: 'Custom group routing' })
+    ).toBeChecked()
+    expect(getControlByLabel('Group routing order').textContent).toContain(
+      'vip'
+    )
+    expect(getControlByLabel('Group routing order').textContent).toContain(
+      'default'
+    )
+
+    fireEvent.click(findButton('Save changes', true))
+    await waitFor(() => expect(updatedPayloads).toHaveLength(1))
+
+    expect(updatedPayloads[0]?.id).toBe(7)
+    expect(updatedPayloads[0]?.group).toBe('vip')
+    expect(updatedPayloads[0]?.groups).toEqual(['vip', 'default'])
+    expect(updatedPayloads[0]?.group_aggregation_enabled).toBe(true)
+  })
+
+  test('submits the selected order when custom group routing is enabled', async () => {
+    const createdPayloads: Array<Record<string, unknown>> = []
+    installApiFixtures(createdPayloads)
+    await renderCreateDrawer()
+
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Custom group routing' })
+    )
+    const groupTrigger = getControlByLabel('Group routing order')
+    selectComboboxOption(groupTrigger, 'Priority access')
+    const defaultGroupOption = [
+      ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+    ].find((candidate) => candidate.textContent?.includes('Standard access'))
+    if (!defaultGroupOption) {
+      throw new Error('Expected option containing "Standard access"')
+    }
+    fireEvent.click(defaultGroupOption)
+
+    changeInput(getControlByLabel('Name'), 'aggregated')
+    fireEvent.click(findButton('Save changes', true))
+    await waitFor(() => expect(createdPayloads).toHaveLength(1))
+
+    expect(createdPayloads[0]?.group).toBe('vip')
+    expect(createdPayloads[0]?.groups).toEqual(['vip', 'default'])
+    expect(createdPayloads[0]?.group_aggregation_enabled).toBe(true)
+  })
+
   test('inherits the root Auto order and sends an empty override for every batch-created key', async () => {
     const createdPayloads: Array<Record<string, unknown>> = []
     installApiFixtures(createdPayloads)

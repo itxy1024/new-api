@@ -87,6 +87,7 @@ import {
 import { USAGE_BILLING_PATH, type LogOtherData } from '../../types'
 import { PluginAuthorLink } from '../plugin-author-link'
 import { DetailRow, DetailSection } from './log-detail-layout'
+import { RequestInputSection } from './request-input-section'
 
 // Maps a channel-update changed-field token (as recorded by the backend audit)
 // to its i18n label key for display in the audit details.
@@ -436,6 +437,7 @@ interface DetailsDialogProps {
   log: UsageLog
   isAdmin: boolean
   isRoot: boolean
+  canViewChannel?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -445,6 +447,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
   const { copiedText, copyToClipboard } = useCopyToClipboard({ notify: false })
   const other = parseLogOther(props.log.other)
   const typeConfig = getLogTypeConfig(props.log.type)
+  const canViewChannel = props.canViewChannel ?? props.isRoot
 
   const isViolation = isViolationFeeLog(other)
   const isRefund = props.log.type === 6
@@ -628,7 +631,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
             />
           )}
 
-          {props.isAdmin && props.log.channel > 0 && (
+          {canViewChannel && props.log.channel > 0 && (
             <DetailRow
               label={t('Channel')}
               value={
@@ -646,7 +649,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
             />
           )}
 
-          {channelChain && props.isAdmin && (
+          {channelChain && canViewChannel && (
             <DetailRow label={t('Retry Chain')} value={channelChain} mono />
           )}
 
@@ -750,6 +753,13 @@ export function DetailsDialog(props: DetailsDialogProps) {
               </div>
             </div>
           </DetailSection>
+        )}
+
+        {adminInfo?.request_input && (
+          <RequestInputSection
+            content={adminInfo.request_input}
+            truncated={Boolean(adminInfo.request_input_truncated)}
+          />
         )}
 
         {/* Quota saturation marker (admin only) */}

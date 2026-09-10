@@ -18,9 +18,16 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, KeyRound, Settings2, WalletCards } from 'lucide-react'
+import {
+  ChevronDown,
+  KeyRound,
+  Layers3,
+  Settings2,
+  WalletCards,
+} from 'lucide-react'
+import { nanoid } from 'nanoid'
 import { useEffect, useMemo, useState } from 'react'
-import { useForm, type SubmitErrorHandler } from 'react-hook-form'
+import { useForm, useWatch, type SubmitErrorHandler } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -204,6 +211,8 @@ export function ApiKeysMutateDrawer({
   // Load existing data when updating
   useEffect(() => {
     if (!open) {
+      // 异步表单需要清除上一个目标，下一次打开时才能按最新接口数据初始化。
+      // oxlint-disable-next-line react/set-state-in-effect
       setInitializedTarget(null)
       return
     }
@@ -260,25 +269,37 @@ export function ApiKeysMutateDrawer({
   const formTarget =
     isUpdate && currentRow ? `update:${currentRow.id}` : 'create'
   const isFormInitialized = initializedTarget === formTarget
-  const selectedGroup = form.watch('group')
+  const selectedGroups = useWatch({ control: form.control, name: 'groups' })
+  const groupAggregationEnabled = useWatch({
+    control: form.control,
+    name: 'group_aggregation_enabled',
+  })
 
-  // Correct group after groups load: if the form value is not in available groups, fall back
+  // 分组加载后移除已经不存在的选项，并为无有效选项的表单补上回退分组。
   useEffect(() => {
     if (groups.length === 0) return
-    const currentGroup = selectedGroup
-    if (currentGroup && !groups.some((g) => g.value === currentGroup)) {
+    const availableGroups = selectedGroups.filter((selectedGroup) =>
+      groups.some((group) => group.value === selectedGroup)
+    )
+    if (availableGroups.length !== selectedGroups.length) {
       const fallback =
-        groups.find((g) => g.value === 'default')?.value ??
+        groups.find((group) => group.value === 'default')?.value ??
         groups[0]?.value ??
         ''
-      form.setValue('group', fallback)
-      if (currentGroup === 'auto') {
+      form.setValue(
+        'groups',
+        availableGroups.length > 0 ? availableGroups : [fallback]
+      )
+      if (
+        selectedGroups.includes('auto') &&
+        !availableGroups.includes('auto')
+      ) {
         form.setValue('auto_groups', [])
         form.setValue('auto_groups_mode', 'inherit')
         form.setValue('cross_group_retry', false)
       }
     }
-  }, [groups, form, selectedGroup])
+  }, [groups, form, selectedGroups])
 
   const onSubmit = async (data: ApiKeyFormValues) => {
     setIsSubmitting(true)
@@ -308,7 +329,7 @@ export function ApiKeysMutateDrawer({
             name:
               i === 0 && data.name
                 ? data.name
-                : `${data.name || 'default'}-${Math.random().toString(36).slice(2, 8)}`,
+                : `${data.name || 'default'}-${nanoid(6)}`,
           })
           if (result.success) {
             successCount++
@@ -360,8 +381,14 @@ export function ApiKeysMutateDrawer({
   const quotaPlaceholder = tokensOnly
     ? t('Enter quota in tokens')
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
-  const autoGroupsMode = form.watch('auto_groups_mode')
-  const unlimitedQuota = form.watch('unlimited_quota')
+  const autoGroupsMode = useWatch({
+    control: form.control,
+    name: 'auto_groups_mode',
+  })
+  const unlimitedQuota = useWatch({
+    control: form.control,
+    name: 'unlimited_quota',
+  })
 
   return (
     <Sheet
@@ -417,17 +444,54 @@ export function ApiKeysMutateDrawer({
 
               <FormField
                 control={form.control}
-                name='group'
+                name='group_aggregation_enabled'
+                render={({ field }) => (
+                  <FormItem className={sideDrawerSwitchItemClassName()}>
+                    <div className='flex min-w-0 items-start gap-3'>
+                      <Layers3 className='text-muted-foreground mt-0.5 size-4 shrink-0' />
+                      <div className='flex min-w-0 flex-col gap-0.5'>
+                        <FormLabel className='text-sm'>
+                          {t('Custom group routing')}
+                        </FormLabel>
+                        <FormDescription className='text-xs'>
+                          {t(
+                            'Enable selecting multiple groups and arranging their routing priority.'
+                          )}
+                        </FormDescription>
+                      </div>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={(checked) => {
+                          field.onChange(checked)
+                          if (!checked) {
+                            form.setValue('groups', [selectedGroups[0]])
+                          }
+                        }}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='groups'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('Group')}</FormLabel>
+                    <FormLabel>
+                      {groupAggregationEnabled
+                        ? t('Group routing order')
+                        : t('Group')}
+                    </FormLabel>
                     <FormControl>
                       <ApiKeyGroupCombobox
                         options={groups}
                         value={field.value}
-                        onValueChange={(group) => {
-                          field.onChange(group)
-                          if (group === 'auto') {
+                        onValueChange={(value) => {
+                          field.onChange(value)
+                          if (value[0] === 'auto') {
                             form.setValue('cross_group_retry', true, {
                               shouldDirty: true,
                             })
@@ -437,15 +501,27 @@ export function ApiKeysMutateDrawer({
                             shouldDirty: true,
                           })
                         }}
-                        placeholder={t('Select a group')}
+                        aggregationEnabled={groupAggregationEnabled}
+                        placeholder={
+                          groupAggregationEnabled
+                            ? t('Select groups')
+                            : t('Select a group')
+                        }
                       />
                     </FormControl>
+                    {groupAggregationEnabled && (
+                      <FormDescription>
+                        {t(
+                          'Models are combined from the selected groups. When a model exists in multiple groups, the first selected group is used.'
+                        )}
+                      </FormDescription>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              {selectedGroup === 'auto' && (
+              {selectedGroups[0] === 'auto' && (
                 <FormField
                   control={form.control}
                   name='auto_groups'
@@ -486,7 +562,7 @@ export function ApiKeysMutateDrawer({
                 />
               )}
 
-              {selectedGroup === 'auto' && (
+              {selectedGroups[0] === 'auto' && (
                 <FormField
                   control={form.control}
                   name='cross_group_retry'

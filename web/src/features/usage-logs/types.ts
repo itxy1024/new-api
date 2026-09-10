@@ -128,6 +128,8 @@ export interface LogOtherData {
     server_ip?: string
     version?: string
     node_name?: string
+    request_input?: string
+    request_input_truncated?: boolean
     // Operator identity for audit logs (type=3, admin only)
     admin_username?: string
     admin_id?: number | string
