@@ -11,7 +11,8 @@ import (
 )
 
 var StartTime = time.Now().Unix() // unit: second
-var Version = "v0.0.0"            // this hard coding will be replaced automatically when building, no need to manually change
+// Version 在发布构建时由构建参数注入；源码直跑时使用 dev，避免被误显示为未知版本。
+var Version = "dev"
 var SystemName = "New API"
 var Footer = ""
 var Logo = ""

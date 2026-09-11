@@ -17,6 +17,16 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 生成构建版本
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(bash ./scripts/resolve-build-version.sh)"
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "构建版本：$VERSION"
 
       - name: 生成小写镜像名称
         id: image
@@ -38,6 +48,8 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          build-args: |
+            BUILD_VERSION=${{ steps.version.outputs.value }}
           platforms: linux/amd64
           push: true
           provenance: false

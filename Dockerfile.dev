@@ -10,6 +10,7 @@ ENV GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64}
 ENV GOEXPERIMENT=greenteagc
 
 WORKDIR /build
+ARG BUILD_VERSION=dev
 
 ADD go.mod go.sum ./
 # relaykit is a local submodule referenced via replace; its go.mod must be
@@ -22,7 +23,9 @@ COPY . .
 RUN mkdir -p web/dist && \
     echo '<!doctype html><html><head><title>dev</title></head><body>use frontend dev server</body></html>' > web/dist/index.html
 
-RUN go build -ldflags "-s -w -X 'github.com/QuantumNous/new-api/common.Version=$(cat VERSION)'" -o new-api
+RUN VERSION_VALUE=$(tr -d '\r\n' < VERSION); \
+    if [ -z "$VERSION_VALUE" ]; then VERSION_VALUE="$BUILD_VERSION"; fi; \
+    go build -ldflags "-s -w -X 'github.com/QuantumNous/new-api/common.Version=$VERSION_VALUE'" -o new-api
 
 FROM debian:bookworm-slim
 

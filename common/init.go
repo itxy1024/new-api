@@ -32,7 +32,7 @@ func printHelp() {
 func InitEnv() {
 	flag.Parse()
 
-	envVersion := os.Getenv("VERSION")
+	envVersion := strings.TrimSpace(os.Getenv("VERSION"))
 	if envVersion != "" {
 		Version = envVersion
 	}
