@@ -7,6 +7,10 @@ import {
 export async function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image()
+    // OSS 固定地址需要以 CORS 模式加载，否则绘制到 Canvas 后会被浏览器标记为跨域污染。
+    if (/^https?:\/\//i.test(dataUrl)) {
+      image.crossOrigin = 'anonymous'
+    }
     image.onload = () => resolve(image)
     image.onerror = () => reject(new Error('图片加载失败'))
     image.src = dataUrl

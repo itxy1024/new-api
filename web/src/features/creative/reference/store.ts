@@ -6810,7 +6810,8 @@ export async function createInputImageFromFile(
 
 /** 添加图片到输入（右键菜单）—— 支持 data/blob/http URL */
 export async function addImageFromUrl(src: string): Promise<void> {
-  const res = await fetch(src)
+  // OSS 白名单修改后，避免复用浏览器中缓存的旧响应头；编辑需要读取响应字节并转为 data URL。
+  const res = await fetch(src, { mode: 'cors', cache: 'no-store' })
   const blob = await res.blob()
   if (!blob.type.startsWith('image/')) throw new Error('不是有效的图片')
   const dataUrl = await blobToDataUrl(blob)

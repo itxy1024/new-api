@@ -423,6 +423,10 @@ export async function storeImageWithSize(
 function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image()
+    // 生成结果可能直接保存为 OSS 固定地址，缩略图生成也必须使用 CORS 模式。
+    if (/^https?:\/\//i.test(dataUrl)) {
+      image.crossOrigin = 'anonymous'
+    }
     image.onload = () => resolve(image)
     image.onerror = () => reject(new Error('图片加载失败'))
     image.src = dataUrl
