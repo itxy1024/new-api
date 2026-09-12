@@ -60,7 +60,9 @@ func TestMigrateCreativeDateTimeTimezoneOnce(t *testing.T) {
 	require.NoError(t, migrateCreativeGenerationTimestamps(database))
 	require.NoError(t, migrateCreativeGenerationTimestamps(database))
 	var createdAt, finishedAt string
-	require.NoError(t, database.Raw("SELECT created_at, finished_at FROM creative_generations WHERE id = 1").Row().Scan(&createdAt, &finishedAt))
+	row, err := database.Raw("SELECT created_at, finished_at FROM creative_generations WHERE id = 1").Row()
+	require.NoError(t, err)
+	require.NoError(t, row.Scan(&createdAt, &finishedAt))
 	assert.Equal(t, "2026-09-10 10:00:00", createdAt)
 	assert.Equal(t, "2026-09-10 10:00:05", finishedAt)
 }
