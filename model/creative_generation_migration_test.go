@@ -22,13 +22,32 @@ CREATE TABLE creative_generations (
 	require.NoError(t, database.Exec(`
 INSERT INTO creative_generations (id, created_at, finished_at)
 VALUES (1, 1789010400, 1789010405)`).Error)
+	require.NoError(t, database.Exec(`
+CREATE TABLE creative_assets (
+  id INTEGER PRIMARY KEY,
+  generation_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  asset_key TEXT NOT NULL,
+  storage_backend TEXT NOT NULL,
+  bucket TEXT NOT NULL,
+  object_key TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+)`).Error)
+	require.NoError(t, database.Exec(`
+INSERT INTO creative_assets (id, generation_id, user_id, asset_key, storage_backend, bucket, object_key, created_at)
+VALUES (1, 1, 7, 'image-1', 's3', 'artifacts', 'image-1.png', 1789010410)`).Error)
 
+	require.NoError(t, migrateCreativeGenerationTimestamps(database))
+	// SQLite 的列亲和性仍可能是 INTEGER，迁移必须可重复执行。
 	require.NoError(t, migrateCreativeGenerationTimestamps(database))
 	require.NoError(t, database.AutoMigrate(&CreativeGeneration{}, &CreativeAsset{}))
 
 	var generation CreativeGeneration
 	require.NoError(t, database.First(&generation, 1).Error)
-	assert.Equal(t, time.Unix(1789010400, 0).UTC(), generation.CreatedAt.UTC())
+	assert.Equal(t, time.Unix(1789010400, 0).UTC().Add(8*time.Hour).Format("2006-01-02 15:04:05"), generation.CreatedAt.Format("2006-01-02 15:04:05"))
 	require.NotNil(t, generation.FinishedAt)
-	assert.Equal(t, time.Unix(1789010405, 0).UTC(), generation.FinishedAt.UTC())
+	assert.Equal(t, time.Unix(1789010405, 0).UTC().Add(8*time.Hour).Format("2006-01-02 15:04:05"), generation.FinishedAt.Format("2006-01-02 15:04:05"))
+	var asset CreativeAsset
+	require.NoError(t, database.First(&asset, 1).Error)
+	assert.Equal(t, time.Unix(1789010410, 0).UTC().Add(8*time.Hour).Format("2006-01-02 15:04:05"), asset.CreatedAt.Format("2006-01-02 15:04:05"))
 }

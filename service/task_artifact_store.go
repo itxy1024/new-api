@@ -200,7 +200,7 @@ func (s *s3ArtifactStore) Persist(ctx context.Context, task *model.Task, artifac
 			Group:          task.Group,
 			Prompt:         task.Properties.Input,
 			Status:         model.CreativeGenerationStatusProcessing,
-			CreatedAt:      time.Unix(createdAt, 0),
+			CreatedAt:      time.Unix(createdAt, 0).Local(),
 		}
 		if generation.Model == "" {
 			generation.Model = task.Properties.UpstreamModelName
@@ -235,7 +235,7 @@ func (s *s3ArtifactStore) Persist(ctx context.Context, task *model.Task, artifac
 	}
 	var finishedAt *time.Time
 	if task.FinishTime > 0 {
-		value := time.Unix(task.FinishTime, 0)
+		value := time.Unix(task.FinishTime, 0).Local()
 		finishedAt = &value
 	}
 	_ = model.UpdateCreativeGenerationResult(ctx, generation.ID, model.CreativeGenerationStatusCompleted, elapsedMS, finishedAt, "")

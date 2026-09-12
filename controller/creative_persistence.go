@@ -297,7 +297,7 @@ func formatCreativeTime(value time.Time) string {
 	if value.IsZero() {
 		return ""
 	}
-	return value.Format("2006-01-02 15:04:05")
+	return value.In(time.Local).Format("2006-01-02 15:04:05")
 }
 
 func formatCreativeTimePtr(value *time.Time) any {

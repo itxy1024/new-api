@@ -116,13 +116,13 @@ func isCreativeUnixColumn(dataType string) bool {
 }
 
 func migrateCreativeUnixColumn(db *gorm.DB, table, column string) error {
-	quoted := table + "." + column
+	// 创作中心的历史时间按中国标准时间落库，避免数据库默认 UTC 导致展示少八小时。
 	switch db.Dialector.Name() {
 	case "sqlite":
 		if column == "finished_at" {
-			return db.Exec("UPDATE " + table + " SET " + column + " = CASE WHEN " + quoted + " > 0 THEN datetime(" + column + ", 'unixepoch') ELSE NULL END").Error
+			return db.Exec("UPDATE " + table + " SET " + column + " = datetime(CAST(" + column + " AS INTEGER), 'unixepoch', '+8 hours') WHERE CAST(" + column + " AS INTEGER) > 100000000").Error
 		}
-		return db.Exec("UPDATE " + table + " SET " + column + " = datetime(" + column + ", 'unixepoch') WHERE " + column + " > 0").Error
+		return db.Exec("UPDATE " + table + " SET " + column + " = datetime(CAST(" + column + " AS INTEGER), 'unixepoch', '+8 hours') WHERE CAST(" + column + " AS INTEGER) > 100000000").Error
 	case "mysql":
 		// MySQL 严格模式下，不能把 DATETIME 表达式直接写回整数列；先转成字符再改类型。
 		nullable := column == "finished_at"
@@ -134,18 +134,18 @@ func migrateCreativeUnixColumn(db *gorm.DB, table, column string) error {
 			return err
 		}
 		if nullable {
-			if err := db.Exec("UPDATE " + table + " SET " + column + " = CASE WHEN CAST(" + column + " AS SIGNED) > 0 THEN DATE_FORMAT(FROM_UNIXTIME(CAST(" + column + " AS SIGNED)), '%Y-%m-%d %H:%i:%s') ELSE NULL END").Error; err != nil {
+			if err := db.Exec("UPDATE " + table + " SET " + column + " = CASE WHEN CAST(" + column + " AS SIGNED) > 0 THEN DATE_FORMAT(TIMESTAMPADD(SECOND, CAST(" + column + " AS SIGNED) + 28800, '1970-01-01 00:00:00'), '%Y-%m-%d %H:%i:%s') ELSE NULL END").Error; err != nil {
 				return err
 			}
-		} else if err := db.Exec("UPDATE " + table + " SET " + column + " = DATE_FORMAT(FROM_UNIXTIME(GREATEST(CAST(" + column + " AS SIGNED), 0)), '%Y-%m-%d %H:%i:%s')").Error; err != nil {
+		} else if err := db.Exec("UPDATE " + table + " SET " + column + " = DATE_FORMAT(TIMESTAMPADD(SECOND, GREATEST(CAST(" + column + " AS SIGNED), 0) + 28800, '1970-01-01 00:00:00'), '%Y-%m-%d %H:%i:%s')").Error; err != nil {
 			return err
 		}
 		return db.Exec("ALTER TABLE " + table + " MODIFY COLUMN " + column + " DATETIME " + nullSQL).Error
 	case "postgres":
 		if column == "finished_at" {
-			return db.Exec("ALTER TABLE " + table + " ALTER COLUMN " + column + " TYPE TIMESTAMP USING CASE WHEN " + column + " IS NULL OR " + column + " = 0 THEN NULL ELSE to_timestamp(" + column + ") END").Error
+			return db.Exec("ALTER TABLE " + table + " ALTER COLUMN " + column + " TYPE TIMESTAMP USING CASE WHEN " + column + " IS NULL OR " + column + " = 0 THEN NULL ELSE to_timestamp(" + column + ") AT TIME ZONE 'Asia/Shanghai' END").Error
 		}
-		return db.Exec("ALTER TABLE " + table + " ALTER COLUMN " + column + " TYPE TIMESTAMP USING to_timestamp(" + column + ")").Error
+		return db.Exec("ALTER TABLE " + table + " ALTER COLUMN " + column + " TYPE TIMESTAMP USING to_timestamp(" + column + ") AT TIME ZONE 'Asia/Shanghai'").Error
 	default:
 		return nil
 	}
