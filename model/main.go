@@ -166,14 +166,8 @@ func chooseDB(envName string, isLog bool) (*gorm.DB, common.DatabaseType, error)
 		}
 		// Use MySQL
 		common.SysLog("using MySQL as database")
-		// check parseTime
-		if !strings.Contains(dsn, "parseTime") {
-			if strings.Contains(dsn, "?") {
-				dsn += "&parseTime=true"
-			} else {
-				dsn += "?parseTime=true"
-			}
-		}
+		// MySQL 的 DATETIME 不携带时区，固定驱动读写位置为中国标准时间。
+		dsn = normalizeMySQLTimeZoneDSN(dsn)
 		db, err := gorm.Open(mysqlMigrationDialector{mysql.Dialector{Config: &mysql.Config{DSN: dsn}}}, newGormConfig(true))
 		return db, common.DatabaseTypeMySQL, err
 	}
@@ -181,6 +175,21 @@ func chooseDB(envName string, isLog bool) (*gorm.DB, common.DatabaseType, error)
 	common.SysLog("SQL_DSN not set, using SQLite as database")
 	db, err := gorm.Open(sqlite.Open(common.SQLitePath), newGormConfig(true))
 	return db, common.DatabaseTypeSQLite, err
+}
+
+func normalizeMySQLTimeZoneDSN(dsn string) string {
+	base, rawQuery, hasQuery := strings.Cut(dsn, "?")
+	query, err := url.ParseQuery(rawQuery)
+	if !hasQuery || err != nil {
+		if hasQuery {
+			rawQuery += "&parseTime=true&loc=Asia%2FShanghai"
+			return base + "?" + rawQuery
+		}
+		return dsn + "?parseTime=true&loc=Asia%2FShanghai"
+	}
+	query.Set("parseTime", "true")
+	query.Set("loc", "Asia/Shanghai")
+	return base + "?" + query.Encode()
 }
 
 func InitDB() (err error) {

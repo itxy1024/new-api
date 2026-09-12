@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/QuantumNous/new-api/common"
@@ -38,7 +37,7 @@ func CreativeImage(c *gin.Context) {
 	userID := c.GetInt("id")
 	tokenID := c.GetInt("token_id")
 	group := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
-	startedAt := time.Now()
+	startedAt := model.CreativeNow()
 	generation := beginCreativeImageGeneration(metadata, userID, tokenID, group, startedAt)
 	originalWriter := c.Writer
 	captureWriter := &creativeCaptureWriter{ResponseWriter: originalWriter}
@@ -49,7 +48,7 @@ func CreativeImage(c *gin.Context) {
 	c.Writer = originalWriter
 	if status < http.StatusOK || status >= http.StatusMultipleChoices || captureWriter.overflow || captureWriter.buffer.Len() == 0 {
 		if generation != nil {
-			finishedAt := time.Now()
+			finishedAt := model.CreativeNow()
 			_ = model.UpdateCreativeGenerationResult(c.Request.Context(), generation.ID, model.CreativeGenerationStatusFailed, elapsedMS, &finishedAt, "图片生成请求失败")
 		}
 		return

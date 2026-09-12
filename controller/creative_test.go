@@ -120,10 +120,6 @@ func TestDecodeCreativeDataURLRejectsNonDataURL(t *testing.T) {
 }
 
 func TestFormatCreativeTimeUsesLocalTimezone(t *testing.T) {
-	previousLocation := time.Local
-	time.Local = time.FixedZone("CST", 8*60*60)
-	t.Cleanup(func() { time.Local = previousLocation })
-
 	value := time.Date(2026, 9, 10, 2, 20, 0, 0, time.UTC)
 	require.Equal(t, "2026-09-10 10:20:00", formatCreativeTime(value))
 }

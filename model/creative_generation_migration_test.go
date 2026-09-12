@@ -51,3 +51,23 @@ VALUES (1, 1, 7, 'image-1', 's3', 'artifacts', 'image-1.png', 1789010410)`).Erro
 	require.NoError(t, database.First(&asset, 1).Error)
 	assert.Equal(t, time.Unix(1789010410, 0).UTC().Add(8*time.Hour).Format("2006-01-02 15:04:05"), asset.CreatedAt.Format("2006-01-02 15:04:05"))
 }
+
+func TestMigrateCreativeDateTimeTimezoneOnce(t *testing.T) {
+	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, database.Exec(`CREATE TABLE creative_generations (id INTEGER PRIMARY KEY, created_at DATETIME NOT NULL, finished_at DATETIME)`).Error)
+	require.NoError(t, database.Exec(`INSERT INTO creative_generations VALUES (1, '2026-09-10 02:00:00', '2026-09-10 02:00:05')`).Error)
+	require.NoError(t, migrateCreativeGenerationTimestamps(database))
+	require.NoError(t, migrateCreativeGenerationTimestamps(database))
+	var createdAt, finishedAt string
+	require.NoError(t, database.Raw("SELECT created_at, finished_at FROM creative_generations WHERE id = 1").Row().Scan(&createdAt, &finishedAt))
+	assert.Equal(t, "2026-09-10 10:00:00", createdAt)
+	assert.Equal(t, "2026-09-10 10:00:05", finishedAt)
+}
+
+func TestNormalizeMySQLTimeZoneDSN(t *testing.T) {
+	assert.Equal(t,
+		"user:pass@tcp(localhost:3306)/db?loc=Asia%2FShanghai&parseTime=true",
+		normalizeMySQLTimeZoneDSN("user:pass@tcp(localhost:3306)/db?parseTime=false&loc=UTC"),
+	)
+}

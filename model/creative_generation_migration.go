@@ -13,6 +13,9 @@ func migrateCreativeGenerationTimestamps(db *gorm.DB) error {
 	if db == nil {
 		return fmt.Errorf("创作记录时间迁移：数据库为空")
 	}
+	if err := migrateCreativeDateTimeTimezone(db); err != nil {
+		return err
+	}
 	for _, table := range []string{"creative_generations", "creative_assets"} {
 		if !db.Migrator().HasTable(table) {
 			continue
@@ -34,6 +37,68 @@ func migrateCreativeGenerationTimestamps(db *gorm.DB) error {
 		}
 	}
 	return nil
+}
+
+const creativeTimezoneMigrationName = "creative_datetime_asia_shanghai_v1"
+
+// migrateCreativeDateTimeTimezone 修正上一版已转换为数据库时间类型、但按 UTC 落库的记录。
+func migrateCreativeDateTimeTimezone(db *gorm.DB) error {
+	if !db.Migrator().HasTable("creative_generations") && !db.Migrator().HasTable("creative_assets") {
+		return nil
+	}
+	if err := db.Exec(`CREATE TABLE IF NOT EXISTS creative_generation_migrations (name VARCHAR(64) NOT NULL PRIMARY KEY)`).Error; err != nil {
+		return fmt.Errorf("创建创作时间迁移标记失败：%w", err)
+	}
+	var applied int64
+	if err := db.Table("creative_generation_migrations").Where("name = ?", creativeTimezoneMigrationName).Count(&applied).Error; err != nil {
+		return fmt.Errorf("读取创作时间迁移标记失败：%w", err)
+	}
+	if applied > 0 {
+		return nil
+	}
+	for _, table := range []string{"creative_generations", "creative_assets"} {
+		if !db.Migrator().HasTable(table) {
+			continue
+		}
+		for _, column := range []string{"created_at", "finished_at"} {
+			if table == "creative_assets" && column == "finished_at" {
+				continue
+			}
+			dataType, err := creativeColumnDataType(db, table, column)
+			if err != nil {
+				return err
+			}
+			if !isCreativeDateTimeColumn(dataType) {
+				continue
+			}
+			if err := shiftCreativeDateTime(db, table, column); err != nil {
+				return err
+			}
+		}
+	}
+	if err := db.Table("creative_generation_migrations").Create(map[string]any{"name": creativeTimezoneMigrationName}).Error; err != nil {
+		return fmt.Errorf("写入创作时间迁移标记失败：%w", err)
+	}
+	return nil
+}
+
+func isCreativeDateTimeColumn(dataType string) bool {
+	dataType = strings.ToLower(strings.TrimSpace(dataType))
+	return strings.Contains(dataType, "date") || strings.Contains(dataType, "time")
+}
+
+func shiftCreativeDateTime(db *gorm.DB, table, column string) error {
+	quoted := table + "." + column
+	switch db.Dialector.Name() {
+	case "sqlite":
+		return db.Exec("UPDATE " + table + " SET " + column + " = datetime(" + quoted + ", '+8 hours') WHERE " + quoted + " IS NOT NULL AND trim(" + quoted + ") <> ''").Error
+	case "mysql":
+		return db.Exec("UPDATE " + table + " SET " + column + " = DATE_ADD(" + quoted + ", INTERVAL 8 HOUR) WHERE " + quoted + " IS NOT NULL").Error
+	case "postgres":
+		return db.Exec("UPDATE " + table + " SET " + column + " = " + quoted + " + INTERVAL '8 hours' WHERE " + quoted + " IS NOT NULL").Error
+	default:
+		return nil
+	}
 }
 
 // migrateCreativeGenerationOutputURLs 回填旧资产的固定地址，方便直接在生成表查看结果。

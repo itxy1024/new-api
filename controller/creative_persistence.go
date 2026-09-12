@@ -125,7 +125,7 @@ func persistCreativeImageResponse(metadata creativeRequestEnvelope, generation *
 
 	var response creativeImageResponse
 	if err := common.Unmarshal(responseBody, &response); err != nil || len(response.Data) == 0 {
-		finishedAt := time.Now()
+		finishedAt := model.CreativeNow()
 		_ = model.UpdateCreativeGenerationResult(ctx, generation.ID, model.CreativeGenerationStatusFailed, elapsedMS, &finishedAt, "图片响应无法解析")
 		logger.LogError(ctx, "创作中心图片响应无法解析，已跳过 OSS 持久化")
 		return
@@ -134,7 +134,7 @@ func persistCreativeImageResponse(metadata creativeRequestEnvelope, generation *
 	for index := range response.Data {
 		content, mimeType, err := loadCreativeImageContent(ctx, response.Data[index], metadata.OutputFormat)
 		if err != nil {
-			finishedAt := time.Now()
+			finishedAt := model.CreativeNow()
 			_ = model.UpdateCreativeGenerationResult(ctx, generation.ID, model.CreativeGenerationStatusFailed, elapsedMS, &finishedAt, err.Error())
 			logger.LogError(ctx, "读取创作中心图片结果失败: "+err.Error())
 			return
@@ -154,13 +154,13 @@ func persistCreativeImageResponse(metadata creativeRequestEnvelope, generation *
 			Height:       height,
 		}, bytes.NewReader(content))
 		if err != nil {
-			finishedAt := time.Now()
+			finishedAt := model.CreativeNow()
 			_ = model.UpdateCreativeGenerationResult(ctx, generation.ID, model.CreativeGenerationStatusFailed, elapsedMS, &finishedAt, err.Error())
 			logger.LogError(ctx, "写入创作中心图片 OSS 失败: "+err.Error())
 			return
 		}
 	}
-	finishedAt := time.Now()
+	finishedAt := model.CreativeNow()
 	if err := model.UpdateCreativeGenerationResult(ctx, generation.ID, model.CreativeGenerationStatusCompleted, elapsedMS, &finishedAt, ""); err != nil {
 		logger.LogError(ctx, "更新创作中心图片记录失败: "+err.Error())
 	}
@@ -297,7 +297,7 @@ func formatCreativeTime(value time.Time) string {
 	if value.IsZero() {
 		return ""
 	}
-	return value.In(time.Local).Format("2006-01-02 15:04:05")
+	return value.In(model.CreativeTimeLocation).Format("2006-01-02 15:04:05")
 }
 
 func formatCreativeTimePtr(value *time.Time) any {
