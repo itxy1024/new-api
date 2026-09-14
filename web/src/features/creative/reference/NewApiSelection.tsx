@@ -12,7 +12,12 @@ import { api } from '@/lib/api'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { DEFAULT_SETTINGS } from './lib/apiProfiles'
-import { setNewApiSelection } from './lib/newApiSelection'
+import {
+  clearStoredNewApiSelection,
+  getStoredNewApiSelection,
+  saveNewApiSelection,
+  setNewApiSelection,
+} from './lib/newApiSelection'
 import { useStore } from './store'
 
 type KeyOption = {
@@ -108,6 +113,8 @@ export default function NewApiSelection() {
   )
   const selectedKeyIdRef = useRef('')
   const userInteractedRef = useRef(false)
+  const [initialStoredSelection] = useState(() => getStoredNewApiSelection())
+  const storedSelectionRef = useRef(initialStoredSelection)
 
   const loadModelsForKey = useCallback((requestedKeyId: string) => {
     const cached = modelsByKeyRef.current.get(requestedKeyId)
@@ -225,6 +232,18 @@ export default function NewApiSelection() {
         )
         setKeys(next)
 
+        const storedSelection = storedSelectionRef.current
+        let storedCandidateIndex = -1
+        if (storedSelection) {
+          storedCandidateIndex = next.findIndex(
+            (item) => item.id === storedSelection.keyId
+          )
+          if (storedCandidateIndex < 0) {
+            clearStoredNewApiSelection()
+            storedSelectionRef.current = null
+          }
+        }
+
         const modelResults = Array.from(
           { length: next.length },
           (): ModelOption[] | undefined => undefined
@@ -233,9 +252,17 @@ export default function NewApiSelection() {
         let scanIndex = 0
         let nextDefaultCandidate = 0
         let defaultApplied = false
+        let storedSelectionChecked = storedCandidateIndex < 0
 
         const applyDefaultWhenReady = () => {
-          if (defaultApplied || userInteractedRef.current || !active) return
+          if (
+            defaultApplied ||
+            !storedSelectionChecked ||
+            userInteractedRef.current ||
+            !active
+          ) {
+            return
+          }
 
           while (settled[nextDefaultCandidate]) {
             const defaultModel = modelResults[nextDefaultCandidate]?.find(
@@ -278,6 +305,36 @@ export default function NewApiSelection() {
               }
             }
             settled[currentIndex] = true
+            if (
+              !storedSelectionChecked &&
+              currentIndex === storedCandidateIndex
+            ) {
+              const savedModel = storedSelection
+                ? modelResults[currentIndex]?.find(
+                    (item) =>
+                      item.id === storedSelection.model &&
+                      (item.group ?? '') === storedSelection.group
+                  )
+                : undefined
+              storedSelectionChecked = true
+              if (
+                storedSelection &&
+                savedModel &&
+                !userInteractedRef.current &&
+                active
+              ) {
+                const savedKeyId = String(storedSelection.keyId)
+                defaultApplied = true
+                selectedKeyIdRef.current = savedKeyId
+                setKeyId(savedKeyId)
+                setModels(modelResults[currentIndex] ?? [])
+                setModel(savedModel.id)
+                setGroup(savedModel.group ?? '')
+              } else if (storedSelection && !userInteractedRef.current) {
+                clearStoredNewApiSelection()
+                storedSelectionRef.current = null
+              }
+            }
             applyDefaultWhenReady()
           }
         }
@@ -333,7 +390,10 @@ export default function NewApiSelection() {
   useEffect(() => {
     const parsedKeyId = Number(keyId)
     if (Number.isInteger(parsedKeyId) && parsedKeyId > 0 && model) {
-      setNewApiSelection({ keyId: parsedKeyId, model, group })
+      const nextSelection = { keyId: parsedKeyId, model, group }
+      setNewApiSelection(nextSelection)
+      saveNewApiSelection(nextSelection)
+      storedSelectionRef.current = nextSelection
     } else {
       setNewApiSelection(null)
     }

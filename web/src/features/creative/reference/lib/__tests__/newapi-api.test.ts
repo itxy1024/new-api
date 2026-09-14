@@ -5,12 +5,39 @@ import { api } from '@/lib/api'
 import { DEFAULT_PARAMS } from '../../types'
 import { callImageApi } from '../api'
 import { DEFAULT_SETTINGS } from '../apiProfiles'
-import { setNewApiSelection } from '../newApiSelection'
+import {
+  clearStoredNewApiSelection,
+  getStoredNewApiSelection,
+  saveNewApiSelection,
+  setNewApiSelection,
+} from '../newApiSelection'
 
 describe('NewAPI 图片请求', () => {
   afterEach(() => {
     setNewApiSelection(null)
+    clearStoredNewApiSelection()
     vi.restoreAllMocks()
+  })
+
+  it('只在浏览器保存 Key ID、分组和模型并可重新读取', () => {
+    const selection = {
+      keyId: 17,
+      model: 'vendor-image-model',
+      group: 'premium',
+    }
+
+    saveNewApiSelection(selection)
+
+    expect(getStoredNewApiSelection()).toEqual(selection)
+  })
+
+  it('浏览器缓存格式无效时不恢复模型选择', () => {
+    window.localStorage.setItem(
+      'creative:new-api-selection:v1',
+      JSON.stringify({ keyId: 17, model: '', group: 'premium' })
+    )
+
+    expect(getStoredNewApiSelection()).toBeNull()
   })
 
   it('始终使用当前选择的 Key、模型和分组构造请求体', async () => {
@@ -56,7 +83,10 @@ describe('NewAPI 图片请求', () => {
       client_task_id: 'local-task-123',
       model: 'vendor-image-model',
       group: 'premium',
+      n: 1,
     })
+    expect(post.mock.calls[0]?.[1]).not.toHaveProperty('expected_n')
+    expect(post.mock.calls[0]?.[1]).not.toHaveProperty('request_index')
   })
 
   it('没有选择模型时在发送请求前终止', async () => {

@@ -214,6 +214,7 @@ export function ChannelsTable() {
       (groupsData?.data || []).map((g) => ({
         label: g,
         value: g,
+        translate: false,
       })),
     [groupsData]
   )

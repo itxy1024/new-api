@@ -2621,35 +2621,49 @@ export async function submitTask(
     useStore.getState().setParams(normalizedParamPatch)
   }
 
-  const taskId = genId()
-  const task: TaskRecord = {
-    id: taskId,
-    prompt: prompt.trim(),
-    params: taskParams,
-    apiProvider: activeProfile.provider,
-    apiProfileId: activeProfile.id,
-    apiProfileName: activeProfile.name,
-    apiMode: activeProfile.apiMode,
-    apiModel: activeProfile.model,
-    ...(selectedNewApi && activeProfile.id === 'newapi'
-      ? { newApiKeyId: selectedNewApi.keyId, newApiGroup: selectedNewApi.group }
-      : {}),
-    inputImageIds: orderedInputImages.map((i) => i.id),
-    maskTargetImageId,
-    maskImageId,
-    transparentOutput: transparentMeta?.transparentOutput,
-    transparentPrompt: transparentMeta?.effectivePrompt,
-    outputImages: [],
-    status: 'running',
-    error: null,
-    createdAt: Date.now(),
-    finishedAt: null,
-    elapsed: null,
-  }
+  const splitIntoIndependentTasks =
+    activeProfile.id === 'newapi' ||
+    activeProfile.baseUrl.trim() === '/api/creative'
+  const taskCount = splitIntoIndependentTasks
+    ? Math.max(1, Math.trunc(taskParams.n))
+    : 1
+  const independentTaskParams = splitIntoIndependentTasks
+    ? { ...taskParams, n: 1 }
+    : taskParams
+  const tasks = Array.from({ length: taskCount }, (): TaskRecord => {
+    const taskId = genId()
+    return {
+      id: taskId,
+      prompt: prompt.trim(),
+      params: { ...independentTaskParams },
+      apiProvider: activeProfile.provider,
+      apiProfileId: activeProfile.id,
+      apiProfileName: activeProfile.name,
+      apiMode: activeProfile.apiMode,
+      apiModel: activeProfile.model,
+      ...(selectedNewApi && splitIntoIndependentTasks
+        ? {
+            newApiKeyId: selectedNewApi.keyId,
+            newApiGroup: selectedNewApi.group,
+          }
+        : {}),
+      inputImageIds: orderedInputImages.map((i) => i.id),
+      maskTargetImageId,
+      maskImageId,
+      transparentOutput: transparentMeta?.transparentOutput,
+      transparentPrompt: transparentMeta?.effectivePrompt,
+      outputImages: [],
+      status: 'running',
+      error: null,
+      createdAt: Date.now(),
+      finishedAt: null,
+      elapsed: null,
+    }
+  })
 
   const latestTasks = useStore.getState().tasks
-  useStore.getState().setTasks([task, ...latestTasks])
-  await putTask(task)
+  useStore.getState().setTasks([...tasks, ...latestTasks])
+  await Promise.all(tasks.map((task) => putTask(task)))
   useStore.getState().showToast('任务已提交', 'success')
 
   if (settings.clearInputAfterSubmit) {
@@ -2659,7 +2673,7 @@ export async function submitTask(
   useStore.getState().setReusedTaskApiProfile(null)
 
   // 异步调用 API
-  executeTask(taskId)
+  for (const task of tasks) executeTask(task.id)
 }
 
 function getActiveAgentConversation(): AgentConversation {

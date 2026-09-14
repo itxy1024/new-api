@@ -17,6 +17,9 @@ import type { ModelGroupSelector } from '@/components/model-group-selector'
 
 const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
+  clearStoredNewApiSelection: vi.fn(),
+  getStoredNewApiSelection: vi.fn(),
+  saveNewApiSelection: vi.fn(),
   setNewApiSelection: vi.fn(),
   setSettings: vi.fn(),
   settings: {
@@ -46,6 +49,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/api', () => ({ api: { get: mocks.apiGet } }))
 
 vi.mock('../lib/newApiSelection', () => ({
+  clearStoredNewApiSelection: mocks.clearStoredNewApiSelection,
+  getStoredNewApiSelection: mocks.getStoredNewApiSelection,
+  saveNewApiSelection: mocks.saveNewApiSelection,
   setNewApiSelection: mocks.setNewApiSelection,
 }))
 
@@ -109,6 +115,9 @@ describe('图片生成页的模型分组选择', () => {
   beforeEach(() => {
     window.localStorage.clear()
     mocks.apiGet.mockReset()
+    mocks.clearStoredNewApiSelection.mockReset()
+    mocks.getStoredNewApiSelection.mockReset().mockReturnValue(null)
+    mocks.saveNewApiSelection.mockReset()
     mocks.setNewApiSelection.mockReset()
     mocks.setSettings.mockReset()
     mocks.apiGet.mockImplementation(
@@ -187,15 +196,15 @@ describe('图片生成页的模型分组选择', () => {
       expect(screen.getByTestId('selected-model')).toHaveTextContent(
         'image\x00vendor-image-v2'
       )
+      expect(mocks.setNewApiSelection).toHaveBeenCalledWith({
+        keyId: 8,
+        model: 'vendor-image-v2',
+        group: 'image',
+      })
     })
     expect(screen.getByTestId('visible-models')).toHaveTextContent(
       'vendor-image-v2'
     )
-    expect(mocks.setNewApiSelection).toHaveBeenCalledWith({
-      keyId: 8,
-      model: 'vendor-image-v2',
-      group: 'image',
-    })
     expect(mocks.apiGet).toHaveBeenCalledWith('/api/token/', {
       params: { p: 2, size: 100 },
     })
@@ -241,6 +250,46 @@ describe('图片生成页的模型分组选择', () => {
         '7\x00VENDOR-IMAGE-A'
       )
     })
+  })
+
+  test('浏览器保存的 Key、分组和模型仍可用时优先恢复选择', async () => {
+    mocks.getStoredNewApiSelection.mockReturnValue({
+      keyId: 8,
+      model: 'image-backup',
+      group: 'backup',
+    })
+
+    render(<NewApiSelection />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('selected-key')).toHaveTextContent('8')
+      expect(screen.getByTestId('selected-model')).toHaveTextContent(
+        'backup\x00image-backup'
+      )
+      expect(mocks.saveNewApiSelection).toHaveBeenCalledWith({
+        keyId: 8,
+        model: 'image-backup',
+        group: 'backup',
+      })
+    })
+  })
+
+  test('浏览器保存的模型已经不存在时清除缓存并回退默认模型逻辑', async () => {
+    mocks.getStoredNewApiSelection.mockReturnValue({
+      keyId: 8,
+      model: 'removed-image-model',
+      group: 'backup',
+    })
+
+    render(<NewApiSelection />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('selected-key')).toHaveTextContent('7')
+      expect(screen.getByTestId('selected-model')).toHaveTextContent(
+        'default\x00image-default'
+      )
+    })
+    expect(mocks.clearStoredNewApiSelection).toHaveBeenCalledTimes(1)
   })
 
   test('没有名称包含 image 的模型时保持空选择，并允许手动选择 Key 和模型', async () => {
@@ -414,6 +463,59 @@ describe('图片生成页的模型分组选择', () => {
         'backup\x00image-backup'
       )
     })
+    expect(mocks.clearStoredNewApiSelection).not.toHaveBeenCalled()
+  })
+
+  test('缓存校验期间手动选择的新模型不会被迟到结果清除', async () => {
+    const key7Models = deferred<ModelResponse>()
+    const key8Models = deferred<ModelResponse>()
+    mocks.getStoredNewApiSelection.mockReturnValue({
+      keyId: 7,
+      model: 'removed-image-model',
+      group: 'default',
+    })
+    mocks.apiGet.mockImplementation(
+      (url: string, config?: { params?: { key_id?: string } }) => {
+        if (url === '/api/token/') {
+          return Promise.resolve({
+            data: {
+              data: {
+                items: [
+                  { id: 7, name: '绘图 Key', status: 1 },
+                  { id: 8, name: '备用 Key', status: 1 },
+                ],
+                total: 2,
+              },
+            },
+          })
+        }
+        return String(config?.params?.key_id) === '7'
+          ? key7Models.promise
+          : key8Models.promise
+      }
+    )
+
+    render(<NewApiSelection />)
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '备用 Key' })).toBeEnabled()
+    })
+    fireEvent.click(screen.getByRole('button', { name: '备用 Key' }))
+    key8Models.resolve({
+      data: { data: [{ id: 'image-backup', group: 'backup' }] },
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'image-backup' })).toBeEnabled()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'image-backup' }))
+
+    key7Models.resolve({ data: { data: [] } })
+    await waitFor(() => {
+      expect(screen.getByTestId('selected-key')).toHaveTextContent('8')
+      expect(screen.getByTestId('selected-model')).toHaveTextContent(
+        'backup\x00image-backup'
+      )
+    })
+    expect(mocks.clearStoredNewApiSelection).not.toHaveBeenCalled()
   })
 
   test('模型接口确认 Key 分组不可用时从选择器移除该 Key', async () => {
