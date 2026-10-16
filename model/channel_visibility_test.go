@@ -57,7 +57,7 @@ func TestAdminVisibleChannelNeverParticipatesInRouting(t *testing.T) {
 			t.Cleanup(func() { common.MemoryCacheEnabled = original })
 			InitChannelCache()
 
-			channel, err := GetRandomSatisfiedChannel("default", "test-model", 0, "")
+			channel, err := GetRandomSatisfiedChannel("default", "test-model", 0, nil)
 			require.NoError(t, err)
 			require.NotNil(t, channel)
 			assert.Equal(t, 11, channel.Id)

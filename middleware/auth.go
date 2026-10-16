@@ -428,11 +428,7 @@ func RequireVisibleChannel() func(c *gin.Context) {
 		}
 		var count int64
 		if err := model.DB.Model(&model.Channel{}).Where("id = ? AND admin_visible = ?", c.Param("id"), true).Count(&count).Error; err != nil || count == 0 {
-			c.JSON(http.StatusForbidden, gin.H{
-				"success": false,
-				"message": common.TranslateMessage(c, i18n.MsgAuthInsufficientPrivilege),
-			})
-			c.Abort()
+			abortWithWebMessage(c, http.StatusForbidden, "AUTH_INSUFFICIENT_PRIVILEGE", common.NewMessage("Unauthorized, insufficient privileges"))
 			return
 		}
 		c.Next()

@@ -64,7 +64,7 @@ func persistCreativeVideoTask(ctx context.Context, task *model.Task) error {
 		} else if existing != nil {
 			continue
 		}
-		descriptor, err := creativeVideoContentRequest(task, artifacts[index])
+		descriptor, err := creativeVideoContentRequest(ctx, task, artifacts[index])
 		if err != nil {
 			return err
 		}
@@ -87,7 +87,7 @@ func persistCreativeVideoTask(ctx context.Context, task *model.Task) error {
 	return nil
 }
 
-func creativeVideoContentRequest(task *model.Task, artifact relaychannel.TaskArtifact) (*relaychannel.TaskContentRequest, error) {
+func creativeVideoContentRequest(ctx context.Context, task *model.Task, artifact relaychannel.TaskArtifact) (*relaychannel.TaskContentRequest, error) {
 	if !taskHasPluginExecution(task) {
 		return &relaychannel.TaskContentRequest{
 			URL:            task.GetResultURL(),
@@ -103,7 +103,7 @@ func creativeVideoContentRequest(task *model.Task, artifact relaychannel.TaskArt
 	if !ok {
 		return nil, errTaskArtifactPluginUnavailable
 	}
-	return provider.BuildContentRequest(task, artifact.Key, relaychannel.TaskArtifactClientRequest{Method: http.MethodGet})
+	return provider.BuildContentRequest(ctx, task, artifact.Key, relaychannel.TaskArtifactClientRequest{Method: http.MethodGet})
 }
 
 func openCreativeVideoContent(ctx context.Context, task *model.Task, descriptor *relaychannel.TaskContentRequest) (io.Reader, string, func() error, error) {

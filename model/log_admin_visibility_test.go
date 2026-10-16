@@ -26,7 +26,7 @@ func TestAdminLogQueriesExcludeRootUsers(t *testing.T) {
 		{UserId: rootUserId, Username: "root-log"},
 		{UserId: regularUserId, Username: "user-log"},
 	}).Error)
-	logs, total, err := GetAllLogs(0, 0, 0, "", "", "", 0, 20, 0, "", "", "", []int{rootUserId})
+	logs, total, err := GetAllLogs(LogFilter{ExcludedUserIDs: []int{rootUserId}}, 0, 20)
 	require.NoError(t, err)
 	require.Len(t, logs, 1)
 	assert.Equal(t, int64(1), total)
