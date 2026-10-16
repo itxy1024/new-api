@@ -42,6 +42,8 @@ export function getApiKeyFormSchema(t: TFunction, maxAutoGroups = 5) {
       allow_ips: z.string().optional(),
       groups: z.array(z.string()).min(1, t('Please select at least one group')),
       group_aggregation_enabled: z.boolean(),
+      allow_user_quota_query: z.boolean(),
+      group: z.string().optional(),
       auto_groups_mode: z.enum(['inherit', 'custom']),
       auto_groups: z.array(z.string()),
       cross_group_retry: z.boolean().optional(),
@@ -109,6 +111,8 @@ export const API_KEY_FORM_DEFAULT_VALUES: ApiKeyFormValues = {
   allow_ips: '',
   groups: [DEFAULT_GROUP],
   group_aggregation_enabled: false,
+  allow_user_quota_query: true,
+  group: DEFAULT_GROUP,
   auto_groups_mode: 'inherit',
   auto_groups: [],
   cross_group_retry: true,
@@ -153,6 +157,7 @@ export function transformFormDataToPayload(
     group: data.groups[0] || '',
     groups: data.groups,
     group_aggregation_enabled: data.group_aggregation_enabled,
+    allow_user_quota_query: data.allow_user_quota_query,
     auto_groups:
       data.groups[0] === 'auto' && data.auto_groups_mode === 'custom'
         ? data.auto_groups
@@ -195,6 +200,8 @@ export function transformApiKeyToFormDefaults(
       : [apiKey.group || DEFAULT_GROUP],
     group_aggregation_enabled: apiKey.group_aggregation_enabled,
     auto_groups_mode: storedAutoGroups.length > 0 ? 'custom' : 'inherit',
+    allow_user_quota_query: !!apiKey.allow_user_quota_query,
+    group: apiKey.group || DEFAULT_GROUP,
     auto_groups: autoGroups,
     cross_group_retry: !!apiKey.cross_group_retry,
     tokenCount: 1,
@@ -215,6 +222,7 @@ export function buildQuickGroupUpdatePayload(
     remain_quota: apiKey.remain_quota,
     expired_time: apiKey.expired_time,
     unlimited_quota: apiKey.unlimited_quota,
+    allow_user_quota_query: apiKey.allow_user_quota_query,
     model_limits_enabled: apiKey.model_limits_enabled,
     model_limits: apiKey.model_limits || '',
     allow_ips: apiKey.allow_ips || '',

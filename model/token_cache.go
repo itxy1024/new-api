@@ -32,7 +32,7 @@ func tokenCacheTTLSeconds() int {
 // While the fence exists readers simply serve the database without caching.
 const tokenCacheFenceSeconds = 10
 
-const tokenCacheSchemaVersion = "2"
+const tokenCacheSchemaVersion = "3"
 
 // invalidateTokenCacheForMutation is called before a token metadata mutation
 // writes to the database: it raises the fence and drops the cached hash so no
@@ -72,11 +72,12 @@ if redis.call('EXISTS', KEYS[2]) == 1 then
   return 0
 end
 if redis.call('EXISTS', KEYS[1]) == 1 then
-  if redis.call('HGET', KEYS[1], 'SchemaVersion') ~= ARGV[19] then
+  if redis.call('HGET', KEYS[1], 'SchemaVersion') ~= ARGV[20] then
     redis.call('HSET', KEYS[1],
-      'GroupsJSON', ARGV[17], 'GroupAggregationEnabled', ARGV[18], 'SchemaVersion', ARGV[19])
+      'GroupsJSON', ARGV[17], 'GroupAggregationEnabled', ARGV[18],
+      'AllowUserQuotaQuery', ARGV[19], 'SchemaVersion', ARGV[20])
   end
-  redis.call('EXPIRE', KEYS[1], ARGV[20])
+  redis.call('EXPIRE', KEYS[1], ARGV[21])
   return 2
 end
 redis.call('HSET', KEYS[1],
@@ -85,8 +86,9 @@ redis.call('HSET', KEYS[1],
   'UnlimitedQuota', ARGV[8], 'ModelLimitsEnabled', ARGV[9], 'ModelLimits', ARGV[10],
   'AllowIps', ARGV[11], 'Group', ARGV[12], 'CrossGroupRetry', ARGV[13],
   'AutoGroups', ARGV[14], 'RemainQuota', ARGV[15], 'UsedQuota', ARGV[16],
-  'GroupsJSON', ARGV[17], 'GroupAggregationEnabled', ARGV[18], 'SchemaVersion', ARGV[19])
-redis.call('EXPIRE', KEYS[1], ARGV[20])
+  'GroupsJSON', ARGV[17], 'GroupAggregationEnabled', ARGV[18],
+  'AllowUserQuotaQuery', ARGV[19], 'SchemaVersion', ARGV[20])
+redis.call('EXPIRE', KEYS[1], ARGV[21])
 return 1`
 
 	return common.RDB.Eval(context.Background(), script, []string{
@@ -97,7 +99,8 @@ return 1`
 		strconv.FormatBool(token.UnlimitedQuota), strconv.FormatBool(token.ModelLimitsEnabled),
 		token.ModelLimits, allowIps, token.Group, strconv.FormatBool(token.CrossGroupRetry),
 		token.AutoGroups, token.RemainQuota, token.UsedQuota,
-		string(groups), strconv.FormatBool(token.GroupAggregationEnabled), tokenCacheSchemaVersion,
+		string(groups), strconv.FormatBool(token.GroupAggregationEnabled),
+		strconv.FormatBool(token.AllowUserQuotaQuery), tokenCacheSchemaVersion,
 		tokenCacheTTLSeconds(),
 	).Int()
 }
@@ -115,11 +118,11 @@ func cacheGetTokenByKey(key string) (*Token, error) {
 		return nil, fmt.Errorf("token cache is incomplete")
 	}
 	metadata, err := common.RDB.HMGet(context.Background(), getTokenCacheKey(key),
-		"SchemaVersion", "GroupsJSON").Result()
+		"SchemaVersion", "GroupsJSON", "AllowUserQuotaQuery").Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load token cache metadata: %w", err)
 	}
-	if len(metadata) != 2 || metadata[0] != tokenCacheSchemaVersion {
+	if len(metadata) != 3 || metadata[0] != tokenCacheSchemaVersion {
 		return nil, fmt.Errorf("token cache schema is outdated")
 	}
 	groupsJSON, ok := metadata[1].(string)
@@ -129,6 +132,11 @@ func cacheGetTokenByKey(key string) (*Token, error) {
 	if err := common.UnmarshalJsonStr(groupsJSON, &token.Groups); err != nil {
 		return nil, fmt.Errorf("failed to parse token cache groups: %w", err)
 	}
+	allowUserQuotaQuery, ok := metadata[2].(string)
+	if !ok {
+		return nil, fmt.Errorf("token cache quota query setting is incomplete")
+	}
+	token.AllowUserQuotaQuery = allowUserQuotaQuery == "true"
 	token.Key = key
 	return &token, nil
 }
