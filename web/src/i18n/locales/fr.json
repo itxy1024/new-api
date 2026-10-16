@@ -3369,6 +3369,7 @@
     "Invited": "Invité",
     "Invited {{count}} users": "{{count}} invitations",
     "Invited by user ID": "Invité par l'ID utilisateur",
+    "Invited user top-up rebate {{quota}} (rebate rate {{ratio}}%)": "Remise de recharge de l’utilisateur invité : {{quota}} (taux : {{ratio}} %)",
     "Invited Users": "Utilisateurs invités",
     "Invitee Reward": "Récompense de l'invité",
     "Inviter": "Inviteur",

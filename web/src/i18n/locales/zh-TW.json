@@ -3369,6 +3369,7 @@
     "Invited": "已邀請",
     "Invited {{count}} users": "邀請 {{count}} 人",
     "Invited by user ID": "由用戶 ID 邀請",
+    "Invited user top-up rebate {{quota}} (rebate rate {{ratio}}%)": "受邀用戶線上儲值返利 {{quota}}（返利比例 {{ratio}}%）",
     "Invited Users": "受邀用戶",
     "Invitee Reward": "受邀者獎勵",
     "Inviter": "邀請人",

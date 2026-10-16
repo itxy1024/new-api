@@ -3369,6 +3369,7 @@
     "Invited": "招待済み",
     "Invited {{count}} users": "招待 {{count}} 人",
     "Invited by user ID": "ユーザーIDによる招待",
+    "Invited user top-up rebate {{quota}} (rebate rate {{ratio}}%)": "招待ユーザーのチャージ還元 {{quota}}（還元率 {{ratio}}%）",
     "Invited Users": "招待されたユーザー",
     "Invitee Reward": "招待された側の報酬",
     "Inviter": "招待者",

@@ -108,7 +108,10 @@ func recordInviterTopUpCommission(commission *inviterTopUpCommission) {
 	RecordLog(
 		commission.InviterId,
 		LogTypeSystem,
-		fmt.Sprintf("受邀用户在线充值返利 %s（返利比例 %g%%）", logger.LogQuota(commission.Quota), commission.Ratio),
+		common.NewMessage("Invited user top-up rebate {{quota}} (rebate rate {{ratio}}%)", map[string]any{
+			"quota": logger.LogQuota(commission.Quota),
+			"ratio": fmt.Sprintf("%g", commission.Ratio),
+		}),
 	)
 }
 

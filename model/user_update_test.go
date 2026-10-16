@@ -44,6 +44,33 @@ func createUserBindTestUser(t *testing.T) User {
 	return user
 }
 
+func TestInviteUserAddsConfiguredRewardAndHistory(t *testing.T) {
+	setupUserUpdateTestState(t)
+
+	originalQuotaForInviter := common.QuotaForInviter
+	common.QuotaForInviter = 250
+	t.Cleanup(func() {
+		common.QuotaForInviter = originalQuotaForInviter
+	})
+
+	user := User{
+		Username:        "invite-reward-user",
+		Status:          common.UserStatusEnabled,
+		AffCount:        2,
+		AffQuota:        100,
+		AffHistoryQuota: 400,
+	}
+	require.NoError(t, DB.Create(&user).Error)
+
+	require.NoError(t, inviteUser(user.Id))
+
+	var got User
+	require.NoError(t, DB.Select("aff_count", "aff_quota", "aff_history").First(&got, user.Id).Error)
+	assert.Equal(t, 3, got.AffCount)
+	assert.Equal(t, 350, got.AffQuota)
+	assert.Equal(t, 650, got.AffHistoryQuota)
+}
+
 func TestUserUpdateDoesNotOverwriteConcurrentAccountingOrTokenChanges(t *testing.T) {
 	setupUserUpdateTestState(t)
 

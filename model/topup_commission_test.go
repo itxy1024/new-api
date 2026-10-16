@@ -83,8 +83,8 @@ func TestRechargeEpayAwardsInviterByCreditedQuotaOnce(t *testing.T) {
 	assert.Equal(t, 13, inviter.AffQuota)
 	assert.Equal(t, 14, inviter.AffHistoryQuota)
 	var commissionLog Log
-	require.NoError(t, DB.Where("user_id = ? AND content LIKE ?", inviter.Id, "受邀用户在线充值返利%").First(&commissionLog).Error)
-	assert.Contains(t, commissionLog.Content, "（返利比例 10%）")
+	require.NoError(t, DB.Where("user_id = ? AND content LIKE ?", inviter.Id, "Invited user top-up rebate%").First(&commissionLog).Error)
+	assert.Contains(t, commissionLog.Content, "(rebate rate 10%)")
 
 	alreadyDone, err = RechargeEpay("commission-epay", "alipay", "127.0.0.1")
 	require.NoError(t, err)

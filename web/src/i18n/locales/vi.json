@@ -3369,6 +3369,7 @@
     "Invited": "Đã mời",
     "Invited {{count}} users": "Đã mời {{count}} người",
     "Invited by user ID": "Được mời bởi ID người dùng",
+    "Invited user top-up rebate {{quota}} (rebate rate {{ratio}}%)": "Thưởng nạp tiền của người dùng được mời: {{quota}} (tỷ lệ {{ratio}}%)",
     "Invited Users": "Người dùng được mời",
     "Invitee Reward": "Referral reward",
     "Inviter": "Người mời",

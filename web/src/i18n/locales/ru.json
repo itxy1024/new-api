@@ -3369,6 +3369,7 @@
     "Invited": "Приглашен",
     "Invited {{count}} users": "Приглашено: {{count}}",
     "Invited by user ID": "Приглашен пользователем с ID",
+    "Invited user top-up rebate {{quota}} (rebate rate {{ratio}}%)": "Бонус за пополнение приглашённого пользователя: {{quota}} (ставка {{ratio}}%)",
     "Invited Users": "Приглашенные пользователи",
     "Invitee Reward": "Награда приглашенному",
     "Inviter": "Пригласивший",
