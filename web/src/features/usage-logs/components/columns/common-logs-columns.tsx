@@ -884,6 +884,7 @@ export function useCommonLogsColumns(
                 log={log}
                 isAdmin={isAdmin}
                 isRoot={isRoot}
+                canViewChannel={canViewChannel}
                 open={dialogOpen}
                 onOpenChange={setDialogOpen}
               />

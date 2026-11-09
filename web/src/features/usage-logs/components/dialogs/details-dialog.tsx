@@ -843,7 +843,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
           </DetailSection>
         )}
 
-        {adminInfo?.request_input && (
+        {props.isRoot && adminInfo?.request_input && (
           <RequestInputSection
             content={adminInfo.request_input}
             truncated={Boolean(adminInfo.request_input_truncated)}

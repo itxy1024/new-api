@@ -114,7 +114,7 @@ func TestLegacyLogOtherVisibilityIsRoleSeparated(t *testing.T) {
 		formatUserLogs(logs, 10)
 
 		assert.Equal(t, 11, logs[0].Id)
-		assert.Equal(t, 77, logs[0].ChannelId)
+		assert.Zero(t, logs[0].ChannelId)
 		assert.Empty(t, logs[0].ChannelName)
 		parsed, err := common.StrToMap(logs[0].Other)
 		require.NoError(t, err)
@@ -200,7 +200,7 @@ func TestLegacyRejectReasonHandlesNullAdminInfo(t *testing.T) {
 }
 
 func TestLogFormattingPreservesLargeIntegerLexemes(t *testing.T) {
-	const other = `{"public_id":9007199254740993,"admin_info":{"admin_id":9007199254740995},"root_info":{"generation":18446744073709551615}}`
+	const other = `{"public_id":9007199254740993,"admin_info":{"admin_id":9007199254740995,"request_input":"private input"},"root_info":{"generation":18446744073709551615}}`
 
 	t.Run("user", func(t *testing.T) {
 		logs := []*Log{{Other: other}}
@@ -219,6 +219,7 @@ func TestLogFormattingPreservesLargeIntegerLexemes(t *testing.T) {
 
 		assert.Contains(t, logs[0].Other, `"public_id":9007199254740993`)
 		assert.Contains(t, logs[0].Other, `"admin_id":9007199254740995`)
+		assert.NotContains(t, logs[0].Other, "request_input")
 		assert.NotContains(t, logs[0].Other, "generation")
 	})
 

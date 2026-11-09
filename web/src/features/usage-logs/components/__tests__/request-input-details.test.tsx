@@ -41,7 +41,17 @@ afterEach(() => {
   queryClients.splice(0).forEach((queryClient) => queryClient.clear())
 })
 
-test('shows the saved request input in root log details', async () => {
+test.each([
+  { name: 'root', isAdmin: true, isRoot: true, canViewChannel: true },
+  {
+    name: 'default admin',
+    isAdmin: true,
+    isRoot: false,
+    canViewChannel: false,
+  },
+  { name: 'granted admin', isAdmin: true, isRoot: false, canViewChannel: true },
+  { name: 'user', isAdmin: false, isRoot: false, canViewChannel: false },
+])('limits request input and channels for $name', async (viewer) => {
   const log: UsageLog = {
     id: 1,
     user_id: 1,
@@ -56,8 +66,8 @@ test('shows the saved request input in root log details', async () => {
     completion_tokens: 0,
     use_time: 0,
     is_stream: false,
-    channel: 0,
-    channel_name: '',
+    channel: 9,
+    channel_name: 'private-channel',
     token_id: 1,
     group: 'default',
     ip: '',
@@ -65,6 +75,7 @@ test('shows the saved request input in root log details', async () => {
       admin_info: {
         request_input: 'saved request text',
         request_input_truncated: false,
+        use_channel: ['9', '10'],
       },
     }),
     request_id: 'req-1',
@@ -79,16 +90,31 @@ test('shows the saved request input in root log details', async () => {
     <QueryClientProvider client={queryClient}>
       <DetailsDialog
         log={log}
-        isAdmin
-        isRoot
+        isAdmin={viewer.isAdmin}
+        isRoot={viewer.isRoot}
+        canViewChannel={viewer.canViewChannel}
         open
         onOpenChange={() => undefined}
       />
     </QueryClientProvider>
   )
 
-  const trigger = screen.getByRole('button', { name: 'Request Input' })
-  expect(trigger).toHaveAttribute('aria-expanded', 'false')
-  await userEvent.click(trigger)
-  expect(screen.getByText('saved request text')).toBeVisible()
+  if (viewer.canViewChannel) {
+    expect(screen.getByText(/private-channel/)).toBeVisible()
+    expect(screen.getByText('9 → 10')).toBeVisible()
+  } else {
+    expect(screen.queryByText(/private-channel/)).not.toBeInTheDocument()
+    expect(screen.queryByText('9 → 10')).not.toBeInTheDocument()
+  }
+  if (viewer.isRoot) {
+    const trigger = screen.getByRole('button', { name: 'Request Input' })
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.click(trigger)
+    expect(screen.getByText('saved request text')).toBeVisible()
+  } else {
+    expect(
+      screen.queryByRole('button', { name: 'Request Input' })
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('saved request text')).not.toBeInTheDocument()
+  }
 })

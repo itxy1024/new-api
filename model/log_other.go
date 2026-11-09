@@ -265,6 +265,35 @@ func formatLogOtherJSON(value string, visibility logOtherVisibility) string {
 			}
 		}
 	}
+	if visibility != logOtherVisibilityRoot {
+		// 请求输入只允许超级管理员读取，渠道查看授权不能扩大此权限。
+		for _, key := range []string{"request_input", "request_input_truncated"} {
+			if _, exists := values[key]; exists {
+				delete(values, key)
+				changed = true
+			}
+		}
+		if rawAdminInfo, exists := values[logOtherAdminInfoKey]; exists {
+			var adminInfo map[string]json.RawMessage
+			if err := common.Unmarshal(rawAdminInfo, &adminInfo); err != nil {
+				delete(values, logOtherAdminInfoKey)
+				changed = true
+			} else if _, hasInput := adminInfo["request_input"]; hasInput || adminInfo["request_input_truncated"] != nil {
+				delete(adminInfo, "request_input")
+				delete(adminInfo, "request_input_truncated")
+				if len(adminInfo) == 0 {
+					delete(values, logOtherAdminInfoKey)
+				} else {
+					encoded, err := common.Marshal(adminInfo)
+					if err != nil {
+						return "{}"
+					}
+					values[logOtherAdminInfoKey] = encoded
+				}
+				changed = true
+			}
+		}
+	}
 
 	if !changed {
 		return value

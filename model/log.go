@@ -113,6 +113,7 @@ func assignDisplayLogIds(logs []*Log, startIdx int) {
 
 func formatUserLogs(logs []*Log, startIdx int) {
 	for i := range logs {
+		logs[i].ChannelId = 0
 		logs[i].ChannelName = ""
 		logs[i].Other = formatLogOtherJSON(logs[i].Other, logOtherVisibilityUser)
 	}
@@ -481,17 +482,17 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 // LogFilter is the usage-log search shared by the log list and the log export.
 // Username and Channel are administrator filters.
 type LogFilter struct {
-	Type              int
-	StartTimestamp    int64
-	EndTimestamp      int64
-	ModelName         string
-	Username          string
-	TokenName         string
-	Channel           int
-	Group             string
-	RequestId         string
-	UpstreamRequestId string
-	ExcludedUserIDs   []int
+	Type               int
+	StartTimestamp     int64
+	EndTimestamp       int64
+	ModelName          string
+	Username           string
+	TokenName          string
+	Channel            int
+	Group              string
+	RequestId          string
+	UpstreamRequestId  string
+	ExcludedUserIDs    []int
 	HideChannelDetails bool
 }
 
@@ -667,6 +668,7 @@ func StreamUserLogs(ctx context.Context, userId int, filter LogFilter, fn func(*
 	return streamLogs(tx, "logs.id desc", func(log *Log) error {
 		count++
 		log.Id = count
+		log.ChannelId = 0
 		log.ChannelName = ""
 		log.Other = formatLogOtherJSON(log.Other, logOtherVisibilityUser)
 		return fn(log)

@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/alicebob/miniredis/v2"
@@ -241,6 +242,105 @@ func TestAcquireLogExportLock(t *testing.T) {
 			require.NoError(t, err)
 			assert.True(t, ok, "a finished export frees the user")
 			releaseAgain()
+		})
+	}
+}
+
+func TestLogSensitiveFieldsFollowViewerPermissions(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	owner, _ := setupAccessTokenAudit(t)
+	db := model.DB
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, sqlDB.Close()) })
+	logDB, _ := newAuditTestDatabase(t, "sqlite", "")
+	logSQLDB, err := logDB.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, logSQLDB.Close()) })
+	useLogExportDatabases(t, db, logDB, common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	require.NoError(t, logDB.AutoMigrate(&model.Log{}))
+	require.NoError(t, db.AutoMigrate(&model.Channel{}))
+	require.NoError(t, db.Create(&model.Channel{Id: 9, Name: "private-channel"}).Error)
+	for i, other := range []string{
+		`{"model_price":0.004,"admin_info":{"request_input":"saved request text","request_input_truncated":true,"use_channel":["9"]}}`,
+		`{"model_price":0.004,"request_input":"legacy request text","request_input_truncated":true,"admin_info":{"use_channel":["9"]}}`,
+		`{"model_price":0.004,"admin_info":"request_input: malformed private data"}`,
+	} {
+		require.NoError(t, logDB.Create(&model.Log{
+			UserId: owner.Id, Username: owner.Username, CreatedAt: time.Now().Unix(),
+			Type: model.LogTypeConsume, ChannelId: 9, RequestId: fmt.Sprintf("private-%d", i), Other: other,
+		}).Error)
+	}
+	for _, tc := range []struct {
+		name        string
+		role        int
+		showChannel bool
+	}{
+		{name: "default_admin", role: common.RoleAdminUser},
+		{name: "granted_admin", role: common.RoleAdminUser, showChannel: true},
+		{name: "revoked_admin", role: common.RoleAdminUser},
+		{name: "root", role: common.RoleRootUser, showChannel: true},
+		{name: "user", role: common.RoleCommonUser},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.name == "granted_admin" || tc.name == "revoked_admin" {
+				require.NoError(t, authz.SetUserPermissions(owner.Id, authz.PermissionsMap{
+					authz.ResourceLog: {authz.ActionChannelView: tc.showChannel},
+				}))
+			}
+			// 未授权时伪造渠道筛选也不能取得渠道是否存在的信息。
+			channel := 999
+			if tc.showChannel {
+				channel = 9
+			}
+			query := fmt.Sprintf("channel=%d", channel)
+			listHandler, exportHandler := GetAllLogs, ExportAllLogs
+			if tc.role == common.RoleCommonUser {
+				listHandler, exportHandler = GetUserLogs, ExportUserLogs
+			}
+			for _, endpoint := range []struct {
+				name    string
+				handler gin.HandlerFunc
+			}{
+				{name: "list", handler: listHandler},
+				{name: "export", handler: exportHandler},
+			} {
+				t.Run(endpoint.name, func(t *testing.T) {
+					response := callLogHandler(t, endpoint.handler, owner.Id, tc.role, query)
+					var logs []map[string]any
+					if endpoint.name == "list" {
+						require.True(t, response[0]["success"].(bool))
+						items := response[0]["data"].(map[string]any)["items"].([]any)
+						for _, item := range items {
+							logs = append(logs, item.(map[string]any))
+						}
+					} else {
+						require.True(t, response[len(response)-1]["success"].(bool))
+						logs = response[:len(response)-1]
+					}
+					require.Len(t, logs, 3)
+					for _, log := range logs {
+						if tc.showChannel {
+							assert.EqualValues(t, 9, log["channel"])
+							assert.Equal(t, "private-channel", log["channel_name"])
+							if log["request_id"] != "private-2" {
+								assert.Contains(t, log["other"], "use_channel")
+							}
+						} else {
+							assert.Zero(t, log["channel"])
+							assert.Empty(t, log["channel_name"])
+							assert.NotContains(t, log["other"], "use_channel")
+						}
+						if tc.role == common.RoleRootUser {
+							assert.Contains(t, log["other"], "request_input")
+						} else {
+							assert.NotContains(t, log["other"], "request_input")
+							assert.NotContains(t, log["other"], "request text")
+						}
+						assert.Contains(t, log["other"], "model_price")
+					}
+				})
+			}
 		})
 	}
 }
