@@ -2,6 +2,15 @@
 
 DO NOT send optional commentary
 
+## 本仓库定制功能保留约定（必读）
+
+这是包含用户定制功能的 fork。执行上游同步、合并、重构、清理或修改相关功能前，**必须完整读取并遵守 [.agents/rules/fork-customizations.md](.agents/rules/fork-customizations.md)**。该文件登记全部已盘点的本地定制功能、行为约束、实现入口与回归检查，包括创作中心、持久化与存储、聚合分组、管理员可见范围、日志权限、充值返佣、智商雷达、客服入口和定制构建发布。
+
+- 未经用户明确要求，不得删除、覆盖、禁用或缩减本地定制功能；上游没有同名实现不代表本地代码可以清理。
+- 合并冲突必须同时保留上游修复与本地功能，禁止对定制路径直接整文件采用上游版本。目录、接口或组件迁移时必须保留等价行为及既有数据兼容。
+- 完成后按登记表逐项说明保留情况和实际验证；发现未登记的定制也必须保留，并补充登记。不得仅以编译通过或符号仍存在声称功能未受影响。
+- 本节与定制功能登记文件本身也必须在后续上游同步时保留。
+
 ## Overview
 
 This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI providers (OpenAI, Claude, Gemini, Azure, AWS Bedrock, etc.) behind a unified API, with user management, billing, rate limiting, and an admin dashboard.
