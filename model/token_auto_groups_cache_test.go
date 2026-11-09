@@ -38,6 +38,7 @@ func TestTokenAggregateGroupsRoundTripThroughRedisHashCache(t *testing.T) {
 		Group:                   "vip",
 		Groups:                  []string{"vip", "default"},
 		GroupAggregationEnabled: true,
+		RemainQuota:             100,
 	}
 
 	require.NoError(t, cacheSetTokenForTest(token))
@@ -45,6 +46,31 @@ func TestTokenAggregateGroupsRoundTripThroughRedisHashCache(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, cached.GroupAggregationEnabled)
 	assert.Equal(t, []string{"vip", "default"}, cached.GetGroups())
+
+	// 元数据修复必须拒绝被篡改的分组，同时保留缓存中已经预扣的额度。
+	require.NoError(t, common.RDB.HSet(t.Context(), getTokenCacheKey(token.Key), "RemainQuota", 75).Err())
+	for _, tc := range []struct {
+		name   string
+		fields map[string]any
+	}{
+		{name: "groups", fields: map[string]any{"GroupsJSON": `["privileged"]`}},
+		{name: "aggregation", fields: map[string]any{"GroupAggregationEnabled": "false"}},
+		{name: "malformed_groups", fields: map[string]any{"GroupsJSON": `not-json`}},
+		{name: "old_schema", fields: map[string]any{"SchemaVersion": "3"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.NoError(t, common.RDB.HSet(t.Context(), getTokenCacheKey(token.Key), tc.fields).Err())
+			_, err := cacheGetTokenByKey(token.Key)
+			require.Error(t, err)
+			_, err = cacheInitToken(token)
+			require.NoError(t, err)
+			repaired, err := cacheGetTokenByKey(token.Key)
+			require.NoError(t, err)
+			assert.Equal(t, token.Groups, repaired.GetGroups())
+			assert.True(t, repaired.GroupAggregationEnabled)
+			assert.Equal(t, 75, repaired.RemainQuota)
+		})
+	}
 }
 
 func TestOutdatedTokenCacheRehydratesAggregateGroupsWithoutOverwritingQuota(t *testing.T) {

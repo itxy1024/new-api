@@ -228,9 +228,12 @@ function buildTypeDetailSegments(
 
       const cacheEntries = tieredSummary.priceEntries
         .filter((entry) =>
-          ['cacheReadPrice', 'cacheCreatePrice', 'cacheCreate1hPrice'].includes(
-            entry.field
-          )
+          [
+            'cacheReadPrice',
+            'cacheCreatePrice',
+            'cacheCreate1hPrice',
+            'cacheCreate12hPrice',
+          ].includes(entry.field)
         )
         .map((entry) => {
           return formatPriceCompact(entry.price)
@@ -251,6 +254,7 @@ function buildTypeDetailSegments(
               'cacheReadPrice',
               'cacheCreatePrice',
               'cacheCreate1hPrice',
+              'cacheCreate12hPrice',
             ].includes(entry.field)
         )
         .map((entry) =>
@@ -300,6 +304,10 @@ function buildTypeDetailSegments(
           other.cache_creation_ratio_1h != null &&
           other.cache_creation_ratio_1h !== 0
             ? formatPriceCompact(inputPriceUSD * other.cache_creation_ratio_1h)
+            : null,
+          other.cache_creation_ratio_12h != null &&
+          other.cache_creation_ratio_12h !== 0
+            ? formatPriceCompact(inputPriceUSD * other.cache_creation_ratio_12h)
             : null,
         ].filter(Boolean) as string[]
 
@@ -385,8 +393,7 @@ export function useCommonLogsColumns(
 
     if (isAdmin) {
       if (canViewChannel) {
-      columns.push(
-        {
+        columns.push({
           id: 'channel',
           header: t('Channel'),
           accessorFn: (row) => row.channel,
@@ -545,70 +552,62 @@ export function useCommonLogsColumns(
               </TooltipProvider>
             )
           },
-        },
-      )
+        })
       }
-      columns.push(
-        {
-          id: 'user',
-          header: t('User'),
-          accessorFn: (row) => row.username,
-          cell: function UserCell({ row }) {
-            const {
-              sensitiveVisible,
-              setSelectedUserId,
-              setUserInfoDialogOpen,
-            } = useUsageLogsContext()
-            const log = row.original
+      columns.push({
+        id: 'user',
+        header: t('User'),
+        accessorFn: (row) => row.username,
+        cell: function UserCell({ row }) {
+          const { sensitiveVisible, setSelectedUserId, setUserInfoDialogOpen } =
+            useUsageLogsContext()
+          const log = row.original
 
-            if (!log.username) return null
+          if (!log.username) return null
 
-            return (
-              <button
-                type='button'
-                className='flex items-center gap-1.5 text-left'
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setSelectedUserId(log.user_id)
-                  setUserInfoDialogOpen(true)
-                }}
-              >
-                <Avatar className='ring-border/60 size-6 ring-1 max-sm:hidden'>
-                  <AvatarFallback
-                    className={cn(
-                      'text-[11px] font-semibold',
-                      !sensitiveVisible && 'bg-muted text-muted-foreground'
-                    )}
-                    style={
-                      sensitiveVisible
-                        ? getUserAvatarStyle(log.username)
-                        : undefined
+          return (
+            <button
+              type='button'
+              className='flex items-center gap-1.5 text-left'
+              onClick={(e) => {
+                e.stopPropagation()
+                setSelectedUserId(log.user_id)
+                setUserInfoDialogOpen(true)
+              }}
+            >
+              <Avatar className='ring-border/60 size-6 ring-1 max-sm:hidden'>
+                <AvatarFallback
+                  className={cn(
+                    'text-[11px] font-semibold',
+                    !sensitiveVisible && 'bg-muted text-muted-foreground'
+                  )}
+                  style={
+                    sensitiveVisible
+                      ? getUserAvatarStyle(log.username)
+                      : undefined
+                  }
+                >
+                  {sensitiveVisible ? getUserAvatarFallback(log.username) : '•'}
+                </AvatarFallback>
+              </Avatar>
+              <TooltipProvider delay={300}>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <span className='text-muted-foreground max-w-[100px] truncate text-sm hover:underline' />
                     }
                   >
-                    {sensitiveVisible
-                      ? getUserAvatarFallback(log.username)
-                      : '•'}
-                  </AvatarFallback>
-                </Avatar>
-                <TooltipProvider delay={300}>
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <span className='text-muted-foreground max-w-[100px] truncate text-sm hover:underline' />
-                      }
-                    >
-                      {sensitiveVisible ? log.username : '••••'}
-                    </TooltipTrigger>
-                    {sensitiveVisible && log.username.length > 12 && (
-                      <TooltipContent side='top'>{log.username}</TooltipContent>
-                    )}
-                  </Tooltip>
-                </TooltipProvider>
-              </button>
-            )
-          },
-        }
-      )
+                    {sensitiveVisible ? log.username : '••••'}
+                  </TooltipTrigger>
+                  {sensitiveVisible && log.username.length > 12 && (
+                    <TooltipContent side='top'>{log.username}</TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
+            </button>
+          )
+        },
+      })
     }
 
     columns.push({
