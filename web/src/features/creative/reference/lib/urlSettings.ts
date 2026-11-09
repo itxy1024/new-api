@@ -5,6 +5,7 @@ import {
   DEFAULT_RESPONSES_MODEL,
   findEquivalentApiProfile,
   mergeImportedSettings,
+  normalizeModelList,
   normalizeSettings,
   normalizeReasoningEffort,
   normalizeStreamPartialImages,
@@ -24,6 +25,7 @@ const URL_SETTING_KEYS = [
   'codexCli',
   'apiMode',
   'model',
+  'imageGenerationModel',
   'profileName',
   'reasoningEffort',
   'streamImages',
@@ -31,26 +33,14 @@ const URL_SETTING_KEYS = [
   'transparentBackgroundMethod',
 ]
 
-function getProfileDedupKey(
-  profile: Pick<
-    AppSettings['profiles'][number],
-    | 'provider'
-    | 'baseUrl'
-    | 'apiKey'
-    | 'model'
-    | 'apiMode'
-    | 'reasoningEffort'
-    | 'codexCli'
-    | 'streamImages'
-    | 'streamPartialImages'
-    | 'transparentBackgroundMethod'
-  >
-) {
+function getProfileDedupKey(profile: ApiProfile) {
   return JSON.stringify([
     profile.provider,
     profile.baseUrl.trim().toLowerCase(),
     profile.apiKey.trim(),
-    profile.model.trim(),
+    // URL 新建的配置尚未规整，按规整后的模型列表比较才能命中已保存的配置
+    normalizeModelList(profile.model),
+    profile.imageGenerationModel?.trim(),
     profile.apiMode,
     profile.reasoningEffort,
     profile.codexCli === true,
@@ -271,6 +261,8 @@ function buildPresetConfigOnlySettingsFromUrlParams(
             patch.baseUrl = matched.baseUrl
           if (typeof matched.model === 'string' && matched.model.trim())
             patch.model = matched.model.trim()
+          if (typeof matched.imageGenerationModel === 'string')
+            patch.imageGenerationModel = matched.imageGenerationModel.trim()
           if (
             typeof matched.timeout === 'number' &&
             Number.isFinite(matched.timeout)
@@ -315,6 +307,7 @@ function buildPresetConfigOnlySettingsFromUrlParams(
   const apiUrlParam = searchParams.get('apiUrl')
   const apiKeyParam = searchParams.get('apiKey')
   const modelParam = searchParams.get('model')
+  const imageGenerationModelParam = searchParams.get('imageGenerationModel')
   const profileNameParam = searchParams.get('profileName')
   const transparentBackgroundMethodParam = searchParams.get(
     'transparentBackgroundMethod'
@@ -324,8 +317,9 @@ function buildPresetConfigOnlySettingsFromUrlParams(
     if (profileNameParam?.trim()) patch.name = profileNameParam.trim()
     if (apiUrlParam !== null)
       patch.baseUrl = normalizeBaseUrl(apiUrlParam.trim())
-    if (modelParam !== null && modelParam.trim())
-      patch.model = modelParam.trim()
+    if (modelParam?.trim()) patch.model = modelParam.trim()
+    if (imageGenerationModelParam !== null)
+      patch.imageGenerationModel = imageGenerationModelParam.trim()
     if (
       transparentBackgroundMethodParam === 'api' ||
       transparentBackgroundMethodParam === 'local'
@@ -390,6 +384,7 @@ function buildRegularSettingsFromUrlParams(
   const codexCliParam = searchParams.get('codexCli')
   const apiModeParam = searchParams.get('apiMode')
   const modelParam = searchParams.get('model')
+  const imageGenerationModelParam = searchParams.get('imageGenerationModel')
   const reasoningEffortParam = searchParams.get('reasoningEffort')
   const profileNameParam = searchParams.get('profileName')
   const profileName = profileNameParam?.trim() ?? ''
@@ -416,6 +411,7 @@ function buildRegularSettingsFromUrlParams(
     codexCliParam !== null ||
     apiMode !== undefined ||
     modelParam !== null ||
+    imageGenerationModelParam !== null ||
     profileNameParam !== null ||
     reasoningEffortParam !== null ||
     streamImagesParam !== null ||
@@ -486,8 +482,9 @@ function buildRegularSettingsFromUrlParams(
         patch.baseUrl = normalizeBaseUrl(apiUrlParam.trim())
       if (apiKeyParam !== null) patch.apiKey = apiKeyParam.trim()
       if (apiMode !== undefined) patch.apiMode = apiMode
-      if (modelParam !== null && modelParam.trim())
-        patch.model = modelParam.trim()
+      if (modelParam?.trim()) patch.model = modelParam.trim()
+      if (imageGenerationModelParam !== null)
+        patch.imageGenerationModel = imageGenerationModelParam.trim()
       if (reasoningEffortParam !== null)
         patch.reasoningEffort = normalizeReasoningEffort(reasoningEffortParam)
       if (profileName) patch.name = profileName
@@ -519,15 +516,16 @@ function buildRegularSettingsFromUrlParams(
       name: 'URL 参数配置',
       apiMode: profileApiMode,
       model:
-        profileApiMode === 'responses'
+        modelParam?.trim() ||
+        (profileApiMode === 'responses'
           ? DEFAULT_RESPONSES_MODEL
-          : DEFAULT_IMAGES_MODEL,
+          : DEFAULT_IMAGES_MODEL),
     })
     if (apiUrlParam !== null)
       profile.baseUrl = normalizeBaseUrl(apiUrlParam.trim())
     if (apiKeyParam !== null) profile.apiKey = apiKeyParam.trim()
-    if (modelParam !== null && modelParam.trim())
-      profile.model = modelParam.trim()
+    if (imageGenerationModelParam !== null)
+      profile.imageGenerationModel = imageGenerationModelParam.trim()
     if (reasoningEffortParam !== null)
       profile.reasoningEffort = normalizeReasoningEffort(reasoningEffortParam)
     if (profileName) profile.name = profileName

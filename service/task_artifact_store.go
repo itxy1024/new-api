@@ -452,6 +452,10 @@ func creativeAssetExtension(mimeType string) string {
 		return ".jpg"
 	case "image/webp":
 		return ".webp"
+	case "image/gif":
+		return ".gif"
+	case "image/svg+xml":
+		return ".svg"
 	case "video/mp4":
 		return ".mp4"
 	case "video/webm":

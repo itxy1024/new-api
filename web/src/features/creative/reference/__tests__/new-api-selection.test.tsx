@@ -10,10 +10,12 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react'
+import * as matchers from '@testing-library/jest-dom/matchers'
 import type { ComponentProps } from 'react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-
 import type { ModelGroupSelector } from '@/components/model-group-selector'
+
+expect.extend(matchers)
 
 const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),

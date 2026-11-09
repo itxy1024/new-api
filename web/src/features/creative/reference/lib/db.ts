@@ -1,209 +1,82 @@
-import type {
-  AgentConversation,
-  TaskRecord,
-  StoredImage,
-  StoredImageThumbnail,
+import {
+  DEFAULT_PARAMS,
+  type StoredImage,
+  type StoredImageThumbnail,
+  type TaskRecord,
 } from '../types'
-import { dataUrlToBytes } from './dataUrl'
+import * as indexedDbBackend from './dbIndexedDb'
+import * as tauriBackend from './dbTauri'
+import { isTauri } from './platform'
 
-const DB_NAME = 'gpt-image-playground'
-const DB_VERSION = 3
-const STORE_TASKS = 'tasks'
-const STORE_IMAGES = 'images'
-const STORE_THUMBNAILS = 'thumbnails'
-const STORE_AGENT_CONVERSATIONS = 'agentConversations'
 const THUMBNAIL_MAX_SIZE = 720
 const THUMBNAIL_QUALITY = 0.9
 const THUMBNAIL_VERSION = 2
 
 export const CURRENT_THUMBNAIL_VERSION = THUMBNAIL_VERSION
 
-function getDataUrlByteSize(dataUrl: string): number | undefined {
-  try {
-    const byteSize = dataUrlToBytes(dataUrl).bytes.byteLength
-    return Number.isFinite(byteSize) ? byteSize : undefined
-  } catch {
-    return undefined
-  }
+// 底层存取按平台转发：网页版用 IndexedDB，客户端用 Rust 侧的 SQLite 与图片文件；标注类型以约束两套实现接口一致
+const backend: typeof indexedDbBackend = isTauri
+  ? tauriBackend
+  : indexedDbBackend
+
+export const {
+  putTask,
+  deleteTask,
+  commitTaskDeletion,
+  clearTasks,
+  getAllAgentConversations,
+  putAgentConversation,
+  clearAgentConversations,
+  replaceAgentConversations,
+  getImage,
+  getImageMeta,
+  getStoredImageThumbnail,
+  putImageThumbnail,
+  getAllImages,
+  getAllImageIds,
+  putImage,
+  deleteImage,
+  clearImages,
+} = backend
+
+/** 旧任务缺少新参数或使用 null，读取时补全 GIF 的实际默认值。 */
+export async function getAllTasks(): Promise<TaskRecord[]> {
+  return (await backend.getAllTasks()).map((task) => ({
+    ...task,
+    params: {
+      ...task.params,
+      complexity: task.params.complexity ?? DEFAULT_PARAMS.complexity,
+      frame_count: task.params.frame_count ?? DEFAULT_PARAMS.frame_count,
+      frame_duration_ms:
+        task.params.frame_duration_ms ?? DEFAULT_PARAMS.frame_duration_ms,
+    },
+  }))
 }
 
-function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION)
-    req.onupgradeneeded = (e) => {
-      const db = (e.target as IDBOpenDBRequest).result
-      if (!db.objectStoreNames.contains(STORE_TASKS)) {
-        db.createObjectStore(STORE_TASKS, { keyPath: 'id' })
-      }
-      if (!db.objectStoreNames.contains(STORE_IMAGES)) {
-        db.createObjectStore(STORE_IMAGES, { keyPath: 'id' })
-      }
-      if (!db.objectStoreNames.contains(STORE_THUMBNAILS)) {
-        db.createObjectStore(STORE_THUMBNAILS, { keyPath: 'id' })
-      }
-      if (!db.objectStoreNames.contains(STORE_AGENT_CONVERSATIONS)) {
-        db.createObjectStore(STORE_AGENT_CONVERSATIONS, { keyPath: 'id' })
-      }
-    }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
-  })
-}
-
-function dbTransaction<T>(
-  storeName: string,
-  mode: IDBTransactionMode,
-  fn: (store: IDBObjectStore) => IDBRequest<T>
-): Promise<T> {
-  return openDB().then(
-    (db) =>
-      new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, mode)
-        const store = tx.objectStore(storeName)
-        const req = fn(store)
-        req.onsuccess = () => resolve(req.result)
-        req.onerror = () => reject(req.error)
-      })
-  )
-}
-
-// ===== Tasks =====
-
-export function getAllTasks(): Promise<TaskRecord[]> {
-  return dbTransaction(STORE_TASKS, 'readonly', (s) => s.getAll())
-}
-
-export function putTask(task: TaskRecord): Promise<IDBValidKey> {
-  return dbTransaction(STORE_TASKS, 'readwrite', (s) => s.put(task))
-}
-
-export function deleteTask(id: string): Promise<undefined> {
-  return dbTransaction(STORE_TASKS, 'readwrite', (s) => s.delete(id))
-}
-
-export function commitTaskDeletion(
-  deletedTaskIds: string[],
-  updatedTasks: TaskRecord[],
-  updatedConversations: AgentConversation[]
-): Promise<undefined> {
-  return openDB().then(
-    (db) =>
-      new Promise((resolve, reject) => {
-        const tx = db.transaction(
-          [STORE_TASKS, STORE_AGENT_CONVERSATIONS],
-          'readwrite'
-        )
-        const taskStore = tx.objectStore(STORE_TASKS)
-        const conversationStore = tx.objectStore(STORE_AGENT_CONVERSATIONS)
-        for (const id of deletedTaskIds) taskStore.delete(id)
-        for (const task of updatedTasks) taskStore.put(task)
-        for (const conversation of updatedConversations)
-          conversationStore.put(conversation)
-        tx.oncomplete = () => resolve(undefined)
-        tx.onerror = () => reject(tx.error)
-        tx.onabort = () => reject(tx.error)
-      })
-  )
-}
-
-export function clearTasks(): Promise<undefined> {
-  return dbTransaction(STORE_TASKS, 'readwrite', (s) => s.clear())
-}
-
-// ===== Agent conversations =====
-
-export function getAllAgentConversations(): Promise<AgentConversation[]> {
-  return dbTransaction(STORE_AGENT_CONVERSATIONS, 'readonly', (s) => s.getAll())
-}
-
-export function putAgentConversation(
-  conversation: AgentConversation
-): Promise<IDBValidKey> {
-  return dbTransaction(STORE_AGENT_CONVERSATIONS, 'readwrite', (s) =>
-    s.put(conversation)
-  )
-}
-
-export function clearAgentConversations(): Promise<undefined> {
-  return dbTransaction(STORE_AGENT_CONVERSATIONS, 'readwrite', (s) => s.clear())
-}
-
-export function replaceAgentConversations(
-  conversations: AgentConversation[]
-): Promise<undefined> {
-  return openDB().then(
-    (db) =>
-      new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_AGENT_CONVERSATIONS, 'readwrite')
-        const store = tx.objectStore(STORE_AGENT_CONVERSATIONS)
-        store.clear()
-        for (const conversation of conversations) store.put(conversation)
-        tx.oncomplete = () => resolve(undefined)
-        tx.onerror = () => reject(tx.error)
-        tx.onabort = () => reject(tx.error)
-      })
-  )
-}
-
-// ===== Images =====
-
-export function getImage(id: string): Promise<StoredImage | undefined> {
-  return dbTransaction(STORE_IMAGES, 'readonly', (s) => s.get(id))
-}
-
-export function getStoredImageThumbnail(
-  id: string
-): Promise<StoredImageThumbnail | undefined> {
-  return dbTransaction(STORE_THUMBNAILS, 'readonly', (s) => s.get(id))
-}
-
-export async function getStoredFreshImageThumbnail(
-  id: string
-): Promise<StoredImageThumbnail | undefined> {
-  const thumbnail = await getStoredImageThumbnail(id)
-  if (thumbnail?.thumbnailVersion !== THUMBNAIL_VERSION) return undefined
-  if (thumbnail.byteSize != null) return thumbnail
-
-  const image = await getImage(id)
-  if (!image) return thumbnail
-  const byteSize = image.byteSize ?? getDataUrlByteSize(image.dataUrl)
-  if (byteSize == null) return thumbnail
-  if (image.byteSize !== byteSize) await putImage({ ...image, byteSize })
-  const refreshedThumbnail = { ...thumbnail, byteSize }
-  await putImageThumbnail(refreshedThumbnail)
-  return refreshedThumbnail
-}
-
-export function putImageThumbnail(
-  thumbnail: StoredImageThumbnail
-): Promise<IDBValidKey> {
-  return dbTransaction(STORE_THUMBNAILS, 'readwrite', (s) => s.put(thumbnail))
-}
+// ===== Thumbnails =====
 
 export async function getImageThumbnail(
   id: string
 ): Promise<StoredImageThumbnail | undefined> {
   const existingThumbnail = await getStoredImageThumbnail(id)
   if (existingThumbnail?.thumbnailVersion === THUMBNAIL_VERSION) {
-    const image = await getImage(id)
-    let refreshedThumbnail = existingThumbnail
-    if (image) {
-      const byteSize = image.byteSize ?? getDataUrlByteSize(image.dataUrl)
-      const width = image.width || existingThumbnail.width
-      const height = image.height || existingThumbnail.height
-      if (
-        (byteSize != null && image.byteSize !== byteSize) ||
-        (width != null && image.width !== width) ||
-        (height != null && image.height !== height)
-      ) {
-        await putImage({ ...image, byteSize, width, height })
-      }
-      if (existingThumbnail.byteSize == null && byteSize != null) {
-        refreshedThumbnail = { ...existingThumbnail, byteSize }
-        await putImageThumbnail(refreshedThumbnail)
-      }
+    // 先只查元数据，确实缺宽高时才读出整张原图写回
+    const meta = await getImageMeta(id)
+    if (
+      meta &&
+      (!meta.width || !meta.height) &&
+      existingThumbnail.width &&
+      existingThumbnail.height
+    ) {
+      const image = await getImage(id)
+      if (image)
+        await putImage({
+          ...image,
+          width: existingThumbnail.width,
+          height: existingThumbnail.height,
+        })
     }
-    return refreshedThumbnail
+    return existingThumbnail
   }
 
   const image = await getImage(id)
@@ -216,7 +89,6 @@ export async function getImageThumbnail(
     const thumbnail: StoredImageThumbnail = {
       id,
       thumbnailDataUrl: legacyImage.thumbnailDataUrl,
-      byteSize: image.byteSize,
       width: legacyImage.width,
       height: legacyImage.height,
       thumbnailVersion: THUMBNAIL_VERSION,
@@ -241,7 +113,6 @@ export async function getImageThumbnail(
   const thumbnail: StoredImageThumbnail = {
     id,
     thumbnailDataUrl: metadata.thumbnailDataUrl,
-    byteSize: image.byteSize ?? getDataUrlByteSize(image.dataUrl),
     width: metadata.width,
     height: metadata.height,
     thumbnailVersion: THUMBNAIL_VERSION,
@@ -255,46 +126,6 @@ export async function getImageThumbnail(
     await putImage({ ...image, width: metadata.width, height: metadata.height })
   }
   return thumbnail
-}
-
-export function getAllImages(): Promise<StoredImage[]> {
-  return dbTransaction(STORE_IMAGES, 'readonly', (s) => s.getAll())
-}
-
-export function getAllImageIds(): Promise<string[]> {
-  return dbTransaction(STORE_IMAGES, 'readonly', (s) => s.getAllKeys()).then(
-    (keys) => keys.map(String)
-  )
-}
-
-export function putImage(image: StoredImage): Promise<IDBValidKey> {
-  return dbTransaction(STORE_IMAGES, 'readwrite', (s) => s.put(image))
-}
-
-export function deleteImage(id: string): Promise<undefined> {
-  return openDB().then(
-    (db) =>
-      new Promise((resolve, reject) => {
-        const tx = db.transaction([STORE_IMAGES, STORE_THUMBNAILS], 'readwrite')
-        tx.objectStore(STORE_IMAGES).delete(id)
-        tx.objectStore(STORE_THUMBNAILS).delete(id)
-        tx.oncomplete = () => resolve(undefined)
-        tx.onerror = () => reject(tx.error)
-      })
-  )
-}
-
-export function clearImages(): Promise<undefined> {
-  return openDB().then(
-    (db) =>
-      new Promise((resolve, reject) => {
-        const tx = db.transaction([STORE_IMAGES, STORE_THUMBNAILS], 'readwrite')
-        tx.objectStore(STORE_IMAGES).clear()
-        tx.objectStore(STORE_THUMBNAILS).clear()
-        tx.oncomplete = () => resolve(undefined)
-        tx.onerror = () => reject(tx.error)
-      })
-  )
 }
 
 // ===== Image hashing & dedup =====
@@ -328,7 +159,6 @@ function hashDataUrlFallback(dataUrl: string): string {
 
 export interface StoreImageResult {
   id: string
-  byteSize?: number
   width?: number
   height?: number
 }
@@ -349,14 +179,12 @@ export async function storeImageWithSize(
   source: NonNullable<StoredImage['source']> = 'upload'
 ): Promise<StoreImageResult> {
   const id = await hashDataUrl(dataUrl)
-  const byteSize = getDataUrlByteSize(dataUrl)
   const existing = await getImage(id)
   if (!existing) {
     const thumbnail = await safeCreateImageThumbnail(dataUrl)
     await putImage({
       id,
       dataUrl,
-      byteSize,
       createdAt: Date.now(),
       source,
       width: thumbnail.width,
@@ -366,13 +194,12 @@ export async function storeImageWithSize(
       await putImageThumbnail({
         id,
         thumbnailDataUrl: thumbnail.thumbnailDataUrl,
-        byteSize,
         width: thumbnail.width,
         height: thumbnail.height,
         thumbnailVersion: THUMBNAIL_VERSION,
       })
     }
-    return { id, width: thumbnail.width, height: thumbnail.height, byteSize }
+    return { id, width: thumbnail.width, height: thumbnail.height }
   }
 
   if (
@@ -381,17 +208,14 @@ export async function storeImageWithSize(
     const thumbnail = await safeCreateImageThumbnail(existing.dataUrl)
     const width = thumbnail.width ?? existing.width
     const height = thumbnail.height ?? existing.height
-    const existingByteSize = existing.byteSize ?? byteSize
     if (
-      (thumbnail.width &&
-        thumbnail.height &&
-        (existing.width !== thumbnail.width ||
-          existing.height !== thumbnail.height)) ||
-      (existingByteSize != null && existing.byteSize !== existingByteSize)
+      thumbnail.width &&
+      thumbnail.height &&
+      (existing.width !== thumbnail.width ||
+        existing.height !== thumbnail.height)
     ) {
       await putImage({
         ...existing,
-        byteSize: existingByteSize,
         width: thumbnail.width,
         height: thumbnail.height,
       })
@@ -400,33 +224,19 @@ export async function storeImageWithSize(
       await putImageThumbnail({
         id,
         thumbnailDataUrl: thumbnail.thumbnailDataUrl,
-        byteSize: existingByteSize,
         width: thumbnail.width,
         height: thumbnail.height,
         thumbnailVersion: THUMBNAIL_VERSION,
       })
     }
-    return { id, width, height, byteSize: existingByteSize }
+    return { id, width, height }
   }
-  const existingByteSize = existing.byteSize ?? byteSize
-  if (existingByteSize != null && existing.byteSize !== existingByteSize) {
-    await putImage({ ...existing, byteSize: existingByteSize })
-  }
-  return {
-    id,
-    width: existing.width,
-    height: existing.height,
-    byteSize: existingByteSize,
-  }
+  return { id, width: existing.width, height: existing.height }
 }
 
 function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image()
-    // 生成结果可能直接保存为 OSS 固定地址，缩略图生成也必须使用 CORS 模式。
-    if (/^https?:\/\//i.test(dataUrl)) {
-      image.crossOrigin = 'anonymous'
-    }
     image.onload = () => resolve(image)
     image.onerror = () => reject(new Error('图片加载失败'))
     image.src = dataUrl

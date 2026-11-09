@@ -4,11 +4,13 @@
  * 本文件基于 gpt_image_playground（MIT License）改编。
  * NewAPI 仅替换认证、Key/模型选择和生成接口，画廊交互保持原项目结构。
  */
-import { useLayoutEffect } from 'react'
+import { useEffect, useLayoutEffect } from 'react'
 
 import { Main } from '@/components/layout'
 
 import ConfirmDialog from './components/ConfirmDialog'
+import DataProgressDialog from './components/DataProgressDialog'
+import DbBlockedNotice from './components/DbBlockedNotice'
 import DetailModal from './components/DetailModal'
 import {
   FavoriteCollectionPickerModal,
@@ -20,10 +22,16 @@ import ImageContextMenu from './components/ImageContextMenu'
 import InputBar from './components/InputBar'
 import Lightbox from './components/Lightbox'
 import MaskEditorModal from './components/MaskEditorModal'
+import { preloadMarkdownRenderer } from './components/MarkdownRenderer'
 import SearchBar from './components/SearchBar'
+import SettingsModal from './components/SettingsModal'
+import SketchBoardModal from './components/SketchBoardModal'
 import SupportPromptModal from './components/SupportPromptModal'
 import TaskGrid from './components/TaskGrid'
 import Toast from './components/Toast'
+import { useAppFonts } from './hooks/useAppFonts'
+import { useColorMode } from './hooks/useColorMode'
+import { usePrivacyModeShortcut } from './hooks/usePrivacyMode'
 import { useGlobalClickSuppression } from './lib/clickSuppression'
 import { clearInputDraftState } from './lib/inputDraftState'
 import { initStore, useStore } from './store'
@@ -42,7 +50,22 @@ export default function ReferenceCreativeApp() {
   const activeFavoriteCollectionId = useStore(
     (state) => state.activeFavoriteCollectionId
   )
+  const privacyModeEpoch = useStore((state) => state.privacyModeEpoch)
   useGlobalClickSuppression()
+  useAppFonts()
+  useColorMode()
+  usePrivacyModeShortcut()
+
+  useEffect(() => {
+    if (!('requestIdleCallback' in window)) {
+      const timer = setTimeout(preloadMarkdownRenderer, 1_000)
+      return () => clearTimeout(timer)
+    }
+    const id = window.requestIdleCallback(preloadMarkdownRenderer, {
+      timeout: 3_000,
+    })
+    return () => window.cancelIdleCallback(id)
+  }, [])
 
   useLayoutEffect(() => {
     const resetPageInput = () => {
@@ -88,16 +111,20 @@ export default function ReferenceCreativeApp() {
             </div>
           </main>
         )}
-        <InputBar />
-        <DetailModal />
-        <Lightbox />
+        <InputBar key={`input-${privacyModeEpoch}`} />
+        <DetailModal key={`detail-${privacyModeEpoch}`} />
+        <Lightbox key={`lightbox-${privacyModeEpoch}`} />
+        <SettingsModal newApiMode />
         <ConfirmDialog />
+        <DataProgressDialog />
         <SupportPromptModal />
         <FavoriteCollectionPickerModal />
         <ManageCollectionsModal />
         <Toast />
-        <MaskEditorModal />
-        <ImageContextMenu />
+        <DbBlockedNotice />
+        <MaskEditorModal key={`mask-${privacyModeEpoch}`} />
+        <SketchBoardModal key={`sketch-${privacyModeEpoch}`} />
+        <ImageContextMenu key={`menu-${privacyModeEpoch}`} />
       </div>
     </Main>
   )

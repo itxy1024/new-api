@@ -1,4 +1,5 @@
 import { normalizeAgentMaxToolRounds } from '../../lib/apiProfiles'
+import { isPresetAgentFieldLocked } from '../../lib/presetConfig'
 import {
   DEFAULT_AGENT_MAX_TOOL_ROUNDS,
   type AgentApiConfigMode,
@@ -47,6 +48,7 @@ export default function AgentSettingsTab({
           <div className='w-20 shrink-0'>
             <Select
               value={draft.agentApiConfigMode}
+              disabled={isPresetAgentFieldLocked('apiConfigMode')}
               onChange={(value) =>
                 updateAgentApiConfigMode(value as AgentApiConfigMode)
               }
@@ -63,6 +65,9 @@ export default function AgentSettingsTab({
           data-selectable-text
           className='space-y-1 text-xs text-gray-500 dark:text-gray-500'
         >
+          {(['apiConfigMode', 'textProfileId', 'imageProfileId'] as const).some(
+            isPresetAgentFieldLocked
+          ) && <div>部分选项由部署配置锁定。</div>}
           <div>
             原生：使用原生的 Responses API 配置，由模型调用{' '}
             <code className='rounded bg-gray-100 px-1 py-0.5 font-mono text-[10px] dark:bg-white/[0.06]'>
@@ -92,6 +97,7 @@ export default function AgentSettingsTab({
                 {agentTextProfileOptions.length > 0 ? (
                   <Select
                     value={selectedAgentTextProfile?.id ?? '请选择配置'}
+                    disabled={isPresetAgentFieldLocked('textProfileId')}
                     onChange={(value) =>
                       commitSettings({
                         ...draft,
@@ -103,7 +109,7 @@ export default function AgentSettingsTab({
                     className='w-full rounded-xl border border-gray-200/60 bg-white/50 px-3 py-1.5 text-xs text-gray-700 shadow-sm transition-all duration-200 outline-none hover:bg-white dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200 dark:hover:bg-white/[0.06]'
                   />
                 ) : (
-                  <div className='w-full rounded-xl border border-gray-200/60 bg-white/50 px-3 py-1.5 text-center text-xs text-gray-700 shadow-sm transition-all duration-200 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200'>
+                  <div className='w-full rounded-xl border border-transparent bg-black/[0.04] px-3 py-1.5 text-center text-xs text-gray-700 transition-all duration-200 dark:bg-white/[0.06] dark:text-gray-200'>
                     没有可用配置
                   </div>
                 )}
@@ -127,6 +133,7 @@ export default function AgentSettingsTab({
                   {agentImageProfileOptions.length > 0 ? (
                     <Select
                       value={selectedAgentImageProfile?.id ?? '请选择配置'}
+                      disabled={isPresetAgentFieldLocked('imageProfileId')}
                       onChange={(value) =>
                         commitSettings({
                           ...draft,
@@ -138,7 +145,7 @@ export default function AgentSettingsTab({
                       className='w-full rounded-xl border border-gray-200/60 bg-white/50 px-3 py-1.5 text-xs text-gray-700 shadow-sm transition-all duration-200 outline-none hover:bg-white dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200 dark:hover:bg-white/[0.06]'
                     />
                   ) : (
-                    <div className='w-full rounded-xl border border-gray-200/60 bg-white/50 px-3 py-1.5 text-center text-xs text-gray-700 shadow-sm transition-all duration-200 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200'>
+                    <div className='w-full rounded-xl border border-transparent bg-black/[0.04] px-3 py-1.5 text-center text-xs text-gray-700 transition-all duration-200 dark:bg-white/[0.06] dark:text-gray-200'>
                       没有可用配置
                     </div>
                   )}

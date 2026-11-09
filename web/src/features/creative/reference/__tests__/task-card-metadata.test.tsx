@@ -4,9 +4,11 @@
  * 本文件基于 gpt_image_playground（MIT License）改编。
  */
 import { fireEvent, render, screen } from '@testing-library/react'
+import * as matchers from '@testing-library/jest-dom/matchers'
 import { describe, expect, it, vi } from 'vitest'
-
 import { DEFAULT_PARAMS, type TaskRecord } from '../types'
+
+expect.extend(matchers)
 
 const mocks = vi.hoisted(() => ({
   ensureImageThumbnailCached: vi.fn(),

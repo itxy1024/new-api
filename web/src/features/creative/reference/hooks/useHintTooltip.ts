@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { onDismissTooltips } from '../lib/tooltipDismiss'
 
 interface UseHintTooltipOptions {
   enabled?: () => boolean
@@ -55,6 +56,8 @@ export function useHintTooltip(options: UseHintTooltipOptions = {}) {
       show()
     }, touchDelayMs)
   }, [clearTimer, show, touchDelayMs])
+
+  useEffect(() => onDismissTooltips(hide), [hide])
 
   useEffect(
     () => () => {

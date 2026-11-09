@@ -1,10 +1,37 @@
-import type { AppSettings, ResponsesOutputItem, TaskParams } from '../types'
+import {
+  OUTPUT_FORMATS,
+  type ApiProfile,
+  type AppSettings,
+  type ResponsesOutputItem,
+  type TaskParams,
+} from '../types'
 import { blobToDataUrl } from './dataUrl'
+import { DEFAULT_SVG_MODEL } from './imageModels'
+import { apiFetch, isTauri } from './platform'
 
 export const MIME_MAP: Record<string, string> = {
   png: 'image/png',
   jpeg: 'image/jpeg',
   webp: 'image/webp',
+  svg: 'image/svg+xml',
+  gif: 'image/gif',
+}
+
+/** GPT Image 2.6 的 complexity、SVG 和 GIF 字段；Images API 生成请求和 Responses 图像工具格式相同 */
+export function applyGptImage26Params(
+  target: Record<string, unknown>,
+  params: TaskParams,
+  profile: ApiProfile
+) {
+  if (params.complexity !== 'auto')
+    target.complexity = params.complexity
+  if (params.output_format === 'svg') {
+    target.svg = { model: profile.svgModel?.trim() || DEFAULT_SVG_MODEL }
+  }
+  if (params.output_format === 'gif') {
+    target.frame_count = params.frame_count
+    target.frame_duration_ms = params.frame_duration_ms
+  }
 }
 
 export const MAX_MASK_EDIT_FILE_BYTES = 50 * 1024 * 1024
@@ -21,7 +48,11 @@ export interface CallApiOptions {
   nativeTransparentBackground?: boolean
   /** 输入图片的 data URL 列表 */
   inputImageDataUrls: string[]
+  /** 与 inputImageDataUrls 按索引对齐的原链接，不是通过链接添加的为 null */
+  inputImageUrls?: (string | null)[]
   maskDataUrl?: string
+  /** 第一张输入图上的透明标注层，仅 Images API 编辑接口原生支持 */
+  markupDataUrl?: string
   skipCodexCliSizePrompt?: boolean
   onFalRequestEnqueued?: (request: {
     requestId: string
@@ -129,6 +160,10 @@ export function assertMaskEditFileSize(label: string, bytes: number) {
   assertMaxBytes(label, bytes, MAX_MASK_EDIT_FILE_BYTES)
 }
 
+const IMAGE_TOOL_DROPPED_ERROR =
+  /Tool choice 'required' must be specified with 'tools' parameter\./i
+export const IMAGE_TOOL_DROPPED_HINT =
+  '提示：当前使用的 API 可能未正确转发图像生成工具，请尝试更换支持该工具的接口或模型。'
 export const IMAGE_FETCH_CORS_HINT =
   ' 可点链接按钮复制结果链接，或尝试开启「返回 Base64 图片数据」避免此问题。'
 export const STREAMING_UNSUPPORTED_HINT =
@@ -158,6 +193,20 @@ export function maybeAppendTransparentBackgroundHint(message: string): string {
   return `${message}\n${TRANSPARENT_BACKGROUND_UNSUPPORTED_HINT}`
 }
 
+/** 部分 API 转发 Responses 请求时会丢弃 image_generation 工具，却保留 tool_choice，服务端因此报错 */
+export function maybeAppendImageToolDroppedHint(message: string): string {
+  if (!IMAGE_TOOL_DROPPED_ERROR.test(message)) return message
+  return `${message}\n${IMAGE_TOOL_DROPPED_HINT}`
+}
+
+/** 请求超时中止时使用的原因，替代浏览器默认的英文“signal is aborted without reason”；仍为 AbortError，不改变错误分类 */
+export function createRequestTimeoutError(timeoutSeconds: number) {
+  return new DOMException(
+    `请求超时：超过 ${timeoutSeconds} 秒仍未完成，请稍后重试或提高超时时间。`,
+    'AbortError'
+  )
+}
+
 /** 排除明确与流式无关的状态码后追加提示 */
 export function maybeAppendStreamingHint(
   message: string,
@@ -166,6 +215,7 @@ export function maybeAppendStreamingHint(
 ): string {
   const transparentMessage = maybeAppendTransparentBackgroundHint(message)
   if (transparentMessage !== message) return transparentMessage
+  if (IMAGE_TOOL_DROPPED_ERROR.test(message)) return message
   if (!streamImages) return message
   if (
     status === 401 ||
@@ -210,12 +260,17 @@ export async function fetchImageUrlAsDataUrl(
 
   let response: Response
   try {
-    response = await fetch(url, {
+    response = await apiFetch(url, {
       cache: 'no-store',
       signal,
     })
   } catch (err) {
     if (err instanceof TypeError) {
+      // 客户端由 Rust 侧发出请求，不存在跨域问题，也不需要 no-cors 探测
+      if (isTauri)
+        throw new Error(
+          `图片链接下载失败（可能因链接过期或网络异常）。${IMAGE_FETCH_CORS_HINT}`
+        )
       const probe = await probeNoCorsReachability(url)
       if (probe === 'opaque') {
         throw new Error(
@@ -242,12 +297,44 @@ export async function fetchImageUrlAsDataUrl(
   return blobToDataUrl(blob, fallbackMime)
 }
 
+const MODERATION_STAGE_LABELS: Record<string, string> = {
+  input: '提示词或参考图',
+  output: '生成结果',
+}
+
+/** moderation_blocked 错误可能附带拦截阶段和粗粒度类别 */
+export function appendModerationDetails(
+  message: string,
+  details: unknown
+): string {
+  if (!details || typeof details !== 'object') return message
+  const record = details as Record<string, unknown>
+  const stage =
+    typeof record.moderation_stage === 'string'
+      ? MODERATION_STAGE_LABELS[record.moderation_stage]
+      : undefined
+  const categories = Array.isArray(record.categories)
+    ? record.categories.filter(
+        (item): item is string => typeof item === 'string' && Boolean(item)
+      )
+    : []
+  const parts = [
+    stage ? `拦截来源：${stage}` : '',
+    categories.length ? `类别：${categories.join('、')}` : '',
+  ].filter(Boolean)
+  return parts.length ? `${message}\n${parts.join('；')}` : message
+}
+
 export async function getApiErrorMessage(response: Response): Promise<string> {
   let errorMsg = `HTTP ${response.status}`
   const textResponse = response.clone()
   try {
     const errJson = await response.json()
-    if (errJson.error?.message) errorMsg = errJson.error.message
+    if (errJson.error?.message)
+      errorMsg = appendModerationDetails(
+        errJson.error.message,
+        errJson.error.moderation_details
+      )
     else if (typeof errJson.detail === 'string') errorMsg = errJson.detail
     else if (Array.isArray(errJson.detail))
       errorMsg = errJson.detail
@@ -277,16 +364,17 @@ export function pickActualParams(source: unknown): Partial<TaskParams> {
     record.quality === 'auto' ||
     record.quality === 'low' ||
     record.quality === 'medium' ||
-    record.quality === 'high'
+    record.quality === 'high' ||
+    record.quality === 'xhigh' ||
+    record.quality === 'max'
   ) {
     actualParams.quality = record.quality
   }
   if (
-    record.output_format === 'png' ||
-    record.output_format === 'jpeg' ||
-    record.output_format === 'webp'
+    OUTPUT_FORMATS.includes(record.output_format as TaskParams['output_format'])
   ) {
-    actualParams.output_format = record.output_format
+    actualParams.output_format =
+      record.output_format as TaskParams['output_format']
   }
   if (typeof record.output_compression === 'number')
     actualParams.output_compression = record.output_compression

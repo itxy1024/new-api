@@ -16,6 +16,7 @@ import {
   getAgentRoundResponseOutput,
   sanitizeResponseOutputForInput,
 } from './agentResponseState'
+import { getTaskPromptText } from './promptImageMentions'
 
 type LoadImage = (id: string) => Promise<string | null | undefined>
 
@@ -86,7 +87,10 @@ function createGeneratedImageReferencePart(
   task: TaskRecord,
   imageIndex: number
 ) {
-  const prompt = (typeof task.prompt === 'string' ? task.prompt : '')
+  const prompt = getTaskPromptText(
+    typeof task.prompt === 'string' ? task.prompt : '',
+    task.inputImageIds.length
+  )
     .replace(/\s+/g, ' ')
     .trim()
   const truncatedPrompt =

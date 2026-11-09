@@ -199,7 +199,7 @@ export default function SizePickerModal({
     return `rounded-xl border px-3 py-2 text-sm transition ${
       active
         ? 'border-blue-400 bg-blue-50 text-blue-600 dark:border-blue-500/50 dark:bg-blue-500/10 dark:text-blue-300'
-        : 'border-gray-200/70 bg-white/60 text-gray-600 hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-300 dark:hover:bg-white/[0.06]'
+        : 'border-transparent bg-black/[0.04] text-gray-600 hover:bg-black/[0.07] dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.1]'
     }`
   }
 
@@ -416,7 +416,7 @@ export default function SizePickerModal({
                       placeholder='例如 5:4 / 2.39:1'
                       className={`w-full rounded-xl border px-3 py-2 text-sm transition outline-none ${
                         customRatioValid
-                          ? 'border-gray-200/70 bg-white/60 text-gray-700 focus:border-blue-300 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200 dark:focus:border-blue-500/50'
+                          ? 'border-transparent bg-black/[0.04] text-gray-700 focus:border-blue-300 dark:bg-white/[0.06] dark:text-gray-200 dark:focus:border-blue-500/50'
                           : 'border-red-300 bg-white/60 text-gray-700 focus:border-red-400 dark:border-red-500/40 dark:bg-white/[0.03] dark:text-gray-200'
                       }`}
                     />
@@ -473,7 +473,7 @@ export default function SizePickerModal({
                     </label>
                   </div>
                 </section>
-                <div className='rounded-xl border border-gray-200/80 bg-gray-50/80 p-3 text-xs text-gray-600 dark:border-white/[0.05] dark:bg-white/[0.02] dark:text-gray-400'>
+                <div className='rounded-xl border border-transparent bg-black/[0.04] p-3 text-xs text-gray-600 dark:bg-white/[0.06] dark:text-gray-400'>
                   <div className='flex items-start gap-2'>
                     <svg
                       className='mt-[2px] h-4 w-4 flex-shrink-0 text-blue-500'

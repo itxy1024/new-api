@@ -60,6 +60,7 @@ function source(settings: AppSettings = DEFAULT_SETTINGS) {
     supportPromptDismissed: false,
     supportPromptOpen: false,
     supportPromptSkippedForImportedData: false,
+    imageSourceUrls: {},
   }
 }
 

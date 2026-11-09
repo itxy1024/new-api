@@ -42,6 +42,9 @@ function normalizeInputImages(value: unknown): InputImage[] {
       return {
         id: img.id,
         dataUrl: typeof img.dataUrl === 'string' ? img.dataUrl : '',
+        ...(typeof img.markupImageId === 'string' && img.markupImageId
+          ? { markupImageId: img.markupImageId }
+          : {}),
       }
     })
     .filter((img): img is InputImage => img != null)
@@ -317,6 +320,7 @@ export function getPersistableAgentInputDrafts(
       inputImages: draft.inputImages.map((img) => ({
         id: img.id,
         dataUrl: '',
+        markupImageId: img.markupImageId,
       })),
     }
   }

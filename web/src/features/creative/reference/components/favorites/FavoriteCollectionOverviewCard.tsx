@@ -31,11 +31,11 @@ function CoverThumbnail({ task }: { task?: TaskRecord }) {
     if (!imageId) return
     let cancelled = false
     const unsubscribe = subscribeImageThumbnail(imageId, (thumbnail) => {
-      if (!cancelled) setSrc(thumbnail.dataUrl)
+      if (!cancelled) setSrc(thumbnail.src)
     })
     ensureImageThumbnailCached(imageId)
       .then((thumbnail) => {
-        if (!cancelled && thumbnail) setSrc(thumbnail.dataUrl)
+        if (!cancelled && thumbnail) setSrc(thumbnail.src)
       })
       .catch(() => {})
     return () => {

@@ -56,6 +56,10 @@ export default defineConfig(({ envMode }) => {
       entry: {
         index: './src/main.tsx',
       },
+      define: {
+        // 创作页所用上游源码的版本，与 NewAPI 自身版本分别维护。
+        __APP_VERSION__: JSON.stringify('0.8.7'),
+      },
     },
     resolve: {
       alias: {

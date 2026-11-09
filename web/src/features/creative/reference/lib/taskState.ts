@@ -8,19 +8,19 @@ type ActualParams = Partial<TaskParams>
 type ImageSize = { width?: number; height?: number }
 
 export function createTaskDonePatch(
-  task: Pick<TaskRecord, 'createdAt'>,
+  task: Pick<TaskRecord, 'createdAt' | 'startedAt'>,
   now: number
 ): TaskLifecyclePatch {
   return {
     status: 'done',
     error: null,
     finishedAt: now,
-    elapsed: now - task.createdAt,
+    elapsed: now - (task.startedAt ?? task.createdAt),
   }
 }
 
 export function createTaskErrorPatch(
-  task: Pick<TaskRecord, 'createdAt'>,
+  task: Pick<TaskRecord, 'createdAt' | 'startedAt'>,
   error: string,
   now: number
 ): TaskLifecyclePatch {
@@ -28,7 +28,7 @@ export function createTaskErrorPatch(
     status: 'error',
     error,
     finishedAt: now,
-    elapsed: now - task.createdAt,
+    elapsed: now - (task.startedAt ?? task.createdAt),
   }
 }
 
@@ -46,7 +46,7 @@ export function markInterruptedOpenAIRunningTasks(
       ...task,
       ...createTaskErrorPatch(task, '请求中断', now),
       falRecoverable: false,
-      elapsed: Math.max(0, now - task.createdAt),
+      elapsed: Math.max(0, now - (task.startedAt ?? task.createdAt)),
     }
     interruptedTasks.push(updated)
     return updated

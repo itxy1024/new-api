@@ -30,7 +30,7 @@ export function createCustomProfileImportUrl(
   url.searchParams.set(
     'settings',
     JSON.stringify({
-      customProviders: provider ? [provider] : [],
+      ...(provider ? { customProviders: [provider] } : {}),
       profiles: [importProfile],
     })
   )

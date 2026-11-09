@@ -13,15 +13,20 @@ import {
   shouldUseApiProxy,
 } from './devProxy'
 import {
+  applyGptImage26Params,
   appendStreamingFormatHint,
+  createRequestTimeoutError,
   getApiErrorMessage,
   getResponsesImageResultBase64,
+  maybeAppendImageToolDroppedHint,
   maybeAppendStreamingHint,
   MIME_MAP,
   normalizeBase64Image,
   pickActualParams,
   PROMPT_REWRITE_GUARD_PREFIX,
 } from './imageApiShared'
+import { getImageGenerationModel } from './imageModels'
+import { apiFetch } from './platform'
 import { normalizeResponsesOutputItems } from './responsesOutputState'
 import {
   isEventStreamResponse,
@@ -148,12 +153,15 @@ function createImageTool(
     output_format: params.output_format,
     moderation: params.moderation,
   }
+  const imageModel = getImageGenerationModel(profile)
+  if (imageModel) tool.model = imageModel
 
   if (!profile.codexCli) {
     tool.size = params.size
   }
 
   tool.quality = params.quality
+  applyGptImage26Params(tool, params, profile)
 
   if (params.output_format !== 'png' && params.output_compression != null) {
     tool.output_compression = params.output_compression
@@ -759,14 +767,17 @@ export async function callAgentResponsesApi(opts: {
   const proxyConfig = readClientDevProxyConfig()
   const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), profile.timeout * 1000)
+  const timeoutId = setTimeout(
+    () => controller.abort(createRequestTimeoutError(profile.timeout)),
+    profile.timeout * 1000
+  )
   const abortFromCaller = () => controller.abort()
   if (signal?.aborted) controller.abort()
   signal?.addEventListener('abort', abortFromCaller, { once: true })
 
   try {
     const body: Record<string, unknown> = {
-      model: profile.model || settings.model,
+      model: profile.model,
       instructions: createAgentInstructions(
         settings,
         (imageProfile ?? profile).codexCli ? params.size : undefined
@@ -780,7 +791,7 @@ export async function callAgentResponsesApi(opts: {
       body.stream = true
     }
 
-    const response = await fetch(
+    const response = await apiFetch(
       buildApiUrl(profile.baseUrl, 'responses', proxyConfig, useApiProxy),
       {
         method: 'POST',
@@ -803,7 +814,7 @@ export async function callAgentResponsesApi(opts: {
     }
 
     if (profile.streamImages && isEventStreamResponse(response)) {
-      return parseAgentStreamResponse(
+      return await parseAgentStreamResponse(
         response,
         mime,
         controller.signal,
@@ -841,11 +852,14 @@ export async function callAgentConversationTitleApi(opts: {
   imageDataUrls?: string[]
   signal?: AbortSignal
 }): Promise<string> {
-  const { settings, profile, prompt, imageDataUrls, signal } = opts
+  const { profile, prompt, imageDataUrls, signal } = opts
   const proxyConfig = readClientDevProxyConfig()
   const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), profile.timeout * 1000)
+  const timeoutId = setTimeout(
+    () => controller.abort(createRequestTimeoutError(profile.timeout)),
+    profile.timeout * 1000
+  )
   const abortFromCaller = () => controller.abort()
   if (signal?.aborted) controller.abort()
   signal?.addEventListener('abort', abortFromCaller, { once: true })
@@ -862,14 +876,14 @@ export async function callAgentConversationTitleApi(opts: {
     }
 
     const body: Record<string, unknown> = {
-      model: profile.model || settings.model,
+      model: profile.model,
       instructions: AGENT_TITLE_INSTRUCTIONS,
       input: [{ role: 'user', content }],
     }
     if (profile.reasoningEffort)
       body.reasoning = { effort: profile.reasoningEffort }
 
-    const response = await fetch(
+    const response = await apiFetch(
       buildApiUrl(profile.baseUrl, 'responses', proxyConfig, useApiProxy),
       {
         method: 'POST',
@@ -943,7 +957,10 @@ export async function callBatchImageSingle(opts: {
   const proxyConfig = readClientDevProxyConfig()
   const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), profile.timeout * 1000)
+  const timeoutId = setTimeout(
+    () => controller.abort(createRequestTimeoutError(profile.timeout)),
+    profile.timeout * 1000
+  )
   const abortFromCaller = () => controller.abort()
   if (signal?.aborted) controller.abort()
   signal?.addEventListener('abort', abortFromCaller, { once: true })
@@ -985,9 +1002,12 @@ export async function callBatchImageSingle(opts: {
       moderation: params.moderation,
       quality: params.quality,
     }
+    const imageModel = getImageGenerationModel(profile)
+    if (imageModel) tool.model = imageModel
     if (!profile.codexCli) {
       tool.size = params.size
     }
+    applyGptImage26Params(tool, params, profile)
     if (params.output_format !== 'png' && params.output_compression != null) {
       tool.output_compression = params.output_compression
     }
@@ -1008,7 +1028,7 @@ export async function callBatchImageSingle(opts: {
       body.stream = true
     }
 
-    const response = await fetch(
+    const response = await apiFetch(
       buildApiUrl(profile.baseUrl, 'responses', proxyConfig, useApiProxy),
       {
         method: 'POST',
@@ -1025,7 +1045,7 @@ export async function callBatchImageSingle(opts: {
         batchItemId,
         image: null,
         error: maybeAppendStreamingHint(
-          errorMsg,
+          maybeAppendImageToolDroppedHint(errorMsg),
           response.status,
           profile.streamImages
         ),

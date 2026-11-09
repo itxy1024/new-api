@@ -12,11 +12,18 @@ import {
 import {
   downloadImageEntriesAsZip,
   downloadImageIds,
+  getDownloadErrorMessage,
   getImageZipEntries,
+  withSaveLocation,
 } from '../lib/downloadImages'
 import { ensureImageCached, getCachedImage } from '../lib/imageCache'
 import { ActualValueBadge, DetailParamValue } from '../lib/paramDisplay'
-import { replaceImageMentionsForApi } from '../lib/promptImageMentions'
+import { isTauri } from '../lib/platform'
+import {
+  getImageComments,
+  getTaskPromptText,
+  replaceImageMentionsForApi,
+} from '../lib/promptImageMentions'
 import { formatImageRatio } from '../lib/size'
 import { isAgentTaskPromptPending } from '../lib/taskPromptDisplay'
 import { dismissAllTooltips } from '../lib/tooltipDismiss'
@@ -29,6 +36,7 @@ import {
   getCodexCliPromptKey,
   retryTask,
 } from '../store'
+import { CommentBadge } from './CommentMarks'
 import {
   CloseIcon,
   CodeIcon,
@@ -48,6 +56,7 @@ export default function DetailModal() {
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
   const showToast = useStore((s) => s.showToast)
   const openFavoritePicker = useStore((s) => s.openFavoritePicker)
+  const privacyMode = useStore((s) => Boolean(s.privacyMode))
   const settings = useStore((s) => s.settings)
   const dismissedCodexCliPrompts = useStore((s) => s.dismissedCodexCliPrompts)
   const streamPreviewSrc = useStore((s) =>
@@ -81,6 +90,7 @@ export default function DetailModal() {
   const viewRawResponseTooltip = useTooltip()
   const downloadPartialImagesTooltip = useTooltip()
   const retryTooltip = useTooltip()
+  const retriedAtTooltip = useTooltip()
   const downloadImageTooltip = useTooltip()
   const downloadOriginalImageTooltip = useTooltip()
   const downloadAllTooltip = useTooltip()
@@ -368,8 +378,7 @@ export default function DetailModal() {
   const streamPreviewLen = streamPreviewItems.length
   const currentStreamPreviewSrc = activeStreamPreviewSrc
   const streamPartialImageIds = task.streamPartialImageIds ?? []
-  const supportsTransparentOutput =
-    task.params.output_format === 'png' || task.params.output_format === 'webp'
+  const supportsTransparentOutput = task.params.output_format !== 'jpeg'
   const transparentOutputText =
     task.transparentOutput || task.params.transparent_output ? 'true' : 'false'
   const currentTransparentOutputFailed = Boolean(
@@ -393,7 +402,10 @@ export default function DetailModal() {
       isFalReconnecting ||
       isCustomReconnecting
     ) {
-      const seconds = Math.max(0, Math.floor((now - task.createdAt) / 1000))
+      const seconds = Math.max(
+        0,
+        Math.floor((now - (task.startedAt ?? task.createdAt)) / 1000)
+      )
       const mm = String(Math.floor(seconds / 60)).padStart(2, '0')
       const ss = String(seconds % 60).padStart(2, '0')
       return `${mm}:${ss}`
@@ -442,7 +454,9 @@ export default function DetailModal() {
   const handleCopyPrompt = async () => {
     if (!task.prompt) return
     try {
-      await copyTextToClipboard(task.prompt)
+      await copyTextToClipboard(
+        getTaskPromptText(task.prompt, task.inputImageIds.length)
+      )
       showToast('提示词已复制', 'success')
     } catch (err) {
       showToast(getClipboardFailureMessage('复制提示词失败', err), 'error')
@@ -480,14 +494,15 @@ export default function DetailModal() {
         [currentOutputImageId],
         `task-${task.id}`
       )
+      if (result.canceled) return
       if (result.successCount === 0) {
-        showToast('下载失败', 'error')
+        showToast(getDownloadErrorMessage(result.error), 'error')
       } else {
-        showToast('下载成功', 'success')
+        showToast(withSaveLocation('下载成功', result.location), 'success')
       }
     } catch (err) {
       console.error(err)
-      showToast('下载失败', 'error')
+      showToast(getDownloadErrorMessage(err), 'error')
     }
   }
 
@@ -500,14 +515,15 @@ export default function DetailModal() {
         [currentOriginalOutputImageId],
         `task-${task.id}-orig`
       )
+      if (result.canceled) return
       if (result.successCount === 0) {
-        showToast('下载失败', 'error')
+        showToast(getDownloadErrorMessage(result.error), 'error')
       } else {
-        showToast('原图下载成功', 'success')
+        showToast(withSaveLocation('原图下载成功', result.location), 'success')
       }
     } catch (err) {
       console.error(err)
-      showToast('下载失败', 'error')
+      showToast(getDownloadErrorMessage(err), 'error')
     }
   }
 
@@ -523,8 +539,9 @@ export default function DetailModal() {
             fileNameBase
           )
         : await downloadImageIds(task.outputImages, fileNameBase)
+      if (result.canceled) return
       if (result.successCount === 0) {
-        showToast('下载失败', 'error')
+        showToast(getDownloadErrorMessage(result.error), 'error')
       } else if (result.failCount > 0) {
         showToast(
           `部分下载失败：成功 ${result.successCount}，失败 ${result.failCount}`,
@@ -532,15 +549,18 @@ export default function DetailModal() {
         )
       } else {
         showToast(
-          result.successCount > 1
-            ? `下载成功：${result.successCount} 张图片`
-            : '下载成功',
+          withSaveLocation(
+            result.successCount > 1
+              ? `下载成功：${result.successCount} 张图片`
+              : '下载成功',
+            result.location
+          ),
           'success'
         )
       }
     } catch (err) {
       console.error(err)
-      showToast('下载失败', 'error')
+      showToast(getDownloadErrorMessage(err), 'error')
     }
   }
 
@@ -555,19 +575,26 @@ export default function DetailModal() {
             fileNameBase
           )
         : await downloadImageIds(streamPartialImageIds, fileNameBase)
+      if (result.canceled) return
       if (result.successCount === 0) {
-        showToast('下载失败', 'error')
+        showToast(getDownloadErrorMessage(result.error), 'error')
       } else if (result.failCount > 0) {
         showToast(
           `部分下载失败：成功 ${result.successCount}，失败 ${result.failCount}`,
           'error'
         )
       } else {
-        showToast(`下载成功：${result.successCount} 张中间步骤图`, 'success')
+        showToast(
+          withSaveLocation(
+            `下载成功：${result.successCount} 张中间步骤图`,
+            result.location
+          ),
+          'success'
+        )
       }
     } catch (err) {
       console.error(err)
-      showToast('下载失败', 'error')
+      showToast(getDownloadErrorMessage(err), 'error')
     }
   }
 
@@ -1051,7 +1078,7 @@ export default function DetailModal() {
                       copyErrorTooltip.handlers.onClick()
                       handleCopyError()
                     }}
-                    className='inline-flex items-center justify-center rounded-full border border-red-200/80 bg-white/80 px-3 py-1.5 text-red-500 transition hover:bg-red-50 dark:border-red-400/20 dark:bg-white/[0.04] dark:hover:bg-red-500/10'
+                    className='inline-flex items-center justify-center rounded-full border border-red-200/80 bg-white/80 px-3 py-1.5 text-red-500 transition hover:bg-red-500/[0.1] dark:border-red-400/20 dark:bg-white/[0.04] dark:hover:bg-red-500/[0.16]'
                     aria-label='复制完整报错'
                   >
                     <CopyIcon className='h-4 w-4' />
@@ -1142,6 +1169,7 @@ export default function DetailModal() {
                     </ViewportTooltip>
                   </div>
                 )}
+                {!isCustomReconnecting && (
                 <div className='group relative'>
                   <button
                     type='button'
@@ -1153,30 +1181,31 @@ export default function DetailModal() {
                     className='inline-flex items-center justify-center rounded-full border border-blue-200/80 bg-white/80 px-3 py-1.5 text-blue-500 transition hover:bg-blue-50 dark:border-blue-400/20 dark:bg-white/[0.04] dark:hover:bg-blue-500/10'
                     aria-label='重试任务'
                   >
-                    <svg
-                      className='h-4 w-4'
-                      fill='none'
-                      stroke='currentColor'
-                      strokeWidth={2}
-                      strokeLinecap='round'
-                      strokeLinejoin='round'
-                      viewBox='0 0 24 24'
-                    >
-                      <path
+                      <svg
+                        className='h-4 w-4'
+                        fill='none'
+                        stroke='currentColor'
+                        strokeWidth={2}
                         strokeLinecap='round'
                         strokeLinejoin='round'
-                        strokeWidth={2}
-                        d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
-                      />
-                    </svg>
-                  </button>
-                  <ViewportTooltip
-                    visible={retryTooltip.visible}
-                    className='whitespace-nowrap'
-                  >
-                    重试任务
-                  </ViewportTooltip>
-                </div>
+                        viewBox='0 0 24 24'
+                      >
+                        <path
+                          strokeLinecap='round'
+                          strokeLinejoin='round'
+                          strokeWidth={2}
+                          d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
+                        />
+                      </svg>
+                    </button>
+                    <ViewportTooltip
+                      visible={retryTooltip.visible}
+                      className='whitespace-nowrap'
+                    >
+                      重试任务
+                    </ViewportTooltip>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1273,8 +1302,12 @@ export default function DetailModal() {
                 </div>
                 {allInputImageIds.length > 0 && (
                   <div className='flex flex-wrap gap-2'>
-                    {allInputImageIds.map((imgId) => {
+                    {allInputImageIds.map((imgId, idx) => {
                       const isMaskTarget = imgId === maskTargetId
+                      const commentCount = getImageComments(
+                        task.prompt,
+                        idx
+                      ).length
                       const displaySrc =
                         isMaskTarget && maskPreviewSrc
                           ? maskPreviewSrc
@@ -1291,7 +1324,11 @@ export default function DetailModal() {
                                 : 'border-gray-200 dark:border-white/[0.08]'
                             }`}
                             onClick={() =>
-                              setLightboxImageId(imgId, allInputImageIds)
+                              setLightboxImageId(
+                                imgId,
+                                allInputImageIds,
+                                task.prompt
+                              )
                             }
                           >
                             {displaySrc && (
@@ -1306,6 +1343,16 @@ export default function DetailModal() {
                               <span className='pointer-events-none absolute top-1 left-1 z-10 rounded bg-blue-500/90 px-1.5 py-0.5 text-[8px] leading-none font-bold tracking-wider text-white backdrop-blur-sm'>
                                 MASK
                               </span>
+                            )}
+                            {commentCount > 0 && (
+                              <CommentBadge
+                                count={commentCount}
+                                className={
+                                  isMaskTarget
+                                    ? 'left-1 top-[18px]'
+                                    : 'left-1 top-1'
+                                }
+                              />
                             )}
                           </div>
                         </div>
@@ -1375,6 +1422,39 @@ export default function DetailModal() {
                   />
                 </div>
               </div>
+              {task.params.complexity !== 'auto' && (
+                <div className='min-w-0 overflow-hidden rounded-lg bg-gray-50 px-3 py-2 dark:bg-white/[0.03]'>
+                  <span className='text-gray-400 dark:text-gray-500'>复杂度</span>
+                  <br />
+                  <div className='hide-scrollbar mask-edge-r mt-0.5 overflow-x-auto pr-2 whitespace-nowrap'>
+                    <span className='font-medium text-gray-700 dark:text-gray-300'>
+                      {task.params.complexity}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {task.params.output_format === 'gif' && (
+                <>
+                  <div className='min-w-0 overflow-hidden rounded-lg bg-gray-50 px-3 py-2 dark:bg-white/[0.03]'>
+                    <span className='text-gray-400 dark:text-gray-500'>帧数</span>
+                    <br />
+                    <div className='hide-scrollbar mask-edge-r mt-0.5 overflow-x-auto pr-2 whitespace-nowrap'>
+                      <span className='font-medium text-gray-700 dark:text-gray-300'>
+                        {task.params.frame_count}
+                      </span>
+                    </div>
+                  </div>
+                  <div className='min-w-0 overflow-hidden rounded-lg bg-gray-50 px-3 py-2 dark:bg-white/[0.03]'>
+                    <span className='text-gray-400 dark:text-gray-500'>每帧时长</span>
+                    <br />
+                    <div className='hide-scrollbar mask-edge-r mt-0.5 overflow-x-auto pr-2 whitespace-nowrap'>
+                      <span className='font-medium text-gray-700 dark:text-gray-300'>
+                        {task.params.frame_duration_ms} ms
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
               {supportsTransparentOutput && (
                 <div className='min-w-0 overflow-hidden rounded-lg bg-gray-50 px-3 py-2 dark:bg-white/[0.03]'>
                   <span className='text-gray-400 dark:text-gray-500'>
@@ -1436,8 +1516,82 @@ export default function DetailModal() {
             {/* 时间 */}
             <div className='mb-4 text-xs text-gray-400 dark:text-gray-500'>
               <span>创建于 {formatTime(task.createdAt)}</span>
+              {task.startedAt != null && task.startedAt > task.createdAt && (
+                <span className='relative ml-1 inline-flex align-middle'>
+                  <button
+                    type='button'
+                    {...retriedAtTooltip.handlers}
+                    className='inline-flex text-gray-400 transition hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'
+                    aria-label='查看重试时间'
+                  >
+                    <svg
+                      className='h-3.5 w-3.5'
+                      fill='none'
+                      stroke='currentColor'
+                      viewBox='0 0 24 24'
+                    >
+                      <path
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
+                        strokeWidth={2}
+                        d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+                      />
+                    </svg>
+                  </button>
+                  <ViewportTooltip
+                    visible={retriedAtTooltip.visible}
+                    className='whitespace-nowrap'
+                  >
+                    重试于 {formatTime(task.startedAt)}
+                  </ViewportTooltip>
+                </span>
+              )}
               {formatDuration() && <span> · 耗时 {formatDuration()}</span>}
             </div>
+
+            {/* 仅客户端：任务 ID 和图片 ID，可复制给使用命令行的 AI 工具，让它直接引用图片而不必重新上传 */}
+            {isTauri && (
+              <div className='mb-4 space-y-1 text-xs text-gray-400 dark:text-gray-500'>
+                {[
+                  ['任务 ID', task.id],
+                  ['图片 ID', currentOutputImageId],
+                ]
+                  .filter(([, id]) => id)
+                  .map(([label, id]) => (
+                    <div
+                      key={label}
+                      className='flex min-w-0 items-center gap-2'
+                    >
+                      <span className='shrink-0'>{label}</span>
+                      <span
+                        data-selectable-text
+                        className='min-w-0 truncate font-mono'
+                      >
+                        {id}
+                      </span>
+                      <button
+                        type='button'
+                        onClick={() => {
+                          copyTextToClipboard(id).then(
+                            () => showToast(`${label}已复制`, 'success'),
+                            (err) =>
+                              showToast(
+                                getClipboardFailureMessage(
+                                  `复制${label}失败`,
+                                  err
+                                ),
+                                'error'
+                              )
+                          )
+                        }}
+                        className='shrink-0 text-blue-500 hover:underline'
+                      >
+                        复制
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            )}
           </div>
 
           {/* 操作按钮 */}
@@ -1476,6 +1630,7 @@ export default function DetailModal() {
               <TrashIcon className='h-4 w-4 flex-shrink-0' />
               删除任务
             </button>
+            {!privacyMode && (
             <button
               onClick={handleToggleFavorite}
               className={`col-span-1 flex w-full items-center justify-center rounded-xl transition sm:w-11 sm:flex-none ${
@@ -1485,20 +1640,21 @@ export default function DetailModal() {
               }`}
               title={task.isFavorite ? '编辑收藏夹' : '收藏任务'}
             >
-              <svg
-                className='h-5 w-5'
-                fill={task.isFavorite ? 'currentColor' : 'none'}
-                stroke='currentColor'
-                viewBox='0 0 24 24'
-              >
-                <path
-                  strokeLinecap='round'
-                  strokeLinejoin='round'
-                  strokeWidth={2}
-                  d='M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z'
-                />
-              </svg>
-            </button>
+                <svg
+                  className='w-5 h-5'
+                  fill={task.isFavorite ? 'currentColor' : 'none'}
+                  stroke='currentColor'
+                  viewBox='0 0 24 24'
+                >
+                  <path
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                    strokeWidth={2}
+                    d='M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z'
+                  />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </div>

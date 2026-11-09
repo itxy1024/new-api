@@ -209,6 +209,24 @@ func prepareCreativeContext(c *gin.Context) error {
 			Size:         strings.TrimSpace(values.Get("size")),
 			Quality:      strings.TrimSpace(values.Get("quality")),
 			OutputFormat: strings.TrimSpace(values.Get("output_format")),
+			Complexity:   strings.TrimSpace(values.Get("complexity")),
+		}
+		if raw := strings.TrimSpace(values.Get("frame_count")); raw != "" {
+			count, parseErr := strconv.Atoi(raw)
+			if parseErr != nil {
+				return errors.New("creative frame_count must be between 2 and 16")
+			}
+			metadata.FrameCount = &count
+		}
+		if raw := strings.TrimSpace(values.Get("frame_duration_ms")); raw != "" {
+			duration, parseErr := strconv.Atoi(raw)
+			if parseErr != nil {
+				return errors.New("creative frame_duration_ms must be between 20 and 2000")
+			}
+			metadata.FrameDurationMS = &duration
+		}
+		if err := validateCreativeImageParameters(metadata); err != nil {
+			return err
 		}
 		if outputCompression, parseErr := strconv.Atoi(values.Get("output_compression")); parseErr == nil {
 			metadata.OutputCompression = &outputCompression
@@ -262,6 +280,9 @@ func prepareCreativeContext(c *gin.Context) error {
 	if len(body) > 0 && common.Unmarshal(body, &envelope) != nil {
 		return errors.New("invalid creative request")
 	}
+	if err := validateCreativeImageParameters(envelope); err != nil {
+		return err
+	}
 	if envelope.KeyID <= 0 {
 		return errors.New("creative key_id is required")
 	}
@@ -283,6 +304,19 @@ func prepareCreativeContext(c *gin.Context) error {
 	return nil
 }
 
+func validateCreativeImageParameters(envelope creativeRequestEnvelope) error {
+	if envelope.Complexity != "" && envelope.Complexity != "auto" && envelope.Complexity != "low" && envelope.Complexity != "medium" && envelope.Complexity != "high" {
+		return errors.New("creative complexity is invalid")
+	}
+	if envelope.FrameCount != nil && (*envelope.FrameCount < 2 || *envelope.FrameCount > 16) {
+		return errors.New("creative frame_count must be between 2 and 16")
+	}
+	if envelope.FrameDurationMS != nil && (*envelope.FrameDurationMS < 20 || *envelope.FrameDurationMS > 2000) {
+		return errors.New("creative frame_duration_ms must be between 20 and 2000")
+	}
+	return nil
+}
+
 func validateCreativeClientTaskID(clientTaskID string) error {
 	if clientTaskID == "" {
 		return nil
@@ -297,15 +331,21 @@ func validateCreativeClientTaskID(clientTaskID string) error {
 // OpenAI 图片接口公共字段的最小集合。输入图片仍然只在服务端转换为
 // multipart 文件，厂商密钥不会进入浏览器或上游请求体。
 type creativeRequestEnvelope struct {
-	KeyID             int      `json:"key_id"`
-	ClientTaskID      string   `json:"client_task_id"`
-	Group             string   `json:"group"`
-	Model             string   `json:"model"`
-	Prompt            string   `json:"prompt"`
-	Size              string   `json:"size"`
-	Quality           string   `json:"quality"`
-	ResponseFormat    string   `json:"response_format"`
-	OutputFormat      string   `json:"output_format"`
+	KeyID           int    `json:"key_id"`
+	ClientTaskID    string `json:"client_task_id"`
+	Group           string `json:"group"`
+	Model           string `json:"model"`
+	Prompt          string `json:"prompt"`
+	Size            string `json:"size"`
+	Quality         string `json:"quality"`
+	ResponseFormat  string `json:"response_format"`
+	OutputFormat    string `json:"output_format"`
+	Complexity      string `json:"complexity"`
+	FrameCount      *int   `json:"frame_count"`
+	FrameDurationMS *int   `json:"frame_duration_ms"`
+	SVG             struct {
+		Model string `json:"model"`
+	} `json:"svg"`
 	OutputCompression *int     `json:"output_compression"`
 	Moderation        string   `json:"moderation"`
 	N                 *int     `json:"n"`
@@ -315,6 +355,7 @@ type creativeRequestEnvelope struct {
 	Watermark         *bool    `json:"watermark"`
 	Images            []string `json:"images"`
 	Mask              string   `json:"mask"`
+	Markup            string   `json:"markup"`
 }
 
 // convertCreativeJSONEditToMultipart 将参考项目使用的 data URL 数组转换为
@@ -367,6 +408,19 @@ func convertCreativeJSONEditToMultipart(c *gin.Context) error {
 	}
 	if err := writeField("output_format", envelope.OutputFormat); err != nil {
 		return err
+	}
+	if err := writeField("complexity", envelope.Complexity); err != nil {
+		return err
+	}
+	if envelope.FrameCount != nil {
+		if err := writeField("frame_count", strconv.Itoa(*envelope.FrameCount)); err != nil {
+			return err
+		}
+	}
+	if envelope.FrameDurationMS != nil {
+		if err := writeField("frame_duration_ms", strconv.Itoa(*envelope.FrameDurationMS)); err != nil {
+			return err
+		}
 	}
 	if envelope.OutputCompression != nil {
 		if err := writeField("output_compression", strconv.Itoa(*envelope.OutputCompression)); err != nil {
@@ -425,6 +479,19 @@ func convertCreativeJSONEditToMultipart(c *gin.Context) error {
 			return err
 		}
 		if _, err := part.Write(maskBytes); err != nil {
+			return err
+		}
+	}
+	if strings.TrimSpace(envelope.Markup) != "" {
+		markupBytes, markupExtension, err := decodeCreativeDataURL(envelope.Markup)
+		if err != nil {
+			return fmt.Errorf("invalid markup image: %w", err)
+		}
+		part, err := writer.CreateFormFile("markup", "markup"+markupExtension)
+		if err != nil {
+			return err
+		}
+		if _, err := part.Write(markupBytes); err != nil {
 			return err
 		}
 	}

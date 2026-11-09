@@ -1,8 +1,193 @@
+import { useEffect, useRef, useState } from 'react'
+
+import {
+  DEFAULT_BATCH_PROMPT_CONCURRENCY,
+  normalizeBatchPromptConcurrency,
+} from '../../lib/batchPrompts'
+import { isTauri } from '../../lib/platform'
 import { dismissAllTooltips } from '../../lib/tooltipDismiss'
 import NewApiSelection from '../../NewApiSelection'
-import type { ApiProfile, TaskParams } from '../../types'
+import {
+  GIF_FRAME_COUNT_RANGE,
+  GIF_FRAME_DURATION_RANGE,
+  IMAGE_COMPLEXITIES,
+  type ApiProfile,
+  type AppSettings,
+  type BatchProgress,
+  type BatchPromptMode,
+  type TaskParams,
+} from '../../types'
 import Select from '../Select'
 import ButtonTooltip from './buttonTooltip'
+import ParamPopoverChip, {
+  CHIP_BASE_CLASS,
+  CHIP_IDLE_CLASS,
+} from './paramPopoverChip'
+
+const CHIP_CLASS = `${CHIP_BASE_CLASS} ${CHIP_IDLE_CLASS}`
+const CHIP_DISABLED_CLASS =
+  'h-8 px-3.5 rounded-full bg-black/[0.03] dark:bg-white/[0.04] opacity-50 cursor-not-allowed text-xs text-gray-700 dark:text-gray-200'
+const ROW_CLASS = 'relative flex items-center justify-between gap-3'
+const ROW_LABEL_CLASS = 'text-gray-500 dark:text-gray-400'
+const CONTROL_DISABLED_CLASS =
+  'px-3 py-1.5 rounded-xl border border-transparent bg-black/[0.04] dark:bg-white/[0.04] opacity-50 cursor-not-allowed text-xs transition-all duration-200'
+
+type BatchSettingsPatch = Partial<
+  Pick<
+    AppSettings,
+    | 'batchPromptEnabled'
+    | 'batchPromptMode'
+    | 'batchPromptConcurrencyLimited'
+    | 'batchPromptConcurrency'
+  >
+>
+
+function Switch({
+  checked,
+  disabled,
+  label,
+  onToggle,
+}: {
+  checked: boolean
+  disabled?: boolean
+  label: string
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type='button'
+      onClick={onToggle}
+      disabled={disabled}
+      className={`relative inline-flex h-4 w-7 flex-shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${checked ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+      role='switch'
+      aria-checked={checked}
+      aria-label={label}
+    >
+      <span
+        className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-[14px]' : 'translate-x-[2px]'}`}
+      />
+    </button>
+  )
+}
+
+/** 输入为空或无效时保留原值 */
+function parseConcurrency(input: string, fallback: number) {
+  const parsed = Number(input)
+  return input.trim() && Number.isFinite(parsed)
+    ? normalizeBatchPromptConcurrency(parsed)
+    : fallback
+}
+
+/** 并发数输入框：随弹层挂载，打开时从已保存的值初始化，聚焦输入时实时提示过高的并发数 */
+function ConcurrencyInput({
+  value,
+  disabled,
+  onCommit,
+}: {
+  value: number
+  disabled: boolean
+  onCommit: (value: number) => void
+}) {
+  const [input, setInput] = useState(String(value))
+  const [focused, setFocused] = useState(false)
+  const latestRef = useRef({ input, value, onCommit })
+  latestRef.current = { input, value, onCommit }
+
+  // 直接关闭弹层时输入框被卸载而不会触发 blur，卸载时补一次提交
+  useEffect(
+    () => () => {
+      const latest = latestRef.current
+      const next = parseConcurrency(latest.input, latest.value)
+      if (next !== latest.value) latest.onCommit(next)
+    },
+    []
+  )
+
+  const commit = () => {
+    const next = parseConcurrency(input, value)
+    setInput(String(next))
+    if (next !== value) onCommit(next)
+  }
+
+  return (
+    <>
+      <input
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false)
+          commit()
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur()
+        }}
+        disabled={disabled}
+        type='number'
+        min={1}
+        className={`w-28 px-3 py-1.5 rounded-xl border border-transparent focus:border-blue-300 dark:focus:border-blue-500/50 focus:outline-none text-xs transition-all duration-200 ${
+          disabled
+            ? 'bg-black/[0.03] dark:bg-white/[0.04] opacity-50 cursor-not-allowed'
+            : 'bg-black/[0.04] dark:bg-white/[0.06]'
+        }`}
+      />
+      <ButtonTooltip
+        visible={focused && Number(input) > DEFAULT_BATCH_PROMPT_CONCURRENCY}
+        text={`并发数超过 ${DEFAULT_BATCH_PROMPT_CONCURRENCY} 可能导致${isTauri ? '客户端' : '浏览器'}卡顿或触发服务商限流`}
+      />
+    </>
+  )
+}
+
+/** GIF 帧参数输入框：超出范围时取边界值，清空或无效时保留原值。 */
+function GifParamInput({
+  value,
+  range,
+  onCommit,
+}: {
+  value: number
+  range: { min: number; max: number }
+  onCommit: (value: number) => void
+}) {
+  const [input, setInput] = useState(String(value))
+  const latestRef = useRef({ input, value, onCommit })
+  latestRef.current = { input, value, onCommit }
+
+  const parse = (text: string, fallback: number) => {
+    const parsed = Number(text)
+    if (!text.trim() || !Number.isFinite(parsed)) return fallback
+    return Math.min(range.max, Math.max(range.min, Math.round(parsed)))
+  }
+
+  // 直接关闭弹层时输入框被卸载而不会触发 blur，卸载时补一次提交
+  useEffect(
+    () => () => {
+      const latest = latestRef.current
+      const next = parse(latest.input, latest.value)
+      if (next !== latest.value) latest.onCommit(next)
+    },
+    []
+  )
+
+  return (
+    <input
+      value={input}
+      onChange={(e) => setInput(e.target.value)}
+      onBlur={() => {
+        const next = parse(input, value)
+        setInput(String(next))
+        if (next !== value) onCommit(next)
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur()
+      }}
+      type='number'
+      min={range.min}
+      max={range.max}
+      className='w-28 px-3 py-1.5 rounded-xl border border-transparent bg-black/[0.04] dark:bg-white/[0.06] focus:border-blue-300 dark:focus:border-blue-500/50 focus:outline-none text-xs transition-all duration-200'
+    />
+  )
+}
 
 interface HintTooltipState {
   visible: boolean
@@ -13,7 +198,6 @@ interface HintTooltipState {
 }
 
 export default function InputParamsPanel({
-  cols,
   params,
   setParams,
   activeProfile,
@@ -22,6 +206,22 @@ export default function InputParamsPanel({
   displaySize,
   qualityOptions,
   selectClass,
+  transparentOutputAvailable,
+  showTransparentOutputControl,
+  transparentOutputEnabled,
+  transparentOutputHint,
+  onTransparentOutputMenuOpenChange,
+  compressionHint,
+  compressionDisabled,
+  outputCompressionInput,
+  setOutputCompressionInput,
+  commitOutputCompression,
+  moderationHint,
+  moderationDisabled,
+  complexityAvailable,
+  vectorAndAnimatedFormatsAvailable,
+  svgFormatAvailable,
+  hasInputImages,
   agentAutoImageCount,
   outputImageLimit,
   nInput,
@@ -40,16 +240,44 @@ export default function InputParamsPanel({
   sizeHint,
   qualityHint,
   onOpenSizePicker,
+  showBatch,
+  batchEnabled,
+  batchMode,
+  batchConcurrencyLimited,
+  batchConcurrency,
+  batchPromptCount,
+  batchProgress,
+  onBatchChange,
+  onStopBatch,
 }: {
-  cols: string
   params: TaskParams
   setParams: (patch: Partial<TaskParams>) => void
   activeProfile: ApiProfile
+  modelOptions: Array<{ label: string; value: string }>
+  onModelChange: (model: string) => void
   isFalProvider: boolean
   isFalTextToImage: boolean
   displaySize: string
   qualityOptions: Array<{ label: string; value: string }>
   selectClass: string
+  transparentOutputAvailable: boolean
+  showTransparentOutputControl: boolean
+  transparentOutputEnabled: boolean
+  transparentOutputHint: HintTooltipState
+  onTransparentOutputMenuOpenChange: (open: boolean) => void
+  compressionHint: HintTooltipState
+  compressionDisabled: boolean
+  outputCompressionInput: string
+  setOutputCompressionInput: (value: string) => void
+  commitOutputCompression: () => void
+  moderationHint: HintTooltipState
+  moderationDisabled: boolean
+  /** 当前模型支持 complexity（GPT Image 2.6 及以上） */
+  complexityAvailable: boolean
+  /** 可选 GIF 输出格式 */
+  vectorAndAnimatedFormatsAvailable: boolean
+  svgFormatAvailable: boolean
+  hasInputImages: boolean
   agentAutoImageCount: boolean
   outputImageLimit: number
   nInput: string
@@ -68,12 +296,43 @@ export default function InputParamsPanel({
   sizeHint: HintTooltipState
   qualityHint: HintTooltipState
   onOpenSizePicker: () => void
+  showBatch: boolean
+  batchEnabled: boolean
+  batchMode: BatchPromptMode
+  batchConcurrencyLimited: boolean
+  batchConcurrency: number
+  batchPromptCount: number
+  batchProgress: BatchProgress | null
+  onBatchChange: (patch: BatchSettingsPatch) => void
+  onStopBatch: () => void
 }) {
+  // 折叠时也展示弹层内每一项的当前值，不支持的参数不显示
+  const isGif = params.output_format === 'gif'
+  const showUnsupportedControls = false
+  const moreSummary = [
+    complexityAvailable ? `复杂度 ${params.complexity}` : null,
+    params.output_format.toUpperCase(),
+    isGif ? `${params.frame_count} 帧` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const prefix = (text: string) => (
+    <span className='mr-1.5 text-gray-400 dark:text-gray-500'>{text}</span>
+  )
+
+  const batchSummary = batchProgress
+    ? `${batchProgress.finished}/${batchProgress.total}`
+    : batchEnabled
+      ? `${batchPromptCount} 条`
+      : undefined
+
   return (
-    <div className={`grid ${cols} flex-1 gap-2 text-xs`}>
-      <NewApiSelection />
-      <label
-        className='relative flex flex-col gap-0.5'
+    <div className='flex flex-1 flex-wrap sm:flex-nowrap items-center gap-2 min-w-0 text-xs'>
+      <div className='min-w-0 max-w-full sm:shrink-[0.01] max-sm:flex-auto'>
+        <NewApiSelection />
+      </div>
+      <div
+        className='relative max-sm:flex-auto sm:shrink-0'
         onMouseEnter={sizeHint.show}
         onMouseLeave={sizeHint.hide}
         onTouchStart={sizeHint.startTouch}
@@ -81,16 +340,16 @@ export default function InputParamsPanel({
         onTouchCancel={sizeHint.hide}
         onClick={sizeHint.show}
       >
-        <span className='ml-1 text-gray-400 dark:text-gray-500'>尺寸</span>
         <button
           type='button'
           onClick={() => {
             dismissAllTooltips()
             onOpenSizePicker()
           }}
-          className='rounded-xl border border-gray-200/60 bg-white/50 px-3 py-1.5 text-left font-mono text-xs shadow-sm transition-all duration-200 hover:bg-white focus:outline-none dark:border-white/[0.08] dark:bg-white/[0.03] dark:hover:bg-white/[0.06]'
+          className={`flex w-full items-center ${CHIP_CLASS}`}
         >
-          {displaySize}
+          {prefix('尺寸')}
+          <span className='font-mono'>{displaySize}</span>
         </button>
         <ButtonTooltip
           visible={
@@ -110,9 +369,9 @@ export default function InputParamsPanel({
             )
           }
         />
-      </label>
-      <label
-        className='relative flex flex-col gap-0.5'
+      </div>
+      <div
+        className='relative max-sm:flex-auto sm:shrink-0'
         onMouseEnter={qualityHint.show}
         onMouseLeave={qualityHint.hide}
         onTouchStart={qualityHint.startTouch}
@@ -120,7 +379,6 @@ export default function InputParamsPanel({
         onTouchCancel={qualityHint.hide}
         onClick={qualityHint.show}
       >
-        <span className='ml-1 text-gray-400 dark:text-gray-500'>质量</span>
         <Select
           value={
             activeProfile.codexCli
@@ -135,12 +393,9 @@ export default function InputParamsPanel({
           }}
           options={qualityOptions}
           disabled={activeProfile.codexCli}
-          showValueTooltips={false}
-          className={
-            activeProfile.codexCli
-              ? 'cursor-not-allowed rounded-xl border border-gray-200/60 bg-gray-100/50 px-3 py-1.5 text-xs opacity-50 shadow-sm transition-all duration-200 dark:border-white/[0.08] dark:bg-white/[0.05]'
-              : selectClass
-          }
+          prefix={prefix('质量')}
+          menuClassName='min-w-max'
+          className={activeProfile.codexCli ? CHIP_DISABLED_CLASS : CHIP_CLASS}
         />
         <ButtonTooltip
           visible={
@@ -160,29 +415,9 @@ export default function InputParamsPanel({
             )
           }
         />
-      </label>
-      <label className='flex flex-col gap-0.5'>
-        <span className='ml-1 text-gray-400 dark:text-gray-500'>格式</span>
-        <Select
-          value={params.output_format}
-          onChange={(val) => {
-            setParams({
-              output_format: val as TaskParams['output_format'],
-              transparent_output: false,
-              output_compression: null,
-            })
-          }}
-          options={[
-            { label: 'PNG', value: 'png' },
-            { label: 'JPEG', value: 'jpeg' },
-            { label: 'WebP', value: 'webp' },
-          ]}
-          showValueTooltips={false}
-          className={selectClass}
-        />
-      </label>
+      </div>
       <label
-        className='relative flex flex-col gap-0.5'
+        className={`relative flex items-center max-sm:flex-auto sm:shrink-0 ${agentAutoImageCount ? CHIP_DISABLED_CLASS : `${CHIP_CLASS} cursor-text`}`}
         onMouseEnter={() => {
           showAgentNHint()
           streamConcurrentHint.show()
@@ -209,7 +444,7 @@ export default function InputParamsPanel({
           streamConcurrentHint.show()
         }}
       >
-        <span className='ml-1 text-gray-400 dark:text-gray-500'>数量</span>
+        {prefix('数量')}
         <input
           value={nInput}
           onChange={(e) => handleNInputChange(e.target.value)}
@@ -232,11 +467,8 @@ export default function InputParamsPanel({
           type={agentAutoImageCount ? 'text' : 'number'}
           min={agentAutoImageCount ? undefined : 1}
           max={agentAutoImageCount ? undefined : outputImageLimit}
-          className={`rounded-xl border border-gray-200/60 px-3 py-1.5 text-xs shadow-sm transition-all duration-200 focus:outline-none dark:border-white/[0.08] ${
-            agentAutoImageCount
-              ? 'cursor-not-allowed bg-gray-100/50 opacity-50 dark:bg-white/[0.05]'
-              : 'bg-white/50 dark:bg-white/[0.03]'
-          }`}
+          style={{ width: `${Math.max(1, nInput.length)}ch` }}
+          className='bg-transparent text-xs focus:outline-none disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
         />
         <ButtonTooltip visible={nLimitHint.visible} text={nLimitHintText} />
         <ButtonTooltip
@@ -248,6 +480,294 @@ export default function InputParamsPanel({
           text='数量大于 1 时会将多图生成拆分为并发单图'
         />
       </label>
+      <ParamPopoverChip
+        label='更多'
+        summary={moreSummary}
+        className='sm:min-w-[5rem]'
+      >
+        {complexityAvailable && (
+          <div className={ROW_CLASS}>
+            <span className={ROW_LABEL_CLASS}>复杂度</span>
+            <div className='w-28'>
+              <Select
+                value={params.complexity}
+                onChange={(val) =>
+                  setParams({ complexity: val as TaskParams['complexity'] })
+                }
+                options={IMAGE_COMPLEXITIES.map((value) => ({
+                  label: value,
+                  value,
+                }))}
+                className={selectClass}
+              />
+            </div>
+          </div>
+        )}
+        <div className={ROW_CLASS}>
+          <span className={ROW_LABEL_CLASS}>格式</span>
+          <div className='w-28'>
+            <Select
+              value={params.output_format}
+              onChange={(val) => {
+                setParams({
+                  output_format: val as TaskParams['output_format'],
+                  ...(val === 'png' || val === 'svg' || val === 'gif'
+                    ? { output_compression: null }
+                    : {}),
+                  ...(val === 'jpeg' ? { transparent_output: false } : {}),
+                })
+              }}
+              options={[
+                { label: 'PNG', value: 'png' },
+                { label: 'JPEG', value: 'jpeg' },
+                { label: 'WebP', value: 'webp' },
+                ...(svgFormatAvailable ? [{ label: 'SVG', value: 'svg' }] : []),
+                ...(vectorAndAnimatedFormatsAvailable
+                  ? [{ label: 'GIF', value: 'gif' }]
+                  : []),
+              ]}
+              className={selectClass}
+            />
+          </div>
+        </div>
+        {hasInputImages && params.output_format === 'svg' && (
+          <p className='text-[11px] leading-snug text-amber-600 dark:text-amber-400'>
+            SVG 只能用于文生图，有参考图时无法提交
+          </p>
+        )}
+        {isGif && (
+          <>
+            <label className={ROW_CLASS}>
+              <span className={ROW_LABEL_CLASS}>帧数</span>
+              <GifParamInput
+                value={params.frame_count}
+                range={GIF_FRAME_COUNT_RANGE}
+                onCommit={(frame_count) => setParams({ frame_count })}
+              />
+            </label>
+            <label className={ROW_CLASS}>
+              <span className={ROW_LABEL_CLASS}>每帧时长（ms）</span>
+              <GifParamInput
+                value={params.frame_duration_ms}
+                range={GIF_FRAME_DURATION_RANGE}
+                onCommit={(frame_duration_ms) =>
+                  setParams({ frame_duration_ms })
+                }
+              />
+            </label>
+          </>
+        )}
+        {showUnsupportedControls && showTransparentOutputControl && (
+          <div
+            className={ROW_CLASS}
+            onMouseEnter={transparentOutputHint.show}
+            onMouseLeave={transparentOutputHint.hide}
+            onTouchStart={transparentOutputHint.startTouch}
+            onTouchEnd={transparentOutputHint.clearTimer}
+            onTouchCancel={transparentOutputHint.hide}
+            onClick={transparentOutputHint.show}
+          >
+            <span className={ROW_LABEL_CLASS}>透明背景</span>
+            <div className='w-28'>
+              <Select
+                value={transparentOutputEnabled ? 'on' : 'off'}
+                onChange={(val) => {
+                  if (!transparentOutputAvailable) return
+                  setParams({
+                    transparent_output: val === 'on',
+                    ...(params.output_format === 'png'
+                      ? { output_compression: null }
+                      : {}),
+                  })
+                }}
+                options={[
+                  { label: 'false', value: 'off' },
+                  { label: 'true', value: 'on' },
+                ]}
+                className={selectClass}
+                onOpenChange={onTransparentOutputMenuOpenChange}
+              />
+            </div>
+            <ButtonTooltip
+              visible={
+                transparentOutputHint.visible &&
+                params.output_format !== 'svg' &&
+                !isGif
+              }
+              text={
+                <>
+                  实现方式可在
+                  <strong className='font-semibold'>「设置 → API 配置」</strong>
+                  中选择
+                </>
+              }
+            />
+          </div>
+        )}
+        {showUnsupportedControls && !showTransparentOutputControl && (
+          <label
+            className={ROW_CLASS}
+            onMouseEnter={compressionHint.show}
+            onMouseLeave={compressionHint.hide}
+            onTouchStart={compressionHint.startTouch}
+            onTouchEnd={compressionHint.clearTimer}
+            onTouchCancel={compressionHint.hide}
+            onClick={compressionHint.show}
+          >
+            <span className={ROW_LABEL_CLASS}>压缩率</span>
+            <input
+              value={outputCompressionInput}
+              onChange={(e) => setOutputCompressionInput(e.target.value)}
+              onBlur={commitOutputCompression}
+              disabled={compressionDisabled}
+              type='number'
+              min={0}
+              max={100}
+              placeholder='0-100'
+              className={`w-28 px-3 py-1.5 rounded-xl border border-transparent focus:border-blue-300 dark:focus:border-blue-500/50 focus:outline-none text-xs transition-all duration-200 ${
+                compressionDisabled
+                  ? 'bg-black/[0.03] dark:bg-white/[0.04] opacity-50 cursor-not-allowed'
+                  : 'bg-black/[0.04] dark:bg-white/[0.06]'
+              }`}
+            />
+            <ButtonTooltip
+              visible={compressionHint.visible}
+              text={
+                isFalProvider
+                  ? 'fal.ai 不支持压缩率参数'
+                  : '仅 JPEG 和 WebP 支持压缩率'
+              }
+            />
+          </label>
+        )}
+        {showUnsupportedControls && <div
+          className={ROW_CLASS}
+          onMouseEnter={moderationHint.show}
+          onMouseLeave={moderationHint.hide}
+          onTouchStart={moderationHint.startTouch}
+          onTouchEnd={moderationHint.clearTimer}
+          onTouchCancel={moderationHint.hide}
+          onClick={moderationHint.show}
+        >
+          <span className={ROW_LABEL_CLASS}>审核</span>
+          <div className='w-28'>
+            <Select
+              value={moderationDisabled ? 'auto' : params.moderation}
+              onChange={(val) => {
+                if (!moderationDisabled)
+                  setParams({ moderation: val as TaskParams['moderation'] })
+              }}
+              options={[
+                { label: 'auto', value: 'auto' },
+                { label: 'low', value: 'low' },
+              ]}
+              disabled={moderationDisabled}
+              className={
+                moderationDisabled ? CONTROL_DISABLED_CLASS : selectClass
+              }
+            />
+          </div>
+          <ButtonTooltip
+            visible={moderationDisabled && moderationHint.visible}
+            text='fal.ai 不支持审核参数'
+          />
+        </div>}
+      </ParamPopoverChip>
+      {showBatch && (
+        <ParamPopoverChip
+          label='批量'
+          summary={batchSummary}
+          active={batchEnabled || Boolean(batchProgress)}
+          className='sm:shrink-0'
+        >
+          <div className={ROW_CLASS}>
+            <span className={ROW_LABEL_CLASS}>多提示词批量提交</span>
+            <Switch
+              checked={batchEnabled}
+              disabled={Boolean(batchProgress)}
+              label='多提示词批量提交'
+              onToggle={() =>
+                onBatchChange({ batchPromptEnabled: !batchEnabled })
+              }
+            />
+          </div>
+          {batchEnabled && (
+            <>
+              <div className={ROW_CLASS}>
+                <span className={ROW_LABEL_CLASS}>执行方式</span>
+                <div className='w-28'>
+                  <Select
+                    value={batchMode}
+                    onChange={(val) =>
+                      onBatchChange({ batchPromptMode: val as BatchPromptMode })
+                    }
+                    options={[
+                      { label: '排队', value: 'queue' },
+                      { label: '并发', value: 'concurrent' },
+                    ]}
+                    disabled={Boolean(batchProgress)}
+                    className={
+                      batchProgress ? CONTROL_DISABLED_CLASS : selectClass
+                    }
+                  />
+                </div>
+              </div>
+              {batchMode === 'concurrent' && (
+                <div className={ROW_CLASS}>
+                  <span className={ROW_LABEL_CLASS}>限制并发数</span>
+                  <Switch
+                    checked={batchConcurrencyLimited}
+                    disabled={Boolean(batchProgress)}
+                    label='限制并发数'
+                    onToggle={() =>
+                      onBatchChange({
+                        batchPromptConcurrencyLimited: !batchConcurrencyLimited,
+                      })
+                    }
+                  />
+                </div>
+              )}
+              {batchMode === 'concurrent' && batchConcurrencyLimited && (
+                <label className={ROW_CLASS}>
+                  <span className={ROW_LABEL_CLASS}>并发数</span>
+                  <ConcurrencyInput
+                    value={batchConcurrency}
+                    disabled={Boolean(batchProgress)}
+                    onCommit={(value) =>
+                      onBatchChange({ batchPromptConcurrency: value })
+                    }
+                  />
+                </label>
+              )}
+              {batchMode === 'concurrent' && !batchConcurrencyLimited && (
+                <p className='rounded-lg bg-amber-500/[0.1] px-2.5 py-2 text-[11px] leading-relaxed text-amber-700 dark:bg-amber-500/[0.14] dark:text-amber-400/90'>
+                  不限制并发时会同时发出全部请求，提示词较多时可能导致
+                  {isTauri ? '客户端' : '浏览器'}
+                  卡顿甚至崩溃，也容易触发服务商限流。
+                </p>
+              )}
+              <p className='text-[11px] leading-relaxed text-gray-400 dark:text-gray-500'>
+                提示词之间空两行分隔，当前共 {batchPromptCount}{' '}
+                条；参考图和参数对每条提示词都生效。
+              </p>
+            </>
+          )}
+          {batchProgress && (
+            <div className={ROW_CLASS}>
+              <span className={ROW_LABEL_CLASS}>
+                已完成 {batchProgress.finished} / {batchProgress.total}
+              </span>
+              <button
+                type='button'
+                onClick={onStopBatch}
+                className='rounded-xl bg-red-500/[0.12] px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/[0.18] dark:bg-red-500/[0.18] dark:text-red-400/90 dark:hover:bg-red-500/[0.25]'
+              >
+                停止批量
+              </button>
+            </div>
+          )}
+        </ParamPopoverChip>
+      )}
     </div>
   )
 }

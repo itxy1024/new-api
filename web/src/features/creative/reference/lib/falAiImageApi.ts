@@ -16,15 +16,23 @@ import {
   MIME_MAP,
   normalizeBase64Image,
 } from './imageApiShared'
+// import { DEFAULT_SVG_MODEL } from './imageModels'
+import { isGptImage25PlusModel, isGptImage26PlusModel } from './imageModels'
+import { apiFetch } from './platform'
 
 const DEFAULT_FAL_IMAGE_SIZE = { width: 1360, height: 1024 }
 
 function mapFalEndpoint(model: string, isEdit: boolean): string {
   const normalized =
     model.trim().replace(/^\/+/, '').replace(/\/+$/, '') || 'openai/gpt-image-2'
-  return isEdit && !normalized.endsWith('/edit')
-    ? `${normalized}/edit`
-    : normalized
+  if (normalized.endsWith('/edit'))
+    return isEdit ? normalized : normalized.replace(/\/edit$/, '/text-to-image')
+  if (normalized.endsWith('/text-to-image'))
+    return isEdit ? normalized.replace(/\/text-to-image$/, '/edit') : normalized
+  if (/gpt-image-\d+\.\d+\//.test(normalized)) {
+    return `${normalized}/${isEdit ? 'edit' : 'text-to-image'}`
+  }
+  return isEdit ? `${normalized}/edit` : normalized
 }
 
 async function mapFalImageSize(
@@ -39,9 +47,17 @@ async function mapFalImageSize(
 }
 
 function mapFalQuality(
-  quality: TaskParams['quality']
-): 'low' | 'medium' | 'high' {
-  return quality === 'auto' ? 'high' : quality
+  quality: TaskParams['quality'],
+  model: string
+): 'low' | 'medium' | 'high' | 'xhigh' | 'max' {
+  // fal.ai 的 2.6 端点画质只到 high
+  if (
+    isGptImage25PlusModel(model) &&
+    !isGptImage26PlusModel(model) &&
+    (quality === 'xhigh' || quality === 'max')
+  )
+    return quality
+  return quality === 'low' || quality === 'medium' ? quality : 'high'
 }
 
 function configureFal(profile: ApiProfile) {
@@ -50,13 +66,16 @@ function configureFal(profile: ApiProfile) {
   const config: Parameters<typeof fal.config>[0] = {
     credentials: profile.apiKey,
     suppressLocalCredentialsWarning: true,
+    // fal 的类型要求接受 RequestInfo，但 SDK 内部只传字符串 URL
+    fetch: apiFetch as typeof fetch,
   }
   if (baseUrl !== DEFAULT_FAL_BASE_URL) config.proxyUrl = baseUrl
   fal.config(config)
 }
 
 async function createFalRequestInput(
-  opts: CallApiOptions
+  opts: CallApiOptions,
+  profile: ApiProfile
 ): Promise<Record<string, unknown>> {
   const isEdit = opts.inputImageDataUrls.length > 0
   const input: Record<string, unknown> = {
@@ -65,10 +84,25 @@ async function createFalRequestInput(
       isEdit && opts.params.size === 'auto'
         ? 'auto'
         : await mapFalImageSize(opts.params.size),
-    quality: mapFalQuality(opts.params.quality),
+    quality: mapFalQuality(opts.params.quality, profile.model),
     num_images: Math.min(4, Math.max(1, opts.params.n || 1)),
     output_format: opts.params.output_format,
   }
+
+  if (opts.nativeTransparentBackground) input.background = 'transparent'
+
+  // fal.ai 把 complexity 叫作 reasoning_effort；实测只接受 low / medium / high
+  if (opts.params.complexity !== 'auto')
+    input.reasoning_effort = opts.params.complexity
+  if (opts.params.output_format === 'gif') {
+    input.frame_count = opts.params.frame_count
+    input.frame_duration_ms = opts.params.frame_duration_ms
+  }
+  // fal.ai 的 SVG 暂不开放：按文档请求会返回 Invalid request，能成功的写法依赖未公开的 provider_options，
+  // 可能是意外暴露的内部参数，编写模型的计费也无法确认。fal.ai 按文档可用后恢复以下代码和 paramCompatibility 中的处理。
+  // if (opts.params.output_format === 'svg') {
+  //   input.provider_options = { svg: { model: profile.svgModel?.trim() || DEFAULT_SVG_MODEL } }
+  // }
 
   if (isEdit) {
     input.image_urls = opts.inputImageDataUrls
@@ -76,6 +110,9 @@ async function createFalRequestInput(
 
   if (opts.maskDataUrl) {
     input.mask_url = opts.maskDataUrl
+  }
+  if (opts.markupDataUrl) {
+    input.markup_image_url = opts.markupDataUrl
   }
 
   return input
@@ -266,7 +303,9 @@ export async function callFalAiImageApi(
       opts.inputImageDataUrls.reduce(
         (sum, dataUrl) => sum + getDataUrlEncodedByteSize(dataUrl),
         0
-      ) + (opts.maskDataUrl ? getDataUrlEncodedByteSize(opts.maskDataUrl) : 0)
+      ) +
+        (opts.maskDataUrl ? getDataUrlEncodedByteSize(opts.maskDataUrl) : 0) +
+        (opts.markupDataUrl ? getDataUrlEncodedByteSize(opts.markupDataUrl) : 0)
     )
 
     // 使用当前配置保存的 API Key，避免 fal SDK 额外输出前端凭据警告。
@@ -274,7 +313,7 @@ export async function callFalAiImageApi(
 
     const isEdit = opts.inputImageDataUrls.length > 0
     const endpoint = mapFalEndpoint(profile.model, isEdit)
-    const input = await createFalRequestInput(opts)
+    const input = await createFalRequestInput(opts, profile)
     const result = await fal.subscribe(endpoint, {
       input,
       logs: true,

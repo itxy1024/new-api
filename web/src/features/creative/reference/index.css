@@ -16,11 +16,18 @@
   --font-ui-sans:
     'Public Sans', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono:
-    'Maple Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
+    'Maple Mono NF CN', 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
   --safe-area-top: env(safe-area-inset-top, 0px);
   --safe-area-right: env(safe-area-inset-right, 0px);
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);
+  /* 顶栏（Header.tsx）的高度，与 .safe-area-top、.safe-header-inner、下边框及窄屏的第二行一致；用于让页面滚动条从顶栏下方开始 */
+  --header-row2-height: 0px;
+  --header-height: calc(
+    var(--safe-area-top) + 3.5rem + 1px + var(--header-row2-height)
+  );
+  /* 细滚动条的宽度，也是 [data-page-scroll] 滚动条的宽度：顶栏、输入栏等 fixed 元素按窗口宽度定位，需让出它才能与页面内容对齐 */
+  --page-scrollbar-width: 0px;
   scrollbar-gutter: stable;
 }
 
@@ -163,11 +170,9 @@ body.drag-selecting [data-creative-reference] * {
   animation: agent-web-search-text-sweep 2.5s linear infinite;
 }
 
-@media (prefers-color-scheme: dark) {
-  .agent-web-search-running-text {
-    --agent-web-search-text: #9ca3af;
-    --agent-web-search-highlight: #ffffff;
-  }
+.dark .agent-web-search-running-text {
+  --agent-web-search-text: #9ca3af;
+  --agent-web-search-highlight: #ffffff;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -299,26 +304,24 @@ body.drag-selecting [data-creative-reference] * {
   border-radius: 0.75rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  .markdown-renderer :where(blockquote) {
-    color: #a1a1aa;
-  }
+.dark .markdown-renderer :where(blockquote) {
+  color: #a1a1aa;
+}
 
-  .markdown-renderer :where(a) {
-    color: #60a5fa;
-  }
+.dark .markdown-renderer :where(a) {
+  color: #60a5fa;
+}
 
-  .markdown-renderer :where(:not(pre) > code) {
-    background: rgba(255, 255, 255, 0.1);
-  }
+.dark .markdown-renderer :where(:not(pre) > code) {
+  background: rgba(255, 255, 255, 0.1);
+}
 
-  .markdown-renderer :where(th, td) {
-    border-color: rgba(255, 255, 255, 0.12);
-  }
+.dark .markdown-renderer :where(th, td) {
+  border-color: rgba(255, 255, 255, 0.12);
+}
 
-  .markdown-renderer :where(th) {
-    background: rgba(255, 255, 255, 0.06);
-  }
+.dark .markdown-renderer :where(th) {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .mask-edge-r {
@@ -428,6 +431,19 @@ body.drag-selecting [data-creative-reference] * {
   animation: confirm-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* 进度条：总量未知时来回滑动 */
+@keyframes progress-indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+.animate-progress-indeterminate {
+  animation: progress-indeterminate 1.2s ease-in-out infinite;
+}
+
 /* 移动端折叠区域收起/展开 */
 .collapse-section {
   display: grid;
@@ -442,6 +458,8 @@ body.drag-selecting [data-creative-reference] * {
   opacity: 0;
 }
 .collapse-section > .collapse-inner {
+  /* grid 子项默认不小于内容宽度，不换行的长文本（如参数摘要）会撑出容器 */
+  min-width: 0;
   overflow: visible;
 }
 .collapse-section.collapsed > .collapse-inner {
@@ -555,35 +573,27 @@ body.drag-selecting [data-creative-reference] * {
   box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.25);
 }
 
-@media (prefers-color-scheme: dark) {
-  .mention-tag {
-    background: rgba(59, 130, 246, 0.12);
-    color: #93c5fd;
-    border-color: rgba(59, 130, 246, 0.2);
-  }
+.dark .mention-tag {
+  background: rgba(59, 130, 246, 0.12);
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, 0.2);
+}
 
-  .mention-tag::selection,
-  .mention-tag *::selection {
-    background: transparent !important;
-    color: inherit !important;
-  }
+.dark [contenteditable]::selection,
+.dark [contenteditable] *::selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: inherit;
+}
 
-  [contenteditable]::selection,
-  [contenteditable] *::selection {
-    background: rgba(59, 130, 246, 0.3);
-    color: inherit;
-  }
+.dark .mention-tag:hover {
+  background: rgba(59, 130, 246, 0.2);
+}
 
-  .mention-tag:hover {
-    background: rgba(59, 130, 246, 0.2);
-  }
-
-  .mention-tag.selected {
-    background: #3b82f6;
-    color: #ffffff;
-    border-color: #60a5fa;
-    box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.35);
-  }
+.dark .mention-tag.selected {
+  background: #3b82f6;
+  color: #ffffff;
+  border-color: #60a5fa;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.35);
 }
 
 /* 修复 iOS/Webkit 上带圆角的滚动容器内容/滚动条溢出的 bug */

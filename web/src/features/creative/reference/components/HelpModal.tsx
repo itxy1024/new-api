@@ -3,7 +3,9 @@ import { createPortal } from 'react-dom'
 
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
+import { isTauri } from '../lib/platform'
 import type { AppMode } from '../types'
+import { LinkIcon } from './icons'
 
 interface HelpModalProps {
   appMode: AppMode
@@ -92,8 +94,11 @@ export default function HelpModal({
                   <ul className='list-disc space-y-2 pl-4'>
                     <li>需要使用 Responses API 配置。</li>
                     <li>
-                      如需 Agent 搜索互联网或读取 URL 内容，可在设置的 Agent
-                      配置中开启“网络搜索”。
+                      如需 Agent 搜索互联网或读取 URL 内容，可在
+                      <strong className='font-semibold'>
+                        「设置 → Agent 配置」
+                      </strong>
+                      中开启“网络搜索”。
                     </li>
                     <li>
                       输入{' '}
@@ -381,6 +386,40 @@ export default function HelpModal({
               </section>
             </>
           )}
+          <section>
+            <h4 className='mb-4 text-sm font-medium text-gray-800 dark:text-gray-200 flex items-center gap-1.5'>
+              <LinkIcon className='w-4 h-4 text-gray-400 dark:text-gray-500' />
+              导入配置链接
+            </h4>
+            <ul className='list-disc pl-4 space-y-2'>
+              {isTauri ? (
+                <>
+                  <li>
+                    在浏览器或其他地方
+                    <strong className='text-blue-500 dark:text-blue-400 font-medium'>
+                      复制导入链接
+                    </strong>
+                    后切回客户端，客户端会提示导入，确认后才会导入。
+                  </li>
+                  <li>
+                    点击{' '}
+                    <code className='rounded bg-gray-100 px-1 py-0.5 text-[0.85em] text-gray-700 dark:bg-white/[0.06] dark:text-gray-200'>
+                      gpt-image-playground://
+                    </code>{' '}
+                    开头的链接可以直接唤起客户端并提示导入。
+                  </li>
+                </>
+              ) : (
+                <li>
+                  打开带有配置参数的
+                  <strong className='text-blue-500 dark:text-blue-400 font-medium'>
+                    导入链接
+                  </strong>
+                  时，页面会先提示导入，确认后才会导入。
+                </li>
+              )}
+            </ul>
+          </section>
         </div>
 
         <div className='flex justify-center border-t border-gray-200 pt-4 dark:border-white/[0.08]'>

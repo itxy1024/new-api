@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
@@ -6,7 +6,8 @@ import { useStore } from '../store'
 import { Checkbox } from './Checkbox'
 import { CopyIcon } from './icons'
 
-function renderMessage(message: string) {
+/** 「」中的内容连同括号加粗，**…** 中的内容去掉星号加粗，反引号中的内容显示为代码；启动提示的补充说明也用它 */
+export function renderMessage(message: string) {
   return message
     .split(/(`[^`]+`|「[^」]+」|\*\*[^*]+\*\*)/g)
     .map((part, index) => {
@@ -51,7 +52,7 @@ function getActionButtonClass(
   tone: 'primary' | 'secondary' | 'danger' | 'warning' = 'primary'
 ) {
   if (tone === 'secondary') {
-    return 'border border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-white/[0.08] dark:text-gray-400 dark:hover:bg-white/[0.06]'
+    return 'border border-transparent bg-black/[0.04] text-gray-600 hover:bg-black/[0.07] dark:bg-white/[0.06] dark:text-gray-400 dark:hover:bg-white/[0.1]'
   }
   if (tone === 'warning') return 'bg-orange-500 text-white hover:bg-orange-600'
   if (tone === 'danger') return 'bg-red-500 text-white hover:bg-red-600'
@@ -64,6 +65,7 @@ export default function ConfirmDialog() {
   const [canConfirm, setCanConfirm] = useState(true)
   const [checkboxChecked, setCheckboxChecked] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const delay = confirmDialog?.minConfirmDelayMs ?? 0
@@ -92,7 +94,7 @@ export default function ConfirmDialog() {
   }
 
   useCloseOnEscape(Boolean(confirmDialog) && canConfirm, handleClose)
-  usePreventBackgroundScroll(Boolean(confirmDialog))
+  usePreventBackgroundScroll(Boolean(confirmDialog), panelRef)
 
   if (!confirmDialog) return null
   const isDestructive =
@@ -142,11 +144,22 @@ export default function ConfirmDialog() {
           )}
           {confirmDialog.title}
         </h3>
-        <p
-          className={`text-sm text-gray-500 dark:text-gray-400 ${confirmDialog.checkbox ? 'mb-4' : 'mb-6'} leading-relaxed whitespace-pre-line ${confirmDialog.messageAlign === 'center' ? 'text-center' : ''}`}
+        {/* 空行分段；text-pretty 避免末行只剩一两个字 */}
+        <div
+          className={`space-y-2 text-sm text-gray-500 dark:text-gray-400 ${confirmDialog.content ? 'mb-3' : confirmDialog.checkbox ? 'mb-4' : 'mb-6'} leading-relaxed whitespace-pre-line text-pretty ${confirmDialog.messageAlign === 'center' ? 'text-center' : ''}`}
         >
-          {renderMessage(confirmDialog.message)}
-        </p>
+          {confirmDialog.message.split(/\n{2,}/).map((para, idx) => (
+            <p key={idx}>{renderMessage(para)}</p>
+          ))}
+        </div>
+        {confirmDialog.content && (
+          // 内容过长时只滚动这一区域，标题和按钮始终可见
+          <div
+            className={`custom-scrollbar -mx-2 max-h-[min(60vh,32rem)] min-h-0 overflow-y-auto overscroll-contain px-2 ${confirmDialog.checkbox ? 'mb-4' : 'mb-6'}`}
+          >
+            {confirmDialog.content}
+          </div>
+        )}
         {confirmDialog.checkbox && (
           <Checkbox
             checked={checkboxChecked}
@@ -207,7 +220,9 @@ export default function ConfirmDialog() {
               disabled={!canConfirm || isSubmitting}
               className={`flex-1 rounded-xl py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${confirmClassName}`}
             >
-              {confirmText}
+              {isSubmitting && confirmDialog.busyText
+                ? confirmDialog.busyText
+                : confirmText}
             </button>
           </div>
         )}

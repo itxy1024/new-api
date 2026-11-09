@@ -97,6 +97,7 @@ import {
 import MarkdownRenderer from './MarkdownRenderer'
 import Select from './Select'
 import AgentSettingsTab from './settings/AgentSettingsTab'
+import AppearanceSettingsTab from './settings/AppearanceSettingsTab'
 import BasicSettingsTab from './settings/BasicSettingsTab'
 import CustomProviderModal from './settings/CustomProviderModal'
 import GeneralSettingsTab from './settings/GeneralSettingsTab'
@@ -234,7 +235,7 @@ function isProfileApiProxyEligible(settings: AppSettings, profile: ApiProfile) {
   return !isAsyncCustomProvider(customProvider)
 }
 
-export default function SettingsModal() {
+export default function SettingsModal({ newApiMode = false }: { newApiMode?: boolean }) {
   const { t } = useTranslation()
   const showSettings = useStore((s) => s.showSettings)
   const settingsTabRequest = useStore((s) => s.settingsTabRequest)
@@ -291,7 +292,7 @@ export default function SettingsModal() {
     useState(false)
   const [duplicateProfileTooltipVisible, setDuplicateProfileTooltipVisible] =
     useState(false)
-  const [activeTab, setActiveTab] = useState<SettingsTab>('basic')
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general')
   const [exportConfig, setExportConfig] = useState(true)
   const [exportTasks, setExportTasks] = useState(true)
   const [importConfig, setImportConfig] = useState(true)
@@ -515,8 +516,14 @@ export default function SettingsModal() {
   }, [activeProfile.id, activeProfile.timeout])
 
   useEffect(() => {
-    if (showSettings && settingsTabRequest) setActiveTab(settingsTabRequest)
-  }, [settingsTabRequest, showSettings])
+    if (showSettings && settingsTabRequest) {
+      setActiveTab(
+        (newApiMode ? ['general', 'appearance'] : ['basic', 'general', 'appearance', 'api', 'agent', 'skill', 'data', 'about']).includes(settingsTabRequest)
+          ? settingsTabRequest
+          : 'general'
+      )
+    }
+  }, [newApiMode, settingsTabRequest, showSettings])
 
   const updateProfileMenuMaxHeight = useCallback(() => {
     if (!profileMenuTriggerRef.current) return
@@ -1593,7 +1600,7 @@ export default function SettingsModal() {
           {/* Sidebar */}
           <div className='flex w-full shrink-0 flex-col border-b border-gray-100 bg-gray-50/50 sm:w-48 sm:border-r sm:border-b-0 dark:border-white/[0.08] dark:bg-white/[0.02]'>
             <nav className='custom-scrollbar flex flex-1 space-x-1 overflow-x-auto p-3 sm:flex-col sm:space-y-1 sm:space-x-0 sm:overflow-y-auto'>
-              <button
+              {!newApiMode && <button
                 onClick={() => setActiveTab('basic')}
                 className={`flex flex-shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm whitespace-nowrap transition-colors ${activeTab === 'basic' ? 'bg-white font-medium text-blue-600 shadow-sm dark:bg-white/[0.08] dark:text-blue-400' : 'text-gray-600 hover:bg-gray-100/80 dark:text-gray-400 dark:hover:bg-white/[0.04]'}`}
               >
@@ -1611,8 +1618,8 @@ export default function SettingsModal() {
                   />
                 </svg>
                 {t('Basic settings')}
-              </button>
-              <button
+              </button>}
+              {!newApiMode && <button
                 onClick={() => setActiveTab('api')}
                 className={`flex flex-shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm whitespace-nowrap transition-colors ${activeTab === 'api' ? 'bg-white font-medium text-blue-600 shadow-sm dark:bg-white/[0.08] dark:text-blue-400' : 'text-gray-600 hover:bg-gray-100/80 dark:text-gray-400 dark:hover:bg-white/[0.04]'}`}
               >
@@ -1630,7 +1637,7 @@ export default function SettingsModal() {
                   />
                 </svg>
                 API 配置
-              </button>
+              </button>}
               <button
                 onClick={() => setActiveTab('general')}
                 className={`flex flex-shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm whitespace-nowrap transition-colors ${activeTab === 'general' ? 'bg-white font-medium text-blue-600 shadow-sm dark:bg-white/[0.08] dark:text-blue-400' : 'text-gray-600 hover:bg-gray-100/80 dark:text-gray-400 dark:hover:bg-white/[0.04]'}`}
@@ -1651,6 +1658,13 @@ export default function SettingsModal() {
                 习惯配置
               </button>
               <button
+                type='button'
+                onClick={() => setActiveTab('appearance')}
+                className={`flex flex-shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm whitespace-nowrap transition-colors ${activeTab === 'appearance' ? 'bg-white font-medium text-blue-600 shadow-sm dark:bg-white/[0.08] dark:text-blue-400' : 'text-gray-600 hover:bg-gray-100/80 dark:text-gray-400 dark:hover:bg-white/[0.04]'}`}
+              >
+                {t('Appearance settings')}
+              </button>
+              {!newApiMode && <button
                 onClick={() => setActiveTab('agent')}
                 className={`flex flex-shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm whitespace-nowrap transition-colors ${activeTab === 'agent' ? 'bg-white font-medium text-blue-600 shadow-sm dark:bg-white/[0.08] dark:text-blue-400' : 'text-gray-600 hover:bg-gray-100/80 dark:text-gray-400 dark:hover:bg-white/[0.04]'}`}
               >
@@ -1684,8 +1698,8 @@ export default function SettingsModal() {
                   />
                 </svg>
                 Agent 配置
-              </button>
-              <button
+              </button>}
+              {!newApiMode && <button
                 onClick={() => setActiveTab('data')}
                 className={`flex flex-shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm whitespace-nowrap transition-colors ${activeTab === 'data' ? 'bg-white font-medium text-blue-600 shadow-sm dark:bg-white/[0.08] dark:text-blue-400' : 'text-gray-600 hover:bg-gray-100/80 dark:text-gray-400 dark:hover:bg-white/[0.04]'}`}
               >
@@ -1703,8 +1717,8 @@ export default function SettingsModal() {
                   />
                 </svg>
                 数据管理
-              </button>
-              <button
+              </button>}
+              {!newApiMode && <button
                 onClick={() => setActiveTab('about')}
                 className={`flex flex-shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm whitespace-nowrap transition-colors ${activeTab === 'about' ? 'bg-white font-medium text-blue-600 shadow-sm dark:bg-white/[0.08] dark:text-blue-400' : 'text-gray-600 hover:bg-gray-100/80 dark:text-gray-400 dark:hover:bg-white/[0.04]'}`}
               >
@@ -1722,7 +1736,7 @@ export default function SettingsModal() {
                   />
                 </svg>
                 关于
-              </button>
+              </button>}
             </nav>
           </div>
 
@@ -1738,6 +1752,7 @@ export default function SettingsModal() {
               {activeTab === 'general' && (
                 <GeneralSettingsTab
                   draft={draft}
+                  newApiMode={newApiMode}
                   zipDownloadRouteSummary={zipDownloadRouteSummary}
                   commitSettings={commitSettings}
                   onOpenZipDownloadRouteManager={() =>
@@ -1746,6 +1761,13 @@ export default function SettingsModal() {
                   toggleTaskCompletionNotification={
                     toggleTaskCompletionNotification
                   }
+                />
+              )}
+
+              {activeTab === 'appearance' && (
+                <AppearanceSettingsTab
+                  draft={draft}
+                  commitSettings={commitSettings}
                 />
               )}
 

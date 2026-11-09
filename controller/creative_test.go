@@ -3,7 +3,9 @@ package controller
 import (
 	"encoding/base64"
 	"errors"
+	"io"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -117,6 +119,37 @@ func TestDecodeCreativeDataURL(t *testing.T) {
 func TestDecodeCreativeDataURLRejectsNonDataURL(t *testing.T) {
 	_, _, err := decodeCreativeDataURL("https://example.com/image.png")
 	require.EqualError(t, err, "image must be a data URL")
+}
+
+func TestCreativeImageExtendedParametersAndMarkup(t *testing.T) {
+	encoded := base64.StdEncoding.EncodeToString([]byte("image-data"))
+	requestBody := `{"model":"gpt-image-2.6-sunburst","prompt":"edit","output_format":"gif","complexity":"high","frame_count":4,"frame_duration_ms":120,"images":["data:image/png;base64,` + encoded + `"],"markup":"data:image/png;base64,` + encoded + `"}`
+	ctx := newCreativeTestContext()
+	ctx.Request = httptest.NewRequest("POST", "/api/creative/images", strings.NewReader(requestBody))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+
+	require.NoError(t, convertCreativeJSONEditToMultipart(ctx))
+	require.NoError(t, ctx.Request.ParseMultipartForm(1<<20))
+	require.Equal(t, "high", ctx.Request.FormValue("complexity"))
+	require.Equal(t, "gif", ctx.Request.FormValue("output_format"))
+	require.Equal(t, "4", ctx.Request.FormValue("frame_count"))
+	require.Equal(t, "120", ctx.Request.FormValue("frame_duration_ms"))
+	file, _, err := ctx.Request.FormFile("markup")
+	require.NoError(t, err)
+	defer file.Close()
+	data, err := io.ReadAll(file)
+	require.NoError(t, err)
+	require.Equal(t, []byte("image-data"), data)
+	require.Equal(t, "image/gif", creativeImageMimeType("gif"))
+	require.Equal(t, "image/svg+xml", creativeImageMimeType("svg"))
+}
+
+func TestCreativeImageExtendedParameterLimits(t *testing.T) {
+	count := 17
+	require.EqualError(t, validateCreativeImageParameters(creativeRequestEnvelope{FrameCount: &count}), "creative frame_count must be between 2 and 16")
+	duration := 2001
+	require.EqualError(t, validateCreativeImageParameters(creativeRequestEnvelope{FrameDurationMS: &duration}), "creative frame_duration_ms must be between 20 and 2000")
+	require.EqualError(t, validateCreativeImageParameters(creativeRequestEnvelope{Complexity: "extreme"}), "creative complexity is invalid")
 }
 
 func TestFormatCreativeTimeUsesLocalTimezone(t *testing.T) {

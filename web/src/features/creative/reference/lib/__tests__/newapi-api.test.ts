@@ -89,6 +89,47 @@ describe('NewAPI 图片请求', () => {
     expect(post.mock.calls[0]?.[1]).not.toHaveProperty('request_index')
   })
 
+  it('向 NewAPI 传递 GPT Image 2.6 的 GIF 参数与标注层', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({
+      data: { data: [{ b64_json: 'aW1hZ2U=' }] },
+    } as never)
+    setNewApiSelection({ keyId: 17, model: 'gpt-image-2.6-sunburst', group: 'image' })
+
+    await callImageApi({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        activeProfileId: 'newapi',
+        profiles: [{
+          ...DEFAULT_SETTINGS.profiles[0],
+          id: 'newapi',
+          baseUrl: '/api/creative',
+          model: 'gpt-image-2.6-sunburst',
+        }],
+      },
+      prompt: 'edit',
+      params: {
+        ...DEFAULT_PARAMS,
+        output_format: 'gif',
+        complexity: 'high',
+        frame_count: 4,
+        frame_duration_ms: 120,
+      },
+      inputImageDataUrls: ['data:image/png;base64,aW1hZ2U='],
+      markupDataUrl: 'data:image/png;base64,bWFya3Vw',
+    })
+
+    expect(post.mock.calls[0]?.[1]).toMatchObject({
+      key_id: 17,
+      group: 'image',
+      model: 'gpt-image-2.6-sunburst',
+      output_format: 'gif',
+      complexity: 'high',
+      frame_count: 4,
+      frame_duration_ms: 120,
+      markup: 'data:image/png;base64,bWFya3Vw',
+    })
+  })
+
   it('没有选择模型时在发送请求前终止', async () => {
     const post = vi.spyOn(api, 'post')
     setNewApiSelection(null)

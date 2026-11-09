@@ -1,9 +1,14 @@
 import { useMemo, useRef, useState, useEffect } from 'react'
 
+import { useVisibleTasks } from '../hooks/usePrivacyMode'
+import { useVirtualGrid } from '../hooks/useVirtualGrid'
 import {
   ALL_FAVORITES_COLLECTION_ID,
   getTaskFavoriteCollectionIds,
 } from '../lib/favoriteState'
+import { getPageScroller, getPageScrollTop } from '../lib/pageScroll'
+import { isTauri } from '../lib/platform'
+import { getIndexesInRect } from '../lib/virtualGrid'
 import {
   useStore,
   reuseConfig,
@@ -15,7 +20,7 @@ import {
 import TaskCard from './TaskCard'
 
 export default function TaskGrid() {
-  const tasks = useStore((s) => s.tasks)
+  const tasks = useVisibleTasks()
   const searchQuery = useStore((s) => s.searchQuery)
   const filterStatus = useStore((s) => s.filterStatus)
   const filterFavorite = useStore((s) => s.filterFavorite)
@@ -27,6 +32,7 @@ export default function TaskGrid() {
   )
   const setDetailTaskId = useStore((s) => s.setDetailTaskId)
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
+  const setShowSettings = useStore((s) => s.setShowSettings)
   const selectedTaskIds = useStore((s) => s.selectedTaskIds)
   const setSelectedTaskIds = useStore((s) => s.setSelectedTaskIds)
   const clearSelection = useStore((s) => s.clearSelection)
@@ -79,6 +85,11 @@ export default function TaskGrid() {
     activeFavoriteCollectionId,
     defaultFavoriteCollectionId,
   ])
+  // 框选的事件处理只在挂载时注册，通过 ref 读取最新列表
+  const filteredTasksRef = useRef(filteredTasks)
+  filteredTasksRef.current = filteredTasks
+  const { startIndex, endIndex, paddingTop, paddingBottom, metricsRef } =
+    useVirtualGrid(gridRef, filteredTasks.length)
 
   const handleDelete = (task: (typeof tasks)[0]) => {
     setConfirmDialog({
@@ -91,7 +102,7 @@ export default function TaskGrid() {
 
   const getPagePoint = (clientX: number, clientY: number) => ({
     pageX: clientX + window.scrollX,
-    pageY: clientY + window.scrollY,
+    pageY: clientY + getPageScrollTop(),
   })
 
   const beginSelection = (
@@ -129,27 +140,25 @@ export default function TaskGrid() {
     const minY = Math.min(start.pageY, pageY)
     const maxY = Math.max(start.pageY, pageY)
 
-    const cards = gridRef.current.querySelectorAll('.task-card-wrapper')
+    // 虚拟列表只渲染了部分卡片，按布局计算框选范围内的全部卡片
+    const list = filteredTasksRef.current
+    const gridRect = gridRef.current.getBoundingClientRect()
+    const gridLeft = gridRect.left + window.scrollX
+    const gridTop = gridRect.top + getPageScrollTop()
+    const hit = new Set(
+      getIndexesInRect(list.length, metricsRef.current, {
+        left: minX - gridLeft,
+        right: maxX - gridLeft,
+        top: minY - gridTop,
+        bottom: maxY - gridTop,
+      })
+    )
     const newSelected = new Set(initialSelection.current)
     const initialSelected = new Set(initialSelection.current)
 
-    cards.forEach((card) => {
-      const rect = card.getBoundingClientRect()
-      const taskId = card.getAttribute('data-task-id')
-      if (!taskId) return
-
-      const cardLeft = rect.left + window.scrollX
-      const cardRight = rect.right + window.scrollX
-      const cardTop = rect.top + window.scrollY
-      const cardBottom = rect.bottom + window.scrollY
-
-      const isIntersecting =
-        minX < cardRight &&
-        maxX > cardLeft &&
-        minY < cardBottom &&
-        maxY > cardTop
-
-      if (isIntersecting) {
+    list.forEach((task, idx) => {
+      const taskId = task.id
+      if (hit.has(idx)) {
         if (initialSelected.has(taskId)) {
           newSelected.delete(taskId)
         } else {
@@ -181,7 +190,7 @@ export default function TaskGrid() {
       stopDragScroll()
       dragScrollDirectionRef.current = direction
       dragScrollIntervalRef.current = window.setInterval(() => {
-        window.scrollBy({ top: direction * 15, behavior: 'instant' })
+        getPageScroller().scrollBy({ top: direction * 15, behavior: 'instant' })
       }, 16)
     }
 
@@ -349,6 +358,20 @@ export default function TaskGrid() {
               />
             </svg>
             <p className='text-sm'>输入提示词开始生成图片</p>
+            {isTauri && !tasks.length && (
+              <p className='mt-3 text-xs'>
+                从网页版迁移：在网页版的
+                <strong className='font-semibold'>「设置 → 数据管理」</strong>
+                中导出备份，再
+                <button
+                  type='button'
+                  onClick={() => setShowSettings(true, 'data')}
+                  className='mx-0.5 text-blue-500 hover:text-blue-600 hover:underline dark:text-blue-400 dark:hover:text-blue-300'
+                >
+                  在这里导入
+                </button>
+              </p>
+            )}
           </>
         )}
       </div>
@@ -356,12 +379,17 @@ export default function TaskGrid() {
   }
 
   return (
-    <div ref={rootRef} data-task-grid-root className='relative min-h-[50vh]'>
+    <div
+      ref={rootRef}
+      data-task-grid-root
+      className='relative min-h-[50vh] pb-10'
+    >
       <div
         ref={gridRef}
         className='grid grid-cols-1 gap-4 pb-10 sm:grid-cols-2 lg:grid-cols-3'
+        style={{ paddingTop, paddingBottom }}
       >
-        {filteredTasks.map((task) => (
+        {filteredTasks.slice(startIndex, endIndex).map((task) => (
           <div
             key={task.id}
             className='task-card-wrapper'
@@ -400,7 +428,7 @@ export default function TaskGrid() {
               window.scrollX,
             top:
               Math.min(selectionBox.startPageY, selectionBox.currentPageY) -
-              window.scrollY,
+              getPageScrollTop(),
             width: Math.abs(
               selectionBox.currentPageX - selectionBox.startPageX
             ),

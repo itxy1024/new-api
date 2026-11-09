@@ -2,11 +2,13 @@ import { Settings02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { SlidersHorizontal } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { useIsAdmin } from '@/hooks/use-admin'
 
 import { useVersionCheck } from '../hooks/useVersionCheck'
+import { getPageScrollTop } from '../lib/pageScroll'
 import { useStore } from '../store'
 import { useFavoriteCollectionTitle } from './FavoriteCollections'
 import HistoryModal from './HistoryModal'
@@ -37,6 +39,7 @@ export default function Header() {
   const isAdmin = useIsAdmin()
   const historyButtonRef = useRef<HTMLButtonElement>(null)
   const createConversation = useStore((s) => s.createAgentConversation)
+  const setShowSettings = useStore((s) => s.setShowSettings)
   // NewAPI 创作中心只提供画廊模式，避免将 Key ID 当作 Agent 的 Bearer 密钥。
   const agentEnabled = false
 
@@ -47,7 +50,7 @@ export default function Header() {
     const handleScroll = () => {
       if (!ticking) {
         window.requestAnimationFrame(() => {
-          const currentScrollY = window.scrollY
+          const currentScrollY = getPageScrollTop()
           if (currentScrollY < 20) {
             setScrollDirection('up')
           } else if (currentScrollY > lastScrollY + 10) {
@@ -122,6 +125,16 @@ export default function Header() {
               </div>
             )}
           </div>
+          <Button
+            type='button'
+            variant='ghost'
+            size='icon'
+            aria-label={t('Preferences')}
+            title={t('Preferences')}
+            onClick={() => setShowSettings(true, 'general')}
+          >
+            <SlidersHorizontal className='size-4' />
+          </Button>
           {isAdmin && (
             <Button
               type='button'
@@ -211,7 +224,7 @@ export default function Header() {
         onOpenChange={setShowOssSettings}
       />
 
-      {/* Hint for sliding down */}
+      {/* Agent 模式下顶栏上推隐藏时的提示；停在 --safe-area-top 下方，客户端不被标题栏挡住 */}
       <div
         className={`pointer-events-none fixed top-0 right-0 left-0 z-30 flex justify-center transition-all duration-300 ease-in-out sm:hidden ${agentEnabled && appMode === 'agent' && hintVisible && !agentMobileHeaderVisible ? 'translate-y-[env(safe-area-inset-top,0px)] opacity-100' : '-translate-y-full opacity-0'}`}
       >

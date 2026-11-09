@@ -89,6 +89,9 @@ func beginCreativeImageGeneration(metadata creativeRequestEnvelope, userID, toke
 		"quality":            metadata.Quality,
 		"output_format":      metadata.OutputFormat,
 		"output_compression": metadata.OutputCompression,
+		"complexity":         metadata.Complexity,
+		"frame_count":        metadata.FrameCount,
+		"frame_duration_ms":  metadata.FrameDurationMS,
 		"n":                  metadata.N,
 	})
 	generation := &model.CreativeGeneration{
@@ -233,6 +236,10 @@ func creativeImageMimeType(outputFormat string) string {
 		return "image/jpeg"
 	case "webp":
 		return "image/webp"
+	case "gif":
+		return "image/gif"
+	case "svg":
+		return "image/svg+xml"
 	default:
 		return "image/png"
 	}

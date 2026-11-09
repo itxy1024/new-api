@@ -93,6 +93,26 @@ describe('创作结果持久化接口', () => {
     ).toEqual({ size: '1536x1024' })
   })
 
+  it('刷新后恢复 GIF 任务的复杂度和帧参数', () => {
+    const gifGeneration = {
+      ...generation,
+      request_params: JSON.stringify({
+        output_format: 'gif',
+        complexity: 'high',
+        frame_count: 12,
+        frame_duration_ms: 180,
+      }),
+    }
+
+    const task = creativeGenerationToTask(gifGeneration, '小鱼中转站')
+    expect(task.params).toMatchObject({
+      output_format: 'gif',
+      complexity: 'high',
+      frame_count: 12,
+      frame_duration_ms: 180,
+    })
+  })
+
   it('只查询图片记录并限制恢复数量', async () => {
     apiMocks.get.mockResolvedValue({ data: { data: [generation] } })
 

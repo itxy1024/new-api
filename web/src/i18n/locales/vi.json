@@ -622,6 +622,7 @@
     "API2GPT": "API2GPT",
     "App": "Ứng dụng",
     "App rankings shown here are simulated for preview purposes and will be replaced with live usage data once the backend integration is complete.": "Bảng xếp hạng ứng dụng hiển thị tại đây là dữ liệu mô phỏng để xem trước và sẽ được thay thế bằng dữ liệu thực sau khi tích hợp backend.",
+    "Appearance settings": "Giao diện",
     "Append": "Thêm vào cuối",
     "Append mode: New keys will be added to the end of the existing key list": "Chế độ nối: Các khóa mới sẽ được thêm vào cuối danh sách khóa hiện có",
     "Append Template": "Thêm mẫu",

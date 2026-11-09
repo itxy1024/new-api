@@ -69,7 +69,8 @@ export default function InputBatchBars({
   clearSelection: () => void
   onSelectAllVisibleTasks: () => void
   onInvertVisibleTasks: () => void
-  onToggleFavorite: () => void
+  /** 隐私模式中不传，隐藏收藏按钮 */
+  onToggleFavorite?: () => void
   onDownloadSelected: () => void | Promise<void>
   onDeleteSelected: () => void
 }) {
@@ -247,7 +248,7 @@ export default function InputBatchBars({
         </BatchActionButton>
         <div className='mx-1 h-5 w-px bg-gray-200 dark:bg-white/20'></div>
         <BatchActionButton
-          onClick={onToggleFavorite}
+          onClick={() => onToggleFavorite?.()}
           className='p-2 text-yellow-500 transition-colors hover:text-yellow-600 dark:text-yellow-400 dark:hover:text-yellow-300'
           tooltip='编辑收藏夹'
         >

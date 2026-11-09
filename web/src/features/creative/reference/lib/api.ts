@@ -1,8 +1,10 @@
 import { api } from '@/lib/api'
 
 import { getActiveApiProfile, getCustomProviderDefinition } from './apiProfiles'
+import { composeMarkupDataUrl } from './canvasImage'
 import { callFalAiImageApi } from './falAiImageApi'
 import {
+  applyGptImage26Params,
   type CallApiOptions,
   type CallApiResult,
   fetchImageUrlAsDataUrl,
@@ -11,6 +13,7 @@ import {
   MIME_MAP,
 } from './imageApiShared'
 import { getNewApiSelection } from './newApiSelection'
+import { isGptImage25PlusModel, isGptImage26PlusModel } from './imageModels'
 import { callOpenAICompatibleImageApi } from './openaiCompatibleImageApi'
 
 export type { CallApiOptions, CallApiResult } from './imageApiShared'
@@ -101,6 +104,9 @@ async function callNewApiImageApi(
     // NewAPI 的创作接口沿用旧页面的短模式值；该字段不会作为厂商密钥或地址暴露给浏览器。
     interface_mode: profile.apiMode === 'responses' ? 'resp' : 'img',
   }
+  if (isGptImage26PlusModel(model)) {
+    applyGptImage26Params(params, opts.params, profile)
+  }
   if (
     opts.params.output_format !== 'png' &&
     opts.params.output_compression != null
@@ -108,8 +114,17 @@ async function callNewApiImageApi(
     params.output_compression = opts.params.output_compression
   }
   if (opts.nativeTransparentBackground) params.background = 'transparent'
-  if (opts.inputImageDataUrls.length) params.images = opts.inputImageDataUrls
+  if (opts.inputImageDataUrls.length) {
+    const images = [...opts.inputImageDataUrls]
+    if (opts.markupDataUrl && !isGptImage25PlusModel(model)) {
+      images[0] = await composeMarkupDataUrl(images[0], opts.markupDataUrl)
+    }
+    params.images = images
+  }
   if (opts.maskDataUrl) params.mask = opts.maskDataUrl
+  if (opts.markupDataUrl && isGptImage25PlusModel(model)) {
+    params.markup = opts.markupDataUrl
+  }
 
   let response
   try {

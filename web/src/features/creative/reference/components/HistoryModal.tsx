@@ -8,6 +8,7 @@ import {
   type RefObject,
 } from 'react'
 
+import { useVisibleAgentConversations } from '../hooks/usePrivacyMode'
 import { useTooltip } from '../hooks/useTooltip'
 import {
   getAgentConversationTaskIds,
@@ -105,7 +106,7 @@ export default function HistoryModal({
   onClose,
   ignoreOutsideClickRef,
 }: HistoryModalProps) {
-  const conversations = useStore((s) => s.agentConversations)
+  const conversations = useVisibleAgentConversations()
   const activeConversationId = useStore((s) => s.activeAgentConversationId)
   const setActiveConversationId = useStore(
     (s) => s.setActiveAgentConversationId

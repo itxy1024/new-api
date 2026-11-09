@@ -128,9 +128,35 @@ function parseTaskParams(value: string): TaskParams {
   if (
     candidate.output_format === 'png' ||
     candidate.output_format === 'jpeg' ||
-    candidate.output_format === 'webp'
+    candidate.output_format === 'webp' ||
+    candidate.output_format === 'gif' ||
+    candidate.output_format === 'svg'
   ) {
     params.output_format = candidate.output_format
+  }
+  if (
+    candidate.complexity === 'auto' ||
+    candidate.complexity === 'low' ||
+    candidate.complexity === 'medium' ||
+    candidate.complexity === 'high'
+  ) {
+    params.complexity = candidate.complexity
+  }
+  if (
+    typeof candidate.frame_count === 'number' &&
+    Number.isInteger(candidate.frame_count) &&
+    candidate.frame_count >= 2 &&
+    candidate.frame_count <= 16
+  ) {
+    params.frame_count = candidate.frame_count
+  }
+  if (
+    typeof candidate.frame_duration_ms === 'number' &&
+    Number.isInteger(candidate.frame_duration_ms) &&
+    candidate.frame_duration_ms >= 20 &&
+    candidate.frame_duration_ms <= 2000
+  ) {
+    params.frame_duration_ms = candidate.frame_duration_ms
   }
   if (
     typeof candidate.output_compression === 'number' &&

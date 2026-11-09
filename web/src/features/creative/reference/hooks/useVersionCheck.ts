@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react'
 
-import { getBuildRevision } from '@/lib/build-metadata'
-
 const REPO = 'CookSleep/gpt_image_playground'
 const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`
 
@@ -47,7 +45,7 @@ export function useVersionCheck() {
         if (cancelled) return
         const tag: string = data.tag_name ?? ''
         const version = tag.replace(/^v/, '')
-        if (version && compareVersions(version, getBuildRevision()) > 0) {
+        if (version && compareVersions(version, __APP_VERSION__) > 0) {
           setLatestRelease({
             tag,
             url: data.html_url ?? `https://github.com/${REPO}/releases/latest`,

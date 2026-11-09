@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 
 import { useDragSelect } from '../../hooks/useDragSelect'
 import { ALL_FAVORITES_COLLECTION_ID } from '../../lib/favoriteState'
+import { getPageScrollTop } from '../../lib/pageScroll'
 import {
   deleteFavoriteCollection,
   renameFavoriteCollection,
@@ -213,7 +214,7 @@ export function FavoriteCollectionsView() {
               window.scrollX,
             top:
               Math.min(selectionBox.startPageY, selectionBox.currentPageY) -
-              window.scrollY,
+              getPageScrollTop(),
             width: Math.abs(
               selectionBox.currentPageX - selectionBox.startPageX
             ),

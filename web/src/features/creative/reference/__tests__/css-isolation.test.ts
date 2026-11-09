@@ -32,4 +32,10 @@ describe('创作中心样式隔离', () => {
       /@tailwind\s+(base|components|utilities)/
     )
   })
+
+  it('限制移动端折叠内容宽度，避免参数摘要撑出输入框', () => {
+    expect(referenceStyles).toMatch(
+      /\.collapse-section\s*>\s*\.collapse-inner\s*\{[^}]*min-width:\s*0;/s
+    )
+  })
 })
