@@ -466,8 +466,8 @@ export default function NewApiSelection() {
       className='contents'
       aria-label={t('Select an API key')}
     >
-      <label className='col-span-2 flex min-w-0 flex-col gap-0.5'>
-        <span className='ml-1 text-gray-400 dark:text-gray-500'>
+      <label className='flex min-w-0 items-center gap-1.5'>
+        <span className='shrink-0 text-gray-400 dark:text-gray-500'>
           {t('Model')}
         </span>
         <ModelGroupSelector
@@ -495,7 +495,7 @@ export default function NewApiSelection() {
             }
           }}
           disabled={!keys.length}
-          className='h-[30px] w-full max-w-none justify-start rounded-xl border-gray-200/60 bg-white/50 px-3 text-xs dark:border-white/[0.08] dark:bg-white/[0.03]'
+          className='h-8 w-auto max-w-none min-w-0 flex-1 shrink justify-start rounded-full border-gray-200/60 bg-white/50 px-3 text-xs dark:border-white/[0.08] dark:bg-white/[0.03]'
         />
       </label>
     </div>

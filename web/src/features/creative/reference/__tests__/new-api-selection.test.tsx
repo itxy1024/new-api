@@ -3,6 +3,7 @@
  *
  * 本文件基于 gpt_image_playground（MIT License）改编。
  */
+import * as matchers from '@testing-library/jest-dom/matchers'
 import {
   cleanup,
   fireEvent,
@@ -10,9 +11,9 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react'
-import * as matchers from '@testing-library/jest-dom/matchers'
 import type { ComponentProps } from 'react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+
 import type { ModelGroupSelector } from '@/components/model-group-selector'
 
 expect.extend(matchers)
@@ -155,6 +156,19 @@ describe('图片生成页的模型分组选择', () => {
   })
 
   afterEach(cleanup)
+
+  test('模型标签与选择器在参数栏中保持单行垂直居中', async () => {
+    render(<NewApiSelection />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('selected-model')).toHaveTextContent(
+        'default\x00image-default'
+      )
+    })
+    const modelLabel = screen.getByText('Model').closest('label')
+    expect(modelLabel).toHaveClass('flex', 'items-center')
+    expect(modelLabel).not.toHaveClass('flex-col')
+  })
 
   test('遍历全部 Key 后默认选择第一个模型名称包含 image 的 Key 和模型', async () => {
     mocks.apiGet.mockImplementation(
