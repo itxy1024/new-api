@@ -293,6 +293,25 @@ func ServeCreativeAsset(c *gin.Context, asset *model.CreativeAsset) error {
 	return nil
 }
 
+// ServeImageLogAsset 代理已鉴权的日志图片，避免重定向后的跨域请求和凭据问题。
+func ServeImageLogAsset(c *gin.Context, asset *model.CreativeAsset) error {
+	store, err := existingS3ArtifactStore()
+	if err != nil {
+		return err
+	}
+	object, err := store.client.GetObject(c.Request.Context(), &s3.GetObjectInput{Bucket: aws.String(asset.Bucket), Key: aws.String(asset.ObjectKey)})
+	if err != nil {
+		return err
+	}
+	defer object.Body.Close()
+	mimeType := asset.MimeType
+	if !strings.HasPrefix(mimeType, "image/") {
+		mimeType = "application/octet-stream"
+	}
+	c.DataFromReader(http.StatusOK, aws.ToInt64(object.ContentLength), mimeType, object.Body, map[string]string{"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox"})
+	return nil
+}
+
 func EnsureCreativeAssetPublicURL(ctx context.Context, asset *model.CreativeAsset) (string, error) {
 	if asset == nil {
 		return "", errors.New("creative asset is required")

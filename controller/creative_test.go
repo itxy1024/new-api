@@ -14,8 +14,10 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
@@ -210,6 +212,12 @@ func TestCreativeImagePersistenceFollowsConfiguredStorage(t *testing.T) {
 
 	var uploaded []byte
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodGet {
+			writer.Header().Set("Content-Type", "image/png")
+			writer.Header().Set("Content-Length", fmt.Sprint(len(uploaded)))
+			_, _ = writer.Write(uploaded)
+			return
+		}
 		if request.Method != http.MethodPut {
 			writer.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -248,7 +256,7 @@ func TestCreativeImagePersistenceFollowsConfiguredStorage(t *testing.T) {
 	require.True(t, service.GetTaskArtifactStore().Enabled(), "已配置的 S3 不能被上游占位逻辑禁用")
 	metadata := creativeRequestEnvelope{
 		ClientTaskID: fmt.Sprintf("creative-persistence-%d", time.Now().UnixNano()),
-		Model:        "creative-test-model", Prompt: "生成灯塔", Size: "1024x1024", Quality: "high",
+		Model:        fmt.Sprintf("creative-test-model-%d", time.Now().UnixNano()), Prompt: "生成灯塔", Size: "1024x1024", Quality: "high",
 	}
 	startedAt := model.CreativeNow()
 	generation := beginCreativeImageGeneration(metadata, 31, 17, "premium", startedAt)
@@ -292,4 +300,100 @@ func TestCreativeImagePersistenceFollowsConfiguredStorage(t *testing.T) {
 	assert.Equal(t, model.CreativeGenerationStatusFailed, failed.Status)
 	assert.NotEmpty(t, failed.ErrorMessage)
 	require.NotNil(t, failed.FinishedAt)
+
+	t.Run("管理员生图日志授权与数据范围", func(t *testing.T) {
+		require.NoError(t, database.AutoMigrate(&model.User{}, &model.CasbinRule{}, &model.AuthzRole{}))
+		require.NoError(t, authz.Init(database))
+		root := model.User{Username: fmt.Sprintf("image-root-%d", time.Now().UnixNano()), Role: common.RoleRootUser, AffCode: fmt.Sprintf("im%d", time.Now().UnixNano())}
+		require.NoError(t, database.Create(&root).Error)
+		rootGeneration := model.CreativeGeneration{UserID: root.Id, ClientTaskID: metadata.ClientTaskID + "-root", MediaType: model.CreativeMediaTypeImage, Model: metadata.Model, Prompt: "root private", Status: model.CreativeGenerationStatusCompleted, CreatedAt: startedAt}
+		require.NoError(t, model.InsertCreativeGeneration(t.Context(), &rootGeneration))
+		rootAsset := model.CreativeAsset{GenerationID: rootGeneration.ID, UserID: root.Id, AssetKey: "root", StorageBackend: "s3", Bucket: "creative-test", ObjectKey: "root.png", MimeType: "image/png"}
+		require.NoError(t, database.Create(&rootAsset).Error)
+		video := model.CreativeGeneration{UserID: 31, ClientTaskID: metadata.ClientTaskID + "-video", MediaType: model.CreativeMediaTypeVideo, Status: model.CreativeGenerationStatusCompleted, CreatedAt: startedAt}
+		require.NoError(t, model.InsertCreativeGeneration(t.Context(), &video))
+		deleted := model.CreativeGeneration{UserID: 31, ClientTaskID: metadata.ClientTaskID + "-deleted", MediaType: model.CreativeMediaTypeImage, Status: model.CreativeGenerationStatusDeleted, CreatedAt: startedAt}
+		require.NoError(t, model.InsertCreativeGeneration(t.Context(), &deleted))
+		filter := model.ImageLogFilter{Model: metadata.Model, Start: &stored.CreatedAt}
+		rows, total, err := model.ListImageLogs(t.Context(), false, filter, 0, 1)
+		require.NoError(t, err)
+		assert.EqualValues(t, 2, total)
+		require.Len(t, rows, 1)
+		assert.Equal(t, failed.ID, rows[0].ID)
+		rows, total, err = model.ListImageLogs(t.Context(), false, filter, 1, 1)
+		require.NoError(t, err)
+		assert.EqualValues(t, 2, total)
+		require.Len(t, rows, 1)
+		assert.Equal(t, stored.ID, rows[0].ID)
+		require.Len(t, rows[0].Assets, 1)
+		filter.UserID = root.Id
+		rows, total, err = model.ListImageLogs(t.Context(), false, filter, 0, 20)
+		require.NoError(t, err)
+		assert.Empty(t, rows)
+		assert.Zero(t, total)
+		rows, total, err = model.ListImageLogs(t.Context(), true, filter, 0, 20)
+		require.NoError(t, err)
+		assert.EqualValues(t, 1, total)
+		require.Len(t, rows, 1)
+		_, exists, err = model.GetImageLogAsset(t.Context(), false, rootGeneration.ID, rootAsset.ID)
+		require.NoError(t, err)
+		assert.False(t, exists)
+		_, exists, err = model.GetImageLogAsset(t.Context(), true, rootGeneration.ID, rootAsset.ID)
+		require.NoError(t, err)
+		assert.True(t, exists)
+		_, exists, err = model.GetImageLogAsset(t.Context(), true, deleted.ID, stored.Assets[0].ID)
+		require.NoError(t, err)
+		assert.False(t, exists)
+		_, exists, err = model.GetImageLogAsset(t.Context(), true, stored.ID, rootAsset.ID)
+		require.NoError(t, err)
+		assert.False(t, exists)
+		role := common.RoleAdminUser
+		router := gin.New()
+		router.Use(func(c *gin.Context) { c.Set("id", 731); c.Set("role", role) }, middleware.RequirePermission(authz.ImageLogRead))
+		router.GET("/image-logs", ListImageLogs)
+		router.GET("/image-logs/:generation_id/assets/:asset_id/content", ImageLogAssetContent)
+		request := func(path string) *httptest.ResponseRecorder {
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+			return response
+		}
+		assetPath := fmt.Sprintf("/image-logs/%d/assets/%d/content", stored.ID, stored.Assets[0].ID)
+		assert.Equal(t, http.StatusForbidden, request("/image-logs").Code)
+		assert.Equal(t, http.StatusForbidden, request(assetPath).Code)
+		require.NoError(t, authz.SetUserPermissions(731, authz.PermissionsMap{authz.ResourceImageLog: {authz.ActionRead: true}}))
+		response := request(fmt.Sprintf("/image-logs?user_id=31&model=%s&status=completed&prompt=灯塔", metadata.Model))
+		assert.Equal(t, http.StatusOK, response.Code)
+		var payload struct {
+			Data struct {
+				Items []map[string]any
+				Total int64
+			}
+		}
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &payload))
+		assert.EqualValues(t, 1, payload.Data.Total)
+		require.Len(t, payload.Data.Items, 1)
+		assert.NotContains(t, response.Body.String(), "object_key")
+		assert.NotContains(t, response.Body.String(), "output_urls")
+		response = request(assetPath)
+		assert.Equal(t, http.StatusOK, response.Code)
+		assert.Equal(t, expectedImage, response.Body.Bytes())
+		assert.Equal(t, "private, no-store", response.Header().Get("Cache-Control"))
+		assert.Equal(t, http.StatusNotFound, request(fmt.Sprintf("/image-logs/%d/assets/%d/content", rootGeneration.ID, rootAsset.ID)).Code)
+		role = common.RoleCommonUser
+		assert.Equal(t, http.StatusForbidden, request("/image-logs").Code)
+		role = common.RoleAdminUser
+		require.NoError(t, authz.SetUserPermissions(731, authz.PermissionsMap{authz.ResourceImageLog: {authz.ActionRead: false}}))
+		assert.Equal(t, http.StatusForbidden, request("/image-logs").Code)
+		assert.Equal(t, http.StatusForbidden, request(assetPath).Code)
+		role = common.RoleRootUser
+		assert.Equal(t, http.StatusOK, request("/image-logs").Code)
+		require.NoError(t, database.Delete(&root).Error)
+		rows, total, err = model.ListImageLogs(t.Context(), false, filter, 0, 20)
+		require.NoError(t, err)
+		assert.Empty(t, rows, "已删除的超级管理员历史记录也不能泄露")
+		assert.Zero(t, total)
+		_, exists, err = model.GetImageLogAsset(t.Context(), false, rootGeneration.ID, rootAsset.ID)
+		require.NoError(t, err)
+		assert.False(t, exists)
+	})
 }

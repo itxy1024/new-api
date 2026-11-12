@@ -25,6 +25,7 @@ export type AdminCapabilities = AdminPermissionMatrix
 
 export const ADMIN_PERMISSION_RESOURCES = {
   AUDIT: 'audit',
+  IMAGE_LOG: 'image_log',
   CHANNEL: 'channel',
   LOG: 'log',
   TASK_PLUGIN: 'task_plugin',
@@ -42,6 +43,18 @@ export const ADMIN_PERMISSION_ACTIONS = {
 
 // The role whose baseline grants are used as defaults in the permission editor.
 export const ADMIN_ROLE_KEY = 'admin'
+
+export function canReadImageLogs(user: AuthUser | null | undefined): boolean {
+  return (
+    !!user &&
+    user.role >= ROLE.ADMIN &&
+    hasPermission(
+      user,
+      ADMIN_PERMISSION_RESOURCES.IMAGE_LOG,
+      ADMIN_PERMISSION_ACTIONS.READ
+    )
+  )
+}
 
 // The permission catalog (resources, actions, labels and role baselines) is owned
 // by the backend authz package and fetched from GET /api/authz/catalog. It is

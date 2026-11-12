@@ -43,7 +43,9 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import type { SidebarBadges, SidebarData } from '@/components/layout/types'
+import { canReadImageLogs } from '@/lib/admin-permissions'
 import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 /**
  * Root navigation groups for the application sidebar.
@@ -53,6 +55,7 @@ import { ROLE } from '@/lib/roles'
  */
 export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
   const { t } = useTranslation()
+  const user = useAuthStore((state) => state.auth.user)
 
   return {
     navGroups: [
@@ -117,6 +120,16 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             url: '/usage-logs/audit',
             icon: ClipboardList,
           },
+          ...(canReadImageLogs(user)
+            ? [
+                {
+                  title: t('Image Generation Logs'),
+                  url: '/usage-logs/image',
+                  icon: Image,
+                  requiredRole: ROLE.ADMIN,
+                },
+              ]
+            : []),
           {
             title: t('Task Logs'),
             url: '/usage-logs/task',

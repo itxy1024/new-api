@@ -102,6 +102,11 @@
 
 ### 12. 服务端创作历史与数据迁移
 
+- 保留审计日志下方的「生图日志」菜单和 `/usage-logs/image` 页面，直接读取现有 `creative_generations` / `creative_assets`，提供服务端分页、用户 ID / 模型 / 提示词 / 状态 / 时间筛选、原图文件大小、缩略图、点击放大和参数详情。
+- `image_log.read`（「查看生图日志」）是独立管理员权限，普通管理员默认关闭，由超级管理员单独授予；无权限时菜单隐藏，直接访问页面及列表、图片内容接口也须拒绝。授权普通管理员的列表、计数和图片内容均排除超级管理员记录，超级管理员可查看全部。撤权时关闭详情和预览并清除页面缓存。
+- 管理日志不能复用仅限本人的图片内容路径，不能直接返回内部存储位置或永久公开 URL；`/api/image-logs/:generation_id/assets/:asset_id/content` 必须重新鉴权和校验可见范围，前端使用统一认证 API 读取 Blob，卸载释放。日志读取不改变原有创作历史归属、删除与持久化行为。
+- 生图日志实现：`service/authz/resources_image_log.go`、`model/image_log.go`、`controller/image_log.go`、`router/api-router.go`、`service/task_artifact_store.go`、`web/src/features/usage-logs/image/`、`web/src/routes/_authenticated/usage-logs/image.tsx`；回归覆盖 `controller/creative_test.go` 与该前端模块的 `__tests__/viewer.test.tsx`。
+
 - 保留 `CreativeGeneration`、`CreativeAsset` 及图片/视频生成记录、参数、状态、耗时、产物关联；刷新、重启或更换浏览器后仍能读取服务端记录。
 - 查询、内容访问、删除操作必须按用户归属隔离。保留按 `client_task_id` 关联/处理记录、分页和前端同步，不得删除旧表或丢失历史记录。
 - 保留创作时间、Unix 秒到时间类型的历史迁移、时区处理及 MySQL 时区规范化；后续 schema 变更仍须按三数据库迁移矩阵验证。
