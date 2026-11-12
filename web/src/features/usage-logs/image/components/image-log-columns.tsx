@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { TruncatedCell } from '@/components/data-table'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
+import { formatByteSize } from '@/features/creative/reference/lib/mediaMetadata'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber } from '@/lib/format'
 
@@ -74,6 +75,9 @@ export function useImageLogColumns(
           <TruncatedCell
             className='max-w-60'
             contentClassName='line-clamp-2 whitespace-normal break-all'
+            tooltipContent={row.original.prompt}
+            tooltipClassName='block max-h-[60dvh] w-[min(32rem,calc(100vw-2rem))] max-w-none overflow-y-auto whitespace-pre-wrap text-left'
+            tabIndex={0}
           >
             {row.original.prompt}
           </TruncatedCell>
@@ -83,7 +87,7 @@ export function useImageLogColumns(
       {
         id: 'images',
         header: t('Images'),
-        size: 180,
+        size: 80,
         cell: ({ row }) => (
           <ImageLogImages
             assets={row.original.assets}
@@ -93,11 +97,53 @@ export function useImageLogColumns(
         meta: { label: t('Images') },
       },
       {
+        id: 'file_size',
+        header: t('File size'),
+        size: 100,
+        cell: ({ row }) => (
+          <div className='flex flex-col gap-2'>
+            {row.original.assets.length === 0
+              ? '-'
+              : row.original.assets.map((asset) => (
+                  <div
+                    key={asset.id}
+                    className='flex items-center whitespace-nowrap sm:min-h-14'
+                  >
+                    {formatByteSize(asset.byte_size)}
+                  </div>
+                ))}
+          </div>
+        ),
+        meta: { label: t('File size') },
+      },
+      {
+        id: 'resolution',
+        header: t('Resolution'),
+        size: 130,
+        cell: ({ row }) => (
+          <div className='flex flex-col gap-2'>
+            {row.original.assets.length === 0
+              ? '-'
+              : row.original.assets.map((asset) => (
+                  <div
+                    key={asset.id}
+                    className='flex items-center whitespace-nowrap sm:min-h-14'
+                  >
+                    {asset.width > 0 && asset.height > 0
+                      ? `${asset.width} × ${asset.height}`
+                      : '-'}
+                  </div>
+                ))}
+          </div>
+        ),
+        meta: { label: t('Resolution') },
+      },
+      {
         accessorKey: 'elapsed_ms',
         header: t('Elapsed time'),
         size: 100,
         cell: ({ row }) =>
-          `${formatNumber(row.original.elapsed_ms, locale)} ms`,
+          `${formatNumber(row.original.elapsed_ms / 1000, locale)} ${t('s')}`,
         meta: { label: t('Elapsed time') },
       },
       {

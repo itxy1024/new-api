@@ -33,7 +33,7 @@ export function ImageLogImages(props: {
 }) {
   const { t } = useTranslation()
   return (
-    <div className='flex flex-wrap gap-2'>
+    <div className='flex flex-col items-start gap-2'>
       {props.assets.length === 0 ? (
         <span className='text-muted-foreground'>{t('No images')}</span>
       ) : (
@@ -91,7 +91,7 @@ function ImageLogThumbnail(props: {
   }, [contentURL, onAccessDenied, attempt])
 
   return (
-    <div className='space-y-1'>
+    <div>
       <Button
         variant='outline'
         className='h-14 w-14 overflow-hidden p-0'
@@ -115,9 +115,6 @@ function ImageLogThumbnail(props: {
           </span>
         )}
       </Button>
-      <div className='text-muted-foreground text-[10px]'>
-        {formatByteSize(props.asset.byte_size)}
-      </div>
       {open && (
         <Dialog
           open

@@ -24,6 +24,7 @@ import {
   renderHook,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AxiosError } from 'axios'
@@ -195,6 +196,134 @@ it('获授权后展示记录和参数详情，撤权后移除数据与缓存', a
   expect(view.client.getQueriesData({ queryKey: ['image-logs'] })).toEqual([])
 })
 
+it('图片、文件大小与分辨率独立成列，多张产物按顺序显示，耗时使用秒', async () => {
+  setUser(10, true)
+  vi.spyOn(api, 'get').mockImplementation(async (url) => {
+    if (url !== '/api/image-logs') return { data: new Blob(['image']) }
+    return {
+      data: {
+        success: true,
+        data: {
+          items: [
+            {
+              ...entry,
+              elapsed_ms: 37864,
+              assets: [
+                {
+                  id: 1,
+                  content_url: '/api/image-logs/9/assets/1/content',
+                  width: 1024,
+                  height: 768,
+                  byte_size: 2048,
+                  mime_type: 'image/png',
+                },
+                {
+                  id: 2,
+                  content_url: '/api/image-logs/9/assets/2/content',
+                  width: 512,
+                  height: 512,
+                  byte_size: 1048576,
+                  mime_type: 'image/png',
+                },
+              ],
+            },
+          ],
+          total: 1,
+        },
+      },
+    }
+  })
+  renderPage()
+  const row = await screen.findByRole('row', { name: /gpt-image/ })
+  const headers = screen
+    .getAllByRole('columnheader')
+    .map((header) => header.textContent)
+  const cells = within(row).getAllByRole('cell')
+  expect(headers).toContain('File size')
+  expect(headers).toContain('Resolution')
+  const imageCell = cells[headers.indexOf('Images')]
+  expect(
+    within(imageCell).getAllByRole('button', { name: 'Preview image' })
+  ).toHaveLength(2)
+  expect(imageCell).not.toHaveTextContent('KB')
+  expect(cells[headers.indexOf('File size')].textContent).toBe('2.0 KB1.0 MB')
+  expect(cells[headers.indexOf('Resolution')].textContent).toBe(
+    '1024 × 768512 × 512'
+  )
+  expect(cells[headers.indexOf('Elapsed time')]).toHaveTextContent('37.86 s')
+})
+
+it('未知分辨率和没有产物时显示占位，耗时零值仍以秒显示', async () => {
+  setUser(10, true)
+  vi.spyOn(api, 'get').mockImplementation(async (url) => {
+    if (url !== '/api/image-logs') return { data: new Blob(['image']) }
+    return {
+      data: {
+        success: true,
+        data: {
+          items: [
+            {
+              ...entry,
+              elapsed_ms: 0,
+              assets: [
+                {
+                  id: 1,
+                  content_url: '/api/image-logs/9/assets/1/content',
+                  width: 0,
+                  height: 0,
+                  byte_size: 0,
+                  mime_type: 'image/png',
+                },
+              ],
+            },
+            { ...entry, id: 10, model: 'empty-output' },
+          ],
+          total: 2,
+        },
+      },
+    }
+  })
+  renderPage()
+  const headers = screen
+    .getAllByRole('columnheader')
+    .map((header) => header.textContent)
+  const cells = within(
+    await screen.findByRole('row', { name: /gpt-image/ })
+  ).getAllByRole('cell')
+  expect(cells[headers.indexOf('Resolution')]).toHaveTextContent('-')
+  expect(cells[headers.indexOf('File size')]).toHaveTextContent('0 B')
+  expect(cells[headers.indexOf('Elapsed time')]).toHaveTextContent('0 s')
+  const empty = within(
+    screen.getByRole('row', { name: /empty-output/ })
+  ).getAllByRole('cell')
+  expect(empty[headers.indexOf('Resolution')]).toHaveTextContent('-')
+  expect(empty[headers.indexOf('File size')]).toHaveTextContent('-')
+})
+
+it('提示词摘要悬停时展示包含末尾内容和换行的完整文本', async () => {
+  setUser(10, true)
+  const prompt = `${'长提示词 '.repeat(180)}\n末尾完整内容`
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: { success: true, data: { items: [{ ...entry, prompt }], total: 1 } },
+  })
+  renderPage()
+  const summary = await screen.findByText(prompt, {
+    exact: true,
+    normalizer: (text) => text,
+  })
+  await userEvent.hover(summary)
+  await waitFor(() =>
+    expect(
+      screen.getAllByText(prompt, { exact: true, normalizer: (text) => text })
+    ).toHaveLength(2)
+  )
+  const expanded = screen
+    .getAllByText(prompt, { exact: true, normalizer: (text) => text })
+    .find((element) => element !== summary)
+  expect(expanded).toBeVisible()
+  expect(expanded?.textContent).toBe(prompt)
+})
+
 it('服务端撤权返回 403 时清除菜单、旧数据和预览', async () => {
   setUser(10, true)
   const request = vi.spyOn(api, 'get').mockResolvedValueOnce({
@@ -268,9 +397,10 @@ it('图片通过认证 API 加载，点击放大、Esc 关闭，卸载释放 Blo
     '/api/image-logs/9/assets/1/content',
     expect.objectContaining({ responseType: 'blob' })
   )
-  expect(screen.getByText('2.0 KB')).toBeInTheDocument()
+  expect(screen.queryByText('2.0 KB')).not.toBeInTheDocument()
   await userEvent.click(preview)
   const dialog = await screen.findByRole('dialog')
+  expect(dialog).toHaveTextContent('1024 × 1024 · 2.0 KB')
   expect(dialog.querySelector('img')).toHaveAttribute('src', 'blob:image-log')
   fireEvent.keyDown(dialog, { key: 'Escape' })
   await waitFor(() =>
