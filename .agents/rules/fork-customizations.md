@@ -81,6 +81,8 @@
 - 保留已接入的 Agent 工作区和相关状态处理；不能用简单生图表单替换整套画廊，或将目录内所有能力一律视为未使用。是否启用某个能力以实际调用、现行设置和用户要求为准。
 - 保留界面 CSS 作用域隔离，避免创作页样式影响全站侧边栏；保留模型选择器打开时的定位与无动画行为、尺寸选择和当前参数布局。
 - 图片输入栏的模型标签与选择器采用内联布局，并与尺寸、质量、数量、更多参数垂直居中；选择器与参数胶囊保持相同高度，不得恢复为模型标签独占上方一行的布局。
+- 结果卡片必须保留原图文件大小标签（B/KB/MB/GB），与模型、耗时同处信息栏。大小取自原图字节数，不能使用缩略图大小；本地新图片、历史 Blob/旧 data URL、缓存命中、缩略图补全及服务端历史恢复均须兼容。缩略图或存储重构时不得漏传 `byteSize`；元数据读取失败不能阻止图片展示。
+- 大小标签回归：`reference/__tests__/task-card-metadata.test.tsx`、`reference/lib/db.test.ts`、`reference/lib/imageCache.test.ts`；存储格式调整时同时核对 `dbIndexedDb.ts`、`dbTauri.ts` 和 `imageCache.ts`。
 - 实现：该目录的 `App.tsx`、`store.ts`、`components/`、`hooks/`、`lib/`、`index.css`，以及 `web/src/features/creative/CreativeDetailModal.tsx`、`CreativeLightbox.tsx`、`SizePickerModal.tsx`、`size.ts`、`web/src/components/model-group-selector.tsx`。
 - 第三方 MIT 许可、版权与资源声明必须一起保留：`reference/THIRD_PARTY_LICENSES/`、`reference/assets/third-party-notices.txt`。
 

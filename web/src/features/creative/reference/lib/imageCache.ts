@@ -124,7 +124,7 @@ export function deleteImageCacheEntry(id: string) {
 
 export function clearImageCaches() {
   imageCache.clear()
-  for (const id of [...thumbnailCache.keys()]) deleteCachedThumbnail(id)
+  for (const id of thumbnailCache.keys()) deleteCachedThumbnail(id)
   thumbnailBackfillIds.clear()
 }
 
@@ -148,25 +148,40 @@ export async function ensureImageThumbnailCached(
     return { src: id, thumbnailVersion: CURRENT_THUMBNAIL_VERSION }
   }
   const cached = getCachedThumbnail(id)
-  if (cached) return cached
+  if (cached?.byteSize != null) return cached
 
-  const thumbnail = isTauri
-    ? await readTauriThumbnail(id)
-    : await getThumbnailSource(id, CURRENT_THUMBNAIL_VERSION)
+  const thumbnail: ImageThumbnail | undefined =
+    cached ??
+    (isTauri
+      ? await readTauriThumbnail(id)
+      : await getThumbnailSource(id, CURRENT_THUMBNAIL_VERSION))
   if (!thumbnail) {
     scheduleThumbnailBackfill([id], 'visible')
     return undefined
   }
 
+  const byteSize = thumbnail.byteSize ?? (await getImageByteSize(id))
+  if (byteSize != null) thumbnail.byteSize = byteSize
+
   // 并发读取同一张时以先写入缓存的为准；多余的 Blob URL 从未交给组件，立即撤销
   const raced = getCachedThumbnail(id)
   if (raced) {
-    if (raced.src !== thumbnail.src && thumbnail.src.startsWith('blob:'))
+    if (raced.src !== thumbnail.src && thumbnail.src.startsWith('blob:')) {
       URL.revokeObjectURL(thumbnail.src)
+    }
     return raced
   }
   cacheThumbnail(id, thumbnail)
   return thumbnail
+}
+
+/** 大小取自原图元数据；读取失败不能影响缩略图展示。 */
+async function getImageByteSize(id: string): Promise<number | undefined> {
+  try {
+    return (await getImageMeta(id))?.byteSize
+  } catch {
+    return undefined
+  }
 }
 
 /** 客户端直接用文件二进制生成 Blob URL，省去 base64 编码和超长 dataUrl 字符串 */
@@ -174,8 +189,9 @@ async function readTauriThumbnail(
   id: string
 ): Promise<ImageThumbnail | undefined> {
   const file = await getThumbnailFile(id)
-  if (!file || file.meta.thumbnailVersion !== CURRENT_THUMBNAIL_VERSION)
+  if (!file || file.meta.thumbnailVersion !== CURRENT_THUMBNAIL_VERSION) {
     return undefined
+  }
   return {
     src:
       file.meta.mime === RAW_DATA_URL_MIME
@@ -206,8 +222,12 @@ export function subscribeImageThumbnail(
     if (!active) return
     active = false
     subscribers?.delete(callback)
-    if (subscribers?.size === 0 && thumbnailSubscribers.get(id) === subscribers)
+    if (
+      subscribers?.size === 0 &&
+      thumbnailSubscribers.get(id) === subscribers
+    ) {
       thumbnailSubscribers.delete(id)
+    }
     const users = (thumbnailUsers.get(id) ?? 1) - 1
     if (users > 0) {
       thumbnailUsers.set(id, users)
@@ -228,8 +248,9 @@ export function scheduleThumbnailBackfill(
     if (isRemoteImageURL(id)) continue
     if (getCachedThumbnail(id) || thumbnailBackfillRunningIds.has(id)) continue
     const currentPriority = thumbnailBackfillIds.get(id)
-    if (!currentPriority || priority === 'visible')
+    if (!currentPriority || priority === 'visible') {
       thumbnailBackfillIds.set(id, priority)
+    }
   }
   scheduleThumbnailBackfillTick()
 }
@@ -341,8 +362,10 @@ async function startThumbnailBackfill(id: string) {
 
     const thumbnail = await getImageThumbnail(id)
     if (thumbnail?.thumbnailDataUrl) {
+      const byteSize = thumbnail.byteSize ?? (await getImageByteSize(id))
       cacheThumbnail(id, {
         src: thumbnail.thumbnailDataUrl,
+        ...(byteSize == null ? {} : { byteSize }),
         width: thumbnail.width,
         height: thumbnail.height,
         thumbnailVersion: thumbnail.thumbnailVersion,
@@ -350,6 +373,7 @@ async function startThumbnailBackfill(id: string) {
       thumbnailSubscribers.get(id)?.forEach((callback) =>
         callback({
           src: thumbnail.thumbnailDataUrl,
+          ...(byteSize == null ? {} : { byteSize }),
           width: thumbnail.width,
           height: thumbnail.height,
         })

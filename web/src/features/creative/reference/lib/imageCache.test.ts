@@ -85,11 +85,12 @@ describe('imageCache', () => {
     const releaseA = subscribeImageThumbnail('shown', () => {})
     const releaseB = subscribeImageThumbnail('shown', () => {})
     cacheThumbnail('shown', { src: 'blob:shown', thumbnailVersion: version })
-    for (let i = 0; i < 200; i++)
+    for (let i = 0; i < 200; i++) {
       cacheThumbnail(`other-${i}`, {
         src: `blob:other-${i}`,
         thumbnailVersion: version,
       })
+    }
 
     // 最久未用但正在显示的项被跳过，淘汰下一个
     expect(revoke.mock.calls).toEqual([['blob:other-0']])
@@ -152,6 +153,38 @@ describe('imageCache', () => {
     expect(imageBlob.getThumbnailSource).not.toHaveBeenCalled()
   })
 
+  it.each([false, true])(
+    '本地缩略图缓存命中=%s 时携带原图大小',
+    async (cached) => {
+      const thumbnail = {
+        src: 'blob:small-preview',
+        width: 941,
+        height: 1672,
+        thumbnailVersion: 2,
+      }
+      if (cached) cacheThumbnail('original', thumbnail)
+      else imageBlob.getThumbnailSource.mockResolvedValue(thumbnail)
+      db.getImageMeta.mockResolvedValue({ id: 'original', byteSize: 2411724 })
+
+      expect(await ensureImageThumbnailCached('original')).toMatchObject({
+        ...thumbnail,
+        byteSize: 2411724,
+      })
+      expect(db.getImage).not.toHaveBeenCalled()
+    }
+  )
+
+  it('大小元数据读取失败时仍展示缩略图', async () => {
+    imageBlob.getThumbnailSource.mockResolvedValue({
+      src: 'blob:preview',
+      thumbnailVersion: 2,
+    })
+    db.getImageMeta.mockRejectedValue(new Error('metadata unavailable'))
+    expect(await ensureImageThumbnailCached('broken-meta')).toMatchObject({
+      src: 'blob:preview',
+    })
+  })
+
   it('deletes individual entries and clears both caches', async () => {
     cacheImage('deleted', 'deleted-data')
     cacheThumbnail('deleted', {
@@ -197,7 +230,11 @@ describe('imageCache', () => {
 
   it('prioritizes visible thumbnail backfills and notifies subscribers', async () => {
     vi.useFakeTimers()
-    db.getImageMeta.mockResolvedValue({ width: 1000, height: 1000 })
+    db.getImageMeta.mockResolvedValue({
+      width: 1000,
+      height: 1000,
+      byteSize: 2411724,
+    })
     db.getImageThumbnail.mockImplementation(async (id: string) => ({
       thumbnailDataUrl: `${id}-thumbnail`,
       width: 1000,
@@ -214,16 +251,13 @@ describe('imageCache', () => {
       expect(db.getImageThumbnail).toHaveBeenCalledTimes(2)
     )
 
-    expect(db.getImageMeta.mock.calls.map(([id]) => id)).toEqual([
-      'visible',
-      'background',
-    ])
     expect(db.getImageThumbnail.mock.calls.map(([id]) => id)).toEqual([
       'visible',
       'background',
     ])
     expect(onThumbnail).toHaveBeenCalledWith({
       src: 'visible-thumbnail',
+      byteSize: 2411724,
       width: 1000,
       height: 1000,
     })
@@ -274,10 +308,6 @@ describe('imageCache', () => {
     expect(imageBlob.getFreshThumbnailIds).toHaveBeenCalledWith(
       db.CURRENT_THUMBNAIL_VERSION
     )
-    expect(db.getImageMeta.mock.calls.map(([id]) => id)).toEqual([
-      'missing',
-      'stale',
-    ])
     expect(db.getImageThumbnail.mock.calls.map(([id]) => id)).toEqual([
       'missing',
       'stale',

@@ -4,6 +4,7 @@ import type {
   StoredImage,
   StoredImageThumbnail,
 } from '../types'
+import { dataUrlToBytes } from './dataUrl'
 import {
   dbTransaction,
   openDB,
@@ -38,8 +39,9 @@ async function putWithBlobFallback(
     if (
       record === original ||
       !BLOB_REJECTED_ERRORS.has((err as Error | null)?.name ?? '')
-    )
+    ) {
       throw err
+    }
     disableBlobStorage(err)
     return dbTransaction(storeName, 'readwrite', (s) => s.put(original))
   }
@@ -75,8 +77,9 @@ export function commitTaskDeletion(
         const conversationStore = tx.objectStore(STORE_AGENT_CONVERSATIONS)
         for (const id of deletedTaskIds) taskStore.delete(id)
         for (const task of updatedTasks) taskStore.put(task)
-        for (const conversation of updatedConversations)
+        for (const conversation of updatedConversations) {
           conversationStore.put(conversation)
+        }
         tx.oncomplete = () => resolve(undefined)
         tx.onerror = () => reject(tx.error)
         tx.onabort = () => reject(tx.error)
@@ -136,6 +139,16 @@ export async function getImageMeta(
   const rec = await getStoredImageRecord(id)
   if (!rec) return undefined
   const { blob, dataUrl, ...meta } = rec
+  if (meta.byteSize == null) {
+    if (blob) meta.byteSize = blob.size
+    else if (dataUrl?.startsWith('data:')) {
+      try {
+        meta.byteSize = dataUrlToBytes(dataUrl).bytes.byteLength
+      } catch {
+        // 旧记录内容损坏时仍返回已有尺寸，不猜测文件大小。
+      }
+    }
+  }
   return meta
 }
 

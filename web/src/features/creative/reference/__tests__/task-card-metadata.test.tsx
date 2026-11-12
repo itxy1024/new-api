@@ -3,9 +3,10 @@
  *
  * 本文件基于 gpt_image_playground（MIT License）改编。
  */
-import { fireEvent, render, screen } from '@testing-library/react'
 import * as matchers from '@testing-library/jest-dom/matchers'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+
 import { DEFAULT_PARAMS, type TaskRecord } from '../types'
 
 expect.extend(matchers)
@@ -36,7 +37,7 @@ const { default: TaskCard } = await import('../components/TaskCard')
 describe('生成结果卡片元数据', () => {
   it('刷新后直接使用任务中的图片尺寸和文件大小', () => {
     const imageURL = 'https://bucket.oss.example/creative/image-1.png'
-    mocks.ensureImageThumbnailCached.mockResolvedValue({ dataUrl: imageURL })
+    mocks.ensureImageThumbnailCached.mockResolvedValue({ src: imageURL })
     const task: TaskRecord = {
       id: 'task-1',
       prompt: '生成一张图片',
@@ -74,6 +75,38 @@ describe('生成结果卡片元数据', () => {
     expect(screen.getByText('1.7 MB')).toBeInTheDocument()
     expect(screen.getByText('gpt-image-2')).toBeInTheDocument()
     expect(screen.queryByText('小鱼API')).not.toBeInTheDocument()
+  })
+
+  it('本地生成结果加载缩略图后显示原图大小标签', async () => {
+    mocks.ensureImageThumbnailCached.mockResolvedValue({
+      src: 'blob:preview',
+      byteSize: 2411724,
+      width: 941,
+      height: 1672,
+    })
+    const task: TaskRecord = {
+      id: 'local-task',
+      prompt: '本地生成结果',
+      params: { ...DEFAULT_PARAMS },
+      inputImageIds: [],
+      outputImages: ['local-image'],
+      status: 'done',
+      error: null,
+      createdAt: 1,
+      finishedAt: 86001,
+      elapsed: 86000,
+    }
+    render(
+      <TaskCard
+        task={task}
+        onReuse={vi.fn()}
+        onEditOutputs={vi.fn()}
+        onDelete={vi.fn()}
+        onClick={vi.fn()}
+      />
+    )
+    expect(await screen.findByText('2.3 MB')).toBeInTheDocument()
+    expect(screen.getByText('941×1672')).toBeInTheDocument()
   })
 
   it('鼠标悬浮时显示选择框，点击选择框不会打开详情', () => {

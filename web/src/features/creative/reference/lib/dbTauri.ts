@@ -10,7 +10,7 @@ import type {
   StoredImage,
   StoredImageThumbnail,
 } from '../types'
-import { base64ToBytes, bytesToBase64 } from './dataUrl'
+import { base64ToBytes, bytesToBase64, dataUrlToBytes } from './dataUrl'
 
 // 与 src-tauri/src/storage/images.rs 中的 RAW_DATA_URL_MIME 保持一致
 export const RAW_DATA_URL_MIME = 'text/x-data-url'
@@ -34,8 +34,9 @@ export async function call<T>(
     return await invoke<T>(cmd, args, opts)
   } catch (err) {
     const info = err as { code?: string; message?: string } | string | null
-    if (typeof info === 'object' && info?.message)
+    if (typeof info === 'object' && info?.message) {
       throw Object.assign(new Error(info.message), { code: info.code })
+    }
     throw new Error(String(err))
   }
 }
@@ -60,18 +61,23 @@ export function dataUrlToPayload(dataUrl: string): {
   if (!head.startsWith('data:') || !head.endsWith(';base64')) return raw
   const mime = head.slice(5, -7)
   // mime 会放进请求头：只接受可打印 ASCII，且首尾不能有空格（请求头会去掉首尾空白）
-  if (!/^[!-~]([ -~]*[!-~])?$/.test(mime) || mime === RAW_DATA_URL_MIME)
+  if (!/^[!-~]([ -~]*[!-~])?$/.test(mime) || mime === RAW_DATA_URL_MIME) {
     return raw
+  }
   const base64 = dataUrl.slice(comma + 1)
   if (base64.length % 4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(base64)) return raw
   const bytes = base64ToBytes(base64)
   // 字符集和长度合规后，只有末尾一组可能含非零的多余比特，重新编码末尾一组即可确认是否规范
-  const tailLen = 3 - (base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0)
+  let padding = 0
+  if (base64.endsWith('==')) padding = 2
+  else if (base64.endsWith('=')) padding = 1
+  const tailLen = 3 - padding
   if (
     base64 &&
     bytesToBase64(bytes.subarray(bytes.length - tailLen)) !== base64.slice(-4)
-  )
+  ) {
     return raw
+  }
   return { mime, bytes }
 }
 
@@ -116,8 +122,9 @@ function putFile(
     meta.source === 'upload' ||
     meta.source === 'generated' ||
     meta.source === 'mask'
-  )
+  ) {
     headers['x-source'] = meta.source
+  }
   return call<null>(cmd, payload.bytes, { headers })
 }
 
@@ -228,8 +235,19 @@ export async function getImageMeta(
 ): Promise<Omit<StoredImage, 'dataUrl'> | undefined> {
   const file = await getImageFile(id)
   if (!file) return undefined
+  let byteSize: number | undefined = file.bytes.byteLength
+  if (file.meta.mime === RAW_DATA_URL_MIME) {
+    byteSize = undefined
+    try {
+      byteSize = dataUrlToBytes(payloadToDataUrl(file.meta.mime, file.bytes))
+        .bytes.byteLength
+    } catch {
+      // 无效旧记录仍保留可读取的元数据。
+    }
+  }
   return {
     id,
+    byteSize,
     createdAt: file.meta.createdAt ?? undefined,
     source: file.meta.source ?? undefined,
     width: file.meta.width ?? undefined,

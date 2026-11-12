@@ -17,7 +17,12 @@ import {
   putImageThumbnail,
   storeImageWithSize,
 } from './db'
-import { commitTaskDeletion, dataUrlToPayload, putTask } from './dbTauri'
+import {
+  commitTaskDeletion,
+  dataUrlToPayload,
+  getImageMeta,
+  putTask,
+} from './dbTauri'
 
 /** 按 Rust 侧的格式模拟 image_put / image_get：请求头带元数据，响应为长度前缀 + JSON + 文件内容 */
 function fakeFileBackend() {
@@ -32,7 +37,8 @@ function fakeFileBackend() {
       opts?: { headers: Record<string, string> }
     ) => {
       if (cmd === 'image_put' || cmd === 'thumbnail_put') {
-        const h = opts!.headers
+        if (!opts) throw new Error('缺少图片元数据')
+        const h = opts.headers
         const num = (v?: string) => (v === undefined ? null : Number(v))
         files.set(`${cmd}:${decodeURIComponent(h['x-id'])}`, {
           meta: {
@@ -67,8 +73,9 @@ function fakeFileBackend() {
 
 function randomBytes(len: number) {
   const bytes = new Uint8Array(len)
-  for (let i = 0; i < len; i += 65536)
+  for (let i = 0; i < len; i += 65536) {
     crypto.getRandomValues(bytes.subarray(i, i + 65536))
+  }
   return bytes
 }
 
@@ -76,6 +83,21 @@ describe('dbTauri', () => {
   afterEach(() => vi.unstubAllGlobals())
   beforeEach(() => {
     invoke.mockReset()
+  })
+
+  it('读取原图元数据时返回二进制大小，兼容旧字符串格式', async () => {
+    fakeFileBackend()
+    for (const dataUrl of [
+      'data:image/png;base64,AQIDBA==',
+      'data:image/png;base64,AQIDBA',
+    ]) {
+      await putImage({ id: dataUrl, dataUrl, width: 941, height: 1672 })
+      expect(await getImageMeta(dataUrl)).toMatchObject({
+        byteSize: 4,
+        width: 941,
+        height: 1672,
+      })
+    }
   })
 
   it('db.ts 门面在客户端中转发到 Rust 命令', async () => {
@@ -203,7 +225,7 @@ describe('dbTauri', () => {
     await putImage({
       id,
       dataUrl,
-      width: NaN,
+      width: Number.NaN,
       height: Infinity,
       createdAt: Number.NaN,
       source: 'weird' as never,
@@ -225,7 +247,7 @@ describe('dbTauri', () => {
       id,
       thumbnailDataUrl: dataUrl,
       width: 10,
-      thumbnailVersion: NaN,
+      thumbnailVersion: Number.NaN,
     })
     expect(invoke.mock.calls[2][2].headers).toEqual({
       'x-id': encodeURIComponent(id),
@@ -276,12 +298,15 @@ describe('dbTauri', () => {
   })
 
   it('storeImageWithSize 经门面写入客户端存储', async () => {
-    vi.stubGlobal('Image', class {
-      onerror: (() => void) | null = null
-      set src(_value: string) {
-        queueMicrotask(() => this.onerror?.())
+    vi.stubGlobal(
+      'Image',
+      class {
+        onerror: (() => void) | null = null
+        set src(_value: string) {
+          queueMicrotask(() => this.onerror?.())
+        }
       }
-    })
+    )
     const files = fakeFileBackend()
     const dataUrl = `data:image/png;base64,${bytesToBase64(randomBytes(64))}`
     const result = await storeImageWithSize(dataUrl, 'upload')
