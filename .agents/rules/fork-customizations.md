@@ -113,6 +113,8 @@
 - 保留创作页存储设置、配置读取/更新/连通性测试接口，以及与 S3 兼容存储的集成；界面只返回凭据是否配置，不能返回可用密钥。
 - 保留 endpoint、bucket、region、prefix、path-style、有效期和现有环境变量/数据库选项兼容，以及存储重载、图片/视频上传、内容读取、URL 和删除流程。
 - 禁用存储或处于上游模式时应保留原转发能力，不能为保留定制而强制所有用户配置 OSS，也不能把现有 S3 实现恢复为上游占位实现。
+- 有效的 S3 配置必须由 `LoadTaskArtifactStoreConfig` 原样保留为 `s3` 模式，禁止恢复上游「S3 尚未实现」而强制改为 `upstream` 的降级分支；该分支会令生图入口跳过 `creative_generations` 写入，同时禁用图片/视频持久化。配置校验失败时的原有降级仍须保留。
+- 回归必须经过实际配置加载和 `GetTaskArtifactStore()`，再验证 `beginCreativeImageGeneration` / `persistCreativeImageResponse` 写入记录、产物和 `output_urls`；直接调用 `newTaskArtifactStore(config)` 不能证明运行时已启用。现有链路测试：`controller/creative_test.go` 的 `TestCreativeImagePersistenceFollowsConfiguredStorage`。
 - 实现：`controller/creative_storage.go`、`service/task_artifact_store.go`、`setting/system_setting/task_artifact_store.go`、`web/src/features/creative/reference/components/OssSettingsDialog.tsx`、`reference/lib/creativeStorage.ts`。
 - 关键回归：`service/task_artifact_store_s3_test.go`、`service/task_artifact_store_test.go`、`setting/system_setting/task_artifact_store_test.go`、`reference/__tests__/oss-settings-dialog.test.tsx`。
 

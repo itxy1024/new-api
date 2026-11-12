@@ -85,4 +85,19 @@ func TestLoadTaskArtifactStoreConfigLoadsValidatedEnvironment(t *testing.T) {
 	assert.Equal(t, "https://objects.example.com", config.S3Endpoint)
 	assert.True(t, config.S3PathStyle)
 	assert.Equal(t, 600, config.S3PresignTTLSeconds)
+
+	// 管理员保存的数据库选项优先于环境变量，重启后仍应启用持久化。
+	common.OptionMapRWMutex.Lock()
+	common.OptionMap[TaskArtifactStoreModeOption] = TaskArtifactStoreModeS3
+	common.OptionMap[TaskArtifactStoreS3BucketOption] = "saved-artifacts"
+	common.OptionMapRWMutex.Unlock()
+	t.Setenv(TaskArtifactStoreModeEnv, TaskArtifactStoreModeUpstream)
+	config = LoadTaskArtifactStoreConfig()
+	assert.Equal(t, TaskArtifactStoreModeS3, config.Mode)
+	assert.Equal(t, "saved-artifacts", config.S3Bucket)
+
+	common.OptionMapRWMutex.Lock()
+	common.OptionMap[TaskArtifactStoreModeOption] = TaskArtifactStoreModeUpstream
+	common.OptionMapRWMutex.Unlock()
+	assert.Equal(t, TaskArtifactStoreModeUpstream, LoadTaskArtifactStoreConfig().Mode)
 }

@@ -98,10 +98,6 @@ func LoadTaskArtifactStoreConfig() TaskArtifactStoreConfig {
 		config.Mode = TaskArtifactStoreModeUpstream
 		return config
 	}
-	if config.Mode == TaskArtifactStoreModeS3 {
-		common.SysError(common.LogText("task artifact S3 storage is not implemented; using upstream mode"))
-		config.Mode = TaskArtifactStoreModeUpstream
-	}
 	return config
 }
 
