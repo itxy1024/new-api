@@ -26,7 +26,6 @@ import { preloadMarkdownRenderer } from './components/MarkdownRenderer'
 import SearchBar from './components/SearchBar'
 import SettingsModal from './components/SettingsModal'
 import SketchBoardModal from './components/SketchBoardModal'
-import SupportPromptModal from './components/SupportPromptModal'
 import TaskGrid from './components/TaskGrid'
 import Toast from './components/Toast'
 import { useAppFonts } from './hooks/useAppFonts'
@@ -117,7 +116,6 @@ export default function ReferenceCreativeApp() {
         <SettingsModal newApiMode />
         <ConfirmDialog />
         <DataProgressDialog />
-        <SupportPromptModal />
         <FavoriteCollectionPickerModal />
         <ManageCollectionsModal />
         <Toast />

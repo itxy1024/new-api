@@ -19,7 +19,6 @@ export default function AnnouncementModal({ ready }: { ready: boolean }) {
     Boolean(
       s.privacyMode ||
       s.confirmDialog ||
-      s.supportPromptOpen ||
       s.showSettings ||
       s.detailTaskId ||
       s.lightboxImageId ||

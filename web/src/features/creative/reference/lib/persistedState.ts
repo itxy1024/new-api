@@ -48,9 +48,6 @@ export interface PersistedAppState {
   agentAssetPanelCollapsed: boolean
   favoriteCollections: FavoriteCollection[]
   defaultFavoriteCollectionId: string | null
-  supportPromptDismissed: boolean
-  supportPromptOpen: boolean
-  supportPromptSkippedForImportedData: boolean
   imageSourceUrls: Record<string, string>
 }
 
@@ -136,10 +133,6 @@ export function createPersistedState(
     agentAssetPanelCollapsed: state.agentAssetPanelCollapsed,
     favoriteCollections: state.favoriteCollections,
     defaultFavoriteCollectionId: state.defaultFavoriteCollectionId,
-    supportPromptDismissed: state.supportPromptDismissed,
-    supportPromptOpen: state.supportPromptOpen,
-    supportPromptSkippedForImportedData:
-      state.supportPromptSkippedForImportedData,
     imageSourceUrls: state.imageSourceUrls,
   }
 }
@@ -288,11 +281,6 @@ export function normalizePersistedState(
       defaultFavoriteCollectionId: resolveDefaultFavoriteCollectionId(
         favoriteCollections,
         preferredDefaultFavoriteCollectionId
-      ),
-      supportPromptDismissed: Boolean(persistedState.supportPromptDismissed),
-      supportPromptOpen: Boolean(persistedState.supportPromptOpen),
-      supportPromptSkippedForImportedData: Boolean(
-        persistedState.supportPromptSkippedForImportedData
       ),
       imageSourceUrls: isRecord(persistedState.imageSourceUrls)
         ? Object.fromEntries(

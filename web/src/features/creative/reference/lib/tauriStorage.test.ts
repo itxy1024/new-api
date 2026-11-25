@@ -252,14 +252,14 @@ describe('tauriStorage', () => {
 
   it('store 加载时同步完成 hydration，修改后以相同的 key 和格式写回', async () => {
     const persisted = JSON.stringify({
-      state: { supportPromptDismissed: true, agentSidebarCollapsed: true },
+      state: { supportPromptOpen: true, agentSidebarCollapsed: true },
       version: 2,
     })
     // setup 已在导入 store 之前把 kv 读入内存，与 main.tsx 的启动顺序一致
     await setup({ 'gpt-image-playground': persisted })
     const { useStore } = await import('../store')
     expect(useStore.persist.hasHydrated()).toBe(true)
-    expect(useStore.getState().supportPromptDismissed).toBe(true)
+    expect(useStore.getState()).not.toHaveProperty('supportPromptOpen')
     expect(useStore.getState().agentSidebarCollapsed).toBe(true)
 
     useStore.setState({ agentSidebarCollapsed: false })
@@ -269,6 +269,6 @@ describe('tauriStorage', () => {
     const saved = JSON.parse(write?.[1].value)
     expect(saved.version).toBe(2)
     expect(saved.state.agentSidebarCollapsed).toBe(false)
-    expect(saved.state.supportPromptDismissed).toBe(true)
+    expect(saved.state).not.toHaveProperty('supportPromptOpen')
   })
 })
